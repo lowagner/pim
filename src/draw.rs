@@ -768,7 +768,7 @@ pub fn draw_help(session: &Session, text: &mut TextBatch, shape: &mut shape2d::B
 
     text.add(
         &format!(
-            "rx v{}: help ({} to exit)",
+            "pim v{}: help ({} to exit)",
             crate::VERSION,
             platform::Key::Escape,
         ),

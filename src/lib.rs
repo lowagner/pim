@@ -106,7 +106,7 @@ pub fn init<P: AsRef<Path>>(paths: &[P], options: Options<'_>) -> std::io::Resul
         WindowHint::Visible(!options.headless),
     ];
     let (mut win, mut events) = platform::init(
-        "rx",
+        "pim",
         options.width,
         options.height,
         hints,
@@ -121,7 +121,7 @@ pub fn init<P: AsRef<Path>>(paths: &[P], options: Options<'_>) -> std::io::Resul
     info!("scale factor: {}", scale_factor);
 
     let assets = data::Assets::new(options.glyphs);
-    let proj_dirs = dirs::ProjectDirs::from("io", "cloudhead", "rx")
+    let proj_dirs = dirs::ProjectDirs::from("com", "patchsoul", "pim")
         .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "config directory not found"))?;
     let base_dirs = dirs::BaseDirs::new()
         .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "home directory not found"))?;

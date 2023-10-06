@@ -692,8 +692,8 @@ impl Session {
         Self::MAX_ZOOM,
     ];
 
-    /// Name of rx initialization script.
-    const INIT: &'static str = "init.rx";
+    /// Name of pim initialization script.
+    const INIT: &'static str = "init.pim";
 
     /// Create a new un-initialized session.
     pub fn new<P: AsRef<Path>>(
@@ -765,7 +765,7 @@ impl Session {
 
         self.source_dir(self.cwd.clone()).ok();
         self.cmdline.history.load()?;
-        self.message(format!("rx v{}", crate::VERSION), MessageType::Debug);
+        self.message(format!("pim v{}", crate::VERSION), MessageType::Debug);
 
         Ok(self)
     }
@@ -1387,7 +1387,7 @@ impl Session {
                         continue;
                     }
 
-                    if path.file_name() == Some(OsStr::new(".rxrc")) {
+                    if path.file_name() == Some(OsStr::new(".pimrc")) {
                         continue;
                     }
 
@@ -2174,7 +2174,7 @@ impl Session {
     /// Sourcing
     ///////////////////////////////////////////////////////////////////////////
 
-    /// Source an rx script at the given path. Returns an error if the path
+    /// Source a pim script at the given path. Returns an error if the path
     /// does not exist or the script couldn't be sourced.
     fn source_path<P: AsRef<Path>>(&mut self, path: P) -> io::Result<()> {
         let path = path.as_ref();
@@ -2191,10 +2191,10 @@ impl Session {
             })
     }
 
-    /// Source a directory which contains a `.rxrc` script. Returns an
+    /// Source a directory which contains a `.pimrc` script. Returns an
     /// error if the script wasn't found or couldn't be sourced.
     fn source_dir<P: AsRef<Path>>(&mut self, dir: P) -> io::Result<()> {
-        self.source_path(dir.as_ref().join(".rxrc"))
+        self.source_path(dir.as_ref().join(".pimrc"))
     }
 
     /// Source a script from an [`io::BufRead`].

@@ -1,7 +1,7 @@
-//! Data included in the `rx` binary.
+//! Data included in the `pim` binary.
 
-/// Initial (default) configuration for rx.
-pub const CONFIG: &[u8] = include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/config/init.rx"));
+/// Initial (default) configuration for pim.
+pub const CONFIG: &[u8] = include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/config/init.pim"));
 
 /// Cursor sprites.
 pub const CURSORS: &[u8] =

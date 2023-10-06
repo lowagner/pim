@@ -197,7 +197,7 @@ impl fmt::Display for Command {
             Self::Set(s, v) => write!(f, "Set {setting} to {val}", setting = s, val = v),
             Self::Slice(Some(n)) => write!(f, "Slice view into {} frame(s)", n),
             Self::Slice(None) => write!(f, "Reset view slices"),
-            Self::Source(_) => write!(f, "Source an rx script (eg. a palette)"),
+            Self::Source(_) => write!(f, "Source a pim script (e.g. a palette)"),
             Self::SwapColors => write!(f, "Swap foreground & background colors"),
             Self::Toggle(s) => write!(f, "Toggle {setting} on/off", setting = s),
             Self::Undo => write!(f, "Undo view edit"),
@@ -785,7 +785,7 @@ impl Default for Commands {
             })
             .command(
                 "source",
-                "Source an rx script (eg. palette or config)",
+                "Source a pim script (e.g. palette or config)",
                 |p| p.then(optional(path())).map(|(_, p)| Command::Source(p)),
             )
             .command("cd", "Change current directory", |p| {
@@ -1286,7 +1286,7 @@ mod test {
         fs::create_dir(tmp.path().join("assets")).unwrap();
         fs::create_dir(tmp.path().join("assets").join("1")).unwrap();
         fs::create_dir(tmp.path().join("assets").join("2")).unwrap();
-        File::create(tmp.path().join("assets").join("rx.png")).unwrap();
+        File::create(tmp.path().join("assets").join("pim.png")).unwrap();
 
         let mut cli = CommandLine::new(tmp.path(), Path::new("/dev/null"), &["png"]);
 

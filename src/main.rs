@@ -13,7 +13,7 @@ A Modern & Minimalist Pixel Editor
 
 const HELP: &str = r#"
 USAGE
-    rx [OPTIONS] [<path>..]
+    pim [OPTIONS] [<path>..]
 
 OPTIONS
     -h, --help           Prints help
@@ -31,7 +31,7 @@ OPTIONS
 
 fn main() {
     if let Err(e) = self::execute(pico_args::Arguments::from_env()) {
-        eprintln!("rx: {}", e);
+        eprintln!("pim: {}", e);
         process::exit(1);
     }
 }
@@ -42,12 +42,12 @@ fn execute(mut args: pico_args::Arguments) -> Result<(), Box<dyn std::error::Err
     let default = rx::Options::default();
 
     if args.contains(["-h", "--help"]) {
-        println!("rx v{}{}{}", rx::VERSION, HEADER, HELP);
+        println!("pim v{}{}{}", rx::VERSION, HEADER, HELP);
         return Ok(());
     }
 
     if args.contains(["-V", "--version"]) {
-        println!("rx v{}", rx::VERSION);
+        println!("pim v{}", rx::VERSION);
         return Ok(());
     }
 

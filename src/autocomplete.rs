@@ -94,8 +94,8 @@ impl Completer for FileCompleter {
 
     fn complete(&self, input: &str, opts: Self::Options) -> Vec<String> {
         // The five possible cases:
-        // 1. "|"            -> ["rx.png"]
-        // 2. "rx.|"         -> ["png"]
+        // 1. "|"            -> ["pim.png"]
+        // 2. "pim.|"        -> ["png"]
         // 3. "assets/|"     -> ["cursors.png"]
         // 4. "assets/curs|" -> ["ors.png"]
         // 5. "assets|"      -> ["assets/"]
@@ -156,7 +156,7 @@ impl FileCompleter {
                     continue;
                 }
                 let known = path.extension().map_or(false, |e| {
-                    e == "rx" || self.extensions.iter().any(|ext| ext == e)
+                    e == "pim" || self.extensions.iter().any(|ext| ext == e)
                 });
                 if known || path.is_dir() {
                     paths.push(file_name.into());
@@ -214,7 +214,7 @@ mod test {
         // Normal directories *shouldn't* be ignored.
         fs::create_dir(tmp.path().join("zod")).unwrap();
         // Non-PNG files should be ignored by the completer.
-        for file_name in &["1.png", "2.png", "3.png", "other.jpeg", ".rxrc"] {
+        for file_name in &["1.png", "2.png", "3.png", "other.jpeg", ".pimrc"] {
             let path = tmp.path().join(file_name);
             File::create(path).unwrap();
         }

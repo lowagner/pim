@@ -130,7 +130,7 @@ fn test(name: &str) {
 fn run(name: &str) -> io::Result<()> {
     // We allow tests to create these temporary files,
     // so make sure it's not there when a test is run.
-    fs::remove_file("/tmp/rx.png").ok();
+    fs::remove_file("/tmp/pim.png").ok();
 
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests")
@@ -149,7 +149,7 @@ fn run(name: &str) -> io::Result<()> {
     let options = rx::Options {
         resizable: false,
         headless: true,
-        source: Some(path.join(name).with_extension("rx")),
+        source: Some(path.join(name).with_extension("pim")),
         width: cfg.window.width,
         height: cfg.window.height,
         exec: ExecutionMode::Replay(path.clone(), DigestMode::Verify),
