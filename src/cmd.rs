@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use crate::autocomplete::{self, Autocomplete, FileCompleter, FileCompleterOpts};
 use crate::brush::BrushMode;
 use crate::history::History;
@@ -674,6 +675,7 @@ impl CommandLine {
 
 pub struct Commands {
     commands: Vec<(&'static str, &'static str, Parser<Command>)>,
+    existing_commands: HashSet<&'static str>,
 }
 
 impl Commands {
@@ -684,6 +686,7 @@ impl Commands {
                 "Add color to palette",
                 color().map(Command::PaletteAdd),
             )],
+            existing_commands: HashSet::from(["#"]),
         }
     }
 
@@ -721,13 +724,14 @@ impl Commands {
     where
         F: Fn(Parser<String>) -> Parser<Command>,
     {
-        let cmd = peek(
-            string(name)
+        assert!(!self.existing_commands.contains(name));
+        let cmd = peek(string(name)
                 .followed_by(hush(whitespace()) / end())
                 .skip(optional(whitespace())),
         )
         .label(name);
 
+        self.existing_commands.insert(name);
         self.commands.push((name, help, f(cmd)));
         self
     }

@@ -2215,9 +2215,12 @@ impl Session {
                 Ok(cmd) => {
                     let result = self.command(cmd);
                     if result != "" {
-                        self.message(format!("Unexpected result in source: {}", result), MessageType::Warning);
+                        self.message(
+                            format!("Unexpected result in source: {}", result),
+                            MessageType::Warning,
+                        );
                     }
-                },
+                }
             }
         }
         Ok(())
