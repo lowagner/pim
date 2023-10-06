@@ -5,11 +5,15 @@
        ████ ▀█▓ ██ ██ █▀
        ██  
 
-    `pim` is a fork of `rx` the modern and minimalist pixel editor.
+    `pim` is a fork of `rx`.
     It's like vim, for your pixels!
 
-  Designed with great care and love
+  `rx` was designed with great care and love
     with pixel artists and animators in mind.
+
+  `pim` is being developed to be more ergonomic
+    for left hand on the keyboard
+    and right hand on the mouse.
 
 OVERVIEW
 
