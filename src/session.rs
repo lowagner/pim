@@ -2445,26 +2445,30 @@ impl Session {
                 self.organize_views();
             }
             Command::FrameCurrent => {
-                result = "TODO".to_string();
+                let (maybe_frame, _) = self.current_frame();
+                match maybe_frame {
+                    None => {
+                        result = "None".to_string();
+                    },
+                    Some(frame) => {
+                        result = frame.to_string();
+                    },
+                }
             }
             Command::FramePrev => {
-                let v = self.active_view().extent();
-                let center = self.active_view_coords(self.center());
-
-                if center.x >= 0. {
-                    let frame = v.to_frame(center.into()).min(v.nframes);
-                    self.center_active_view_frame(frame.saturating_sub(1));
+                let (maybe_frame, _) = self.current_frame();
+                match maybe_frame {
+                    None => {},
+                    Some(frame) => if frame > 0 {
+                        self.center_active_view_frame(frame - 1);
+                    },
                 }
             }
             Command::FrameNext => {
-                let v = self.active_view().extent();
-                let center = self.active_view_coords(self.center());
-                let frame = v.to_frame(center.into());
-
-                if center.x < 0. {
-                    self.center_active_view_frame(0);
-                } else if frame < v.nframes {
-                    self.center_active_view_frame((frame + 1).min(v.nframes - 1));
+                let (maybe_frame, max_frames) = self.current_frame();
+                match maybe_frame {
+                    None => self.center_active_view_frame(0),
+                    Some(frame) => self.center_active_view_frame((frame + 1).min(max_frames)),
                 }
             }
             Command::ForceQuit => self.quit_view(self.views.active_id),
@@ -3019,6 +3023,18 @@ impl Session {
             }
         };
         result
+    }
+
+    fn current_frame(&self) -> (Option<usize>, usize) {
+        let v = self.active_view().extent();
+        let center = self.active_view_coords(self.center());
+
+        let frame: Option<usize> = if center.x >= 0. {
+            Some(v.to_frame(center.into()).min(v.nframes))
+        } else {
+            None
+        };
+        return (frame, v.nframes);
     }
 
     fn cmdline_hide(&mut self) {
