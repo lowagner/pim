@@ -70,7 +70,7 @@ impl<T> Rect<T> {
     /// # Examples
     ///
     /// ```
-    /// use rx::gfx::rect::Rect;
+    /// use pim::gfx::rect::Rect;
     ///
     /// let r = Rect::new(1, 1, 4, 4);
     /// assert_eq!(r.with_origin(0, 0), Rect::new(0, 0, 3, 3));
@@ -92,7 +92,7 @@ impl<T> Rect<T> {
     /// # Examples
     ///
     /// ```
-    /// use rx::gfx::rect::Rect;
+    /// use pim::gfx::rect::Rect;
     ///
     /// let r = Rect::new(1, 1, 4, 4);
     /// assert_eq!(r.with_size(9, 9), Rect::new(1, 1, 10, 10));
@@ -114,7 +114,7 @@ impl<T> Rect<T> {
     /// # Examples
     ///
     /// ```
-    /// use rx::gfx::rect::Rect;
+    /// use pim::gfx::rect::Rect;
     ///
     /// let r = Rect::new(0, 0, 3, 3);
     /// assert_eq!(r.expand(1, 1, 1, 1), Rect::new(-1, -1, 4, 4));
@@ -185,7 +185,7 @@ impl<T> Rect<T> {
     /// # Examples
     ///
     /// ```
-    /// use rx::gfx::rect::Rect;
+    /// use pim::gfx::rect::Rect;
     ///
     /// let r = Rect::new(0, 0, 3, 3);
     /// assert_eq!(r.width(), 3);
@@ -206,7 +206,7 @@ impl<T> Rect<T> {
     /// # Examples
     ///
     /// ```
-    /// use rx::gfx::rect::Rect;
+    /// use pim::gfx::rect::Rect;
     ///
     /// let r = Rect::origin(-6, -6);
     /// assert_eq!(r.height(), 6);
@@ -227,8 +227,8 @@ impl<T> Rect<T> {
     /// # Examples
     ///
     /// ```
-    /// use rx::gfx::rect::Rect;
-    /// use rx::gfx::math::Point2;
+    /// use pim::gfx::rect::Rect;
+    /// use pim::gfx::math::Point2;
     ///
     /// let r = Rect::new(0, 0, 1, -1);
     /// assert_eq!(r.min(), Point2::new(0, -1));
@@ -248,8 +248,8 @@ impl<T> Rect<T> {
     /// # Examples
     ///
     /// ```
-    /// use rx::gfx::rect::Rect;
-    /// use rx::gfx::math::Point2;
+    /// use pim::gfx::rect::Rect;
+    /// use pim::gfx::math::Point2;
     ///
     /// let r = Rect::origin(-1, 1);
     /// assert_eq!(r.max(), Point2::new(0, 1));
@@ -269,8 +269,8 @@ impl<T> Rect<T> {
     /// # Examples
     ///
     /// ```
-    /// use rx::gfx::rect::Rect;
-    /// use rx::gfx::math::Point2;
+    /// use pim::gfx::rect::Rect;
+    /// use pim::gfx::math::Point2;
     ///
     /// let r = Rect::origin(8, 8);
     /// assert_eq!(r.center(), Point2::new(4, 4));
@@ -316,8 +316,8 @@ impl<T> Rect<T> {
     /// Check whether the given point is contained in the rectangle.
     ///
     /// ```
-    /// use rx::gfx::rect::Rect;
-    /// use rx::gfx::math::Point2;
+    /// use pim::gfx::rect::Rect;
+    /// use pim::gfx::math::Point2;
     ///
     /// let r = Rect::origin(6, 6);
     /// assert!(r.contains(Point2::new(0, 0)));
@@ -348,7 +348,7 @@ impl<T> Rect<T> {
     /// # Examples
     ///
     /// ```
-    /// use rx::gfx::rect::Rect;
+    /// use pim::gfx::rect::Rect;
     ///
     /// let r = Rect::new(3, 3, 1, 1).abs();
     /// assert_eq!(r, Rect::new(1, 1, 3, 3));
@@ -373,7 +373,7 @@ impl<T> Rect<T> {
     /// # Examples
     ///
     /// ```
-    /// use rx::gfx::rect::Rect;
+    /// use pim::gfx::rect::Rect;
     ///
     /// let other = Rect::new(0, 0, 3, 3);
     ///

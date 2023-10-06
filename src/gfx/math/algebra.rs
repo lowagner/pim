@@ -65,7 +65,7 @@ impl<S: Sized> Vector2<S> {
     /// Dot product of two vectors.
     ///
     /// ```
-    /// use rx::gfx::math::*;
+    /// use pim::gfx::math::*;
     ///
     /// let v1 = Vector4::new(1, 3, -5, 4);
     /// let v2 = Vector4::new(4, -2, -1, 3);
@@ -510,7 +510,7 @@ where
 /// Transform a [`Vector3`] with a [`Matrix4`].
 ///
 /// ```
-/// use rx::gfx::math::*;
+/// use pim::gfx::math::*;
 /// let m = Matrix4::from_translation(Vector3::new(8., 8., 0.));
 /// let v = Vector3::new(1., 1., 0.);
 ///
@@ -528,7 +528,7 @@ impl std::ops::Mul<Vector3<f32>> for Matrix4<f32> {
 /// Transform a [`Vector4`] with a [`Matrix4`].
 ///
 /// ```
-/// use rx::gfx::math::*;
+/// use pim::gfx::math::*;
 /// let m = Matrix4::from_translation(Vector3::new(8., 8., 0.));
 /// let v = Vector4::new(1., 1., 0., 1.);
 ///
@@ -550,7 +550,7 @@ impl std::ops::Mul<Vector4<f32>> for Matrix4<f32> {
 /// Transform a [`Point2`] with a [`Matrix4`].
 ///
 /// ```
-/// use rx::gfx::math::*;
+/// use pim::gfx::math::*;
 /// let m = Matrix4::from_translation(Vector3::new(8., 8., 0.));
 /// let p = Point2::new(1., 1.);
 ///

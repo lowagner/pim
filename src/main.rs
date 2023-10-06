@@ -1,6 +1,6 @@
 #![allow(clippy::inconsistent_struct_constructor)]
-use rx::execution::{DigestMode, ExecutionMode, GifMode};
-use rx::logger;
+use pim::execution::{DigestMode, ExecutionMode, GifMode};
+use pim::logger;
 
 use std::io;
 use std::path::PathBuf;
@@ -37,17 +37,17 @@ fn main() {
 }
 
 fn execute(mut args: pico_args::Arguments) -> Result<(), Box<dyn std::error::Error>> {
-    rx::ALLOCATOR.reset();
+    pim::ALLOCATOR.reset();
 
-    let default = rx::Options::default();
+    let default = pim::Options::default();
 
     if args.contains(["-h", "--help"]) {
-        println!("pim v{}{}{}", rx::VERSION, HEADER, HELP);
+        println!("pim v{}{}{}", pim::VERSION, HEADER, HELP);
         return Ok(());
     }
 
     if args.contains(["-V", "--version"]) {
-        println!("pim v{}", rx::VERSION);
+        println!("pim v{}", pim::VERSION);
         return Ok(());
     }
 
@@ -109,9 +109,9 @@ fn execute(mut args: pico_args::Arguments) -> Result<(), Box<dyn std::error::Err
         ExecutionMode::Normal
     };
 
-    let glyphs = rx::data::GLYPHS;
+    let glyphs = pim::data::GLYPHS;
 
-    let options = rx::Options {
+    let options = pim::Options {
         width,
         height,
         headless,
@@ -123,7 +123,7 @@ fn execute(mut args: pico_args::Arguments) -> Result<(), Box<dyn std::error::Err
     };
 
     match args.free() {
-        Ok(paths) => rx::init(&paths, options).map_err(|e| e.into()),
+        Ok(paths) => pim::init(&paths, options).map_err(|e| e.into()),
         Err(e) => {
             Err(io::Error::new(io::ErrorKind::InvalidInput, format!("{}\n{}", e, HELP)).into())
         }

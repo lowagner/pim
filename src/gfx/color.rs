@@ -66,7 +66,7 @@ impl Rgba8 {
     /// Return the color with a changed alpha.
     ///
     /// ```
-    /// use rx::gfx::color::Rgba8;
+    /// use pim::gfx::color::Rgba8;
     ///
     /// let c = Rgba8::WHITE;
     /// assert_eq!(c.alpha(0x88), Rgba8::new(c.r, c.g, c.b, 0x88))
@@ -88,7 +88,7 @@ impl Rgba8 {
 }
 
 /// ```
-/// use rx::gfx::color::Rgba8;
+/// use pim::gfx::color::Rgba8;
 ///
 /// assert_eq!(format!("{}", Rgba8::new(0xff, 0x0, 0xa, 0xff)), "#ff000a");
 /// ```
@@ -103,7 +103,7 @@ impl fmt::Display for Rgba8 {
 }
 
 /// ```
-/// use rx::gfx::color::{Rgba8, Rgba};
+/// use pim::gfx::color::{Rgba8, Rgba};
 ///
 /// assert_eq!(Rgba8::from(Rgba::RED), Rgba8::RED);
 /// ```
