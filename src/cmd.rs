@@ -63,6 +63,7 @@ pub enum Command {
     FrameAdd,
     FrameClone(i32),
     FrameRemove,
+    FrameCurrent,
     FramePrev,
     FrameNext,
     FrameResize(u32, u32),
@@ -170,6 +171,7 @@ impl fmt::Display for Command {
             Self::FrameAdd => write!(f, "Add a blank frame to the view"),
             Self::FrameClone(i) => write!(f, "Clone frame {} and add it to the view", i),
             Self::FrameRemove => write!(f, "Remove the last frame of the view"),
+            Self::FrameCurrent => write!(f, "Returns current frame"),
             Self::FramePrev => write!(f, "Navigate to previous frame"),
             Self::FrameNext => write!(f, "Navigate to next frame"),
             Self::Noop => write!(f, "No-op"),
@@ -258,6 +260,9 @@ impl From<Command> for String {
             Command::FrameAdd => format!("f/add"),
             Command::FrameClone(i) => format!("f/clone {}", i),
             Command::FrameRemove => format!("f/remove"),
+            Command::FrameCurrent => format!("f/current"),
+            Command::FramePrev => format!("f/prev"),
+            Command::FrameNext => format!("f/next"),
             Command::Export(None, path) => format!("export {}", path),
             Command::Export(Some(s), path) => format!("export @{}x {}", s, path),
             Command::Noop => format!(""),
@@ -941,6 +946,9 @@ impl Default for Commands {
                 "Remove the last frame from the active view",
                 |p| p.value(Command::FrameRemove),
             )
+            .command("f/current", "Returns the current frame", |p| {
+                p.value(Command::FrameCurrent)
+            })
             .command("f/prev", "Navigate to previous frame", |p| {
                 p.value(Command::FramePrev)
             })

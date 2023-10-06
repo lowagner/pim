@@ -2212,7 +2212,12 @@ impl Session {
                         format!("{} on line {}", e, i + 1),
                     ))
                 }
-                Ok(cmd) => self.command(cmd),
+                Ok(cmd) => {
+                    let result = self.command(cmd);
+                    if result != "" {
+                        self.message(format!("Unexpected result in source: {}", result), MessageType::Warning);
+                    }
+                },
             }
         }
         Ok(())
@@ -2361,9 +2366,10 @@ impl Session {
     ///////////////////////////////////////////////////////////////////////////
 
     /// Process a command.
-    fn command(&mut self, cmd: Command) {
+    fn command(&mut self, cmd: Command) -> String {
         debug!("command: {:?}", cmd);
 
+        let mut result: String = "".to_string();
         match cmd {
             Command::Mode(m) => {
                 self.toggle_mode(m);
@@ -2418,7 +2424,7 @@ impl Session {
                         "Error: cannot set frame dimension to `0`",
                         MessageType::Error,
                     );
-                    return;
+                    return result;
                 }
                 if fw > Self::MAX_FRAME_SIZE || fh > Self::MAX_FRAME_SIZE {
                     self.message(
@@ -2429,7 +2435,7 @@ impl Session {
                         ),
                         MessageType::Error,
                     );
-                    return;
+                    return result;
                 }
 
                 let v = self.active_view_mut();
@@ -2437,6 +2443,9 @@ impl Session {
 
                 self.check_selection();
                 self.organize_views();
+            }
+            Command::FrameCurrent => {
+                result = "TODO".to_string();
             }
             Command::FramePrev => {
                 let v = self.active_view().extent();
@@ -2655,7 +2664,7 @@ impl Session {
                         format!("Warning: the setting `{}` has been deprecated", k),
                         MessageType::Warning,
                     );
-                    return;
+                    return result;
                 }
                 match self.settings.set(k, v.clone()) {
                     Err(e) => {
@@ -2669,7 +2678,9 @@ impl Session {
                 }
             }
             Command::Toggle(ref k) => match self.settings.get(k) {
-                Some(Value::Bool(b)) => self.command(Command::Set(k.clone(), Value::Bool(!b))),
+                Some(Value::Bool(b)) => {
+                    self.command(Command::Set(k.clone(), Value::Bool(!b)));
+                }
                 Some(_) => {
                     self.message(format!("Error: can't toggle `{}`", k), MessageType::Error);
                 }
@@ -3007,6 +3018,7 @@ impl Session {
                 }
             }
         };
+        result
     }
 
     fn cmdline_hide(&mut self) {
@@ -3035,8 +3047,11 @@ impl Session {
         match self.cmdline.parse(&input) {
             Err(e) => self.message(format!("Error: {}", e), MessageType::Error),
             Ok(cmd) => {
-                self.command(cmd);
+                let result = self.command(cmd);
                 self.cmdline.history.add(input);
+                if result != "" {
+                    self.message(result, MessageType::Info);
+                }
             }
         }
     }
