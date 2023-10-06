@@ -1,31 +1,24 @@
 
+            ██ 
+      ▓███▄ ▄▄ █▓▄██████ 
+       ██ █ ██  ██ ██ ██
+       ████ ▀█▓ ██ ██ █▀
+       ██  
 
-        ██ ████ ██ ██
-         ███ ██  ███
-         ██     ██ ██
-         ██    ██   ██
-
-
-    `rx` is a modern and minimalist pixel editor.
+    `pim` is a fork of `rx` the modern and minimalist pixel editor.
+    It's like vim, for your pixels!
 
   Designed with great care and love
     with pixel artists and animators in mind.
 
 OVERVIEW
 
-  `rx` is an extensible, modern and minimalist pixel editor implemented
-  in rust[0]. rx is free software, licensed under the GPLv3.
+  `pim` is an extensible, modern and minimalist pixel editor implemented
+  in rust[0]. pim is free software, licensed under the GPLv3.
 
-  Most of the information on how to use rx is on the website:
-  https://rx.cloudhead.io. There, you can also find a user guide
-  (https://rx.cloudhead.io/guide.html), installation instructions,
-  and binary download links.
+  To build pim from source, see the build sections below.
 
-  For discussions, join the community: https://rx.cloudhead.io/#community.
-
-  To build rx from source, see the build sections below.
-
-  Once inside rx, enter the `:help` command to get a list of key bindings
+  Once inside pim, enter the `:help` command to get a list of key bindings
   and commands.
 
   [0]: https://rust-lang.org
@@ -51,7 +44,7 @@ BUILD & INSTALLATION
 
     $ cargo install --locked --path .
 
-  This will install rx under `~/.cargo/bin/rx`.  If you prefer a different
+  This will install pim under `~/.cargo/bin/pim`.  If you prefer a different
   install location, you can specify it via the `--root <prefix>` flag, where
   <prefix> is for example '/usr/local'.
 
@@ -59,24 +52,20 @@ CONTRIBUTING
 
   See the CONTRIBUTING file for details. Contributions are appreciated.
 
-USAGE
-
-  See the guide at https://rx.cloudhead.io/guide.html.
-
 TROUBLESHOOTING
 
   If something isn't working like it's supposed to, there are various things
   you can do to debug the problem:
 
-  * Run `rx` with verbose logging, by using the `-v` command-line flag. This
+  * Run `pim` with verbose logging, by using the `-v` command-line flag. This
     will log errors from the underlying libraries that are usually suppressed,
     and will show debug output that might indicate what the problem is.
-  * If `rx` is crashing, run it with `RUST_BACKTRACE=1` set in your environment
+  * If `pim` is crashing, run it with `RUST_BACKTRACE=1` set in your environment
     to show a backtrace on crash.
   * It could be that the issue is related to your configuration - in that case
     the program can be run without loading the initialization script like so:
 
-        rx -u -
+        pim -u -
 
 LICENSE
 

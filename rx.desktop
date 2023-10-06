@@ -1,11 +1,11 @@
 [Desktop Entry]
 Version=1.0
 Type=Application
-Name=rx
+Name=pim
 Comment=A modern & minimalist pixel editor
-TryExec=rx
-Exec=rx
-Icon=rx
+TryExec=pim
+Exec=pim
+Icon=pim
 Categories=Graphics;2DGraphics;RasterGraphics;
 Terminal=false
 MimeType=image/png;

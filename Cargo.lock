@@ -529,7 +529,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "rx"
+name = "pim"
 version = "0.5.2"
 dependencies = [
  "arrayvec",

@@ -2,8 +2,8 @@
 set -e
 
 linuxdeploy \
-  --executable=target/release/rx \
-  --desktop-file=rx.desktop \
-  --icon-file=rx.png \
+  --executable=target/release/pim \
+  --desktop-file=pim.desktop \
+  --icon-file=pim.png \
   --appdir=AppDir
 appimagetool --no-appstream --sign AppDir

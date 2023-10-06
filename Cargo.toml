@@ -1,11 +1,10 @@
 [package]
-name = "rx"
+name = "pim"
 version = "0.5.2"
 description = "a modern, minimalist pixel editor"
 license = "GPL-3.0-only"
-repository = "https://github.com/cloudhead/rx"
-homepage = "https://rx.cloudhead.io"
-authors = ["Alexis Sellier <self@cloudhead.io>"]
+repository = "https://github.com/lowagner/pim"
+authors = ["Alexis Sellier <self@cloudhead.io>", "Lucas Wagner <lowagner@gmail.com>"]
 edition = "2021"
 
 [features]
