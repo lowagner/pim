@@ -1,10 +1,10 @@
-use std::collections::HashSet;
 use crate::autocomplete::{self, Autocomplete, FileCompleter, FileCompleterOpts};
 use crate::brush::BrushMode;
 use crate::history::History;
 use crate::parser::*;
 use crate::platform;
 use crate::session::{Direction, Input, Mode, PanState, Tool, VisualState};
+use std::collections::HashSet;
 
 use memoir::traits::Parse;
 use memoir::*;
@@ -720,12 +720,17 @@ impl Commands {
 
     ///////////////////////////////////////////////////////////////////////////
 
-    fn command<F>(mut self, name: &'static str, help: &'static str, f: F) -> Self
+    fn command<F>(&mut self, name: &'static str, help: &'static str, f: F) -> &mut Self
     where
         F: Fn(Parser<String>) -> Parser<Command>,
     {
-        assert!(!self.existing_commands.contains(name));
-        let cmd = peek(string(name)
+        assert!(
+            !self.existing_commands.contains(name),
+            "command `{}` already defined",
+            name
+        );
+        let cmd = peek(
+            string(name)
                 .followed_by(hush(whitespace()) / end())
                 .skip(optional(whitespace())),
         )
@@ -735,11 +740,22 @@ impl Commands {
         self.commands.push((name, help, f(cmd)));
         self
     }
+
+    fn commands<F>(&mut self, names: &[&'static str], help: &'static str, f: F) -> &mut Self
+    where
+        F: Fn(Parser<String>) -> Parser<Command>,
+    {
+        for name in names {
+            self.command(name, help, &f);
+        }
+        self
+    }
 }
 
 impl Default for Commands {
     fn default() -> Self {
-        Self::new()
+        let mut new_self = Self::new();
+        new_self
             .command("q", "Quit view", |p| p.value(Command::Quit))
             .command("qa", "Quit all views", |p| p.value(Command::QuitAll))
             .command("q!", "Force quit view", |p| p.value(Command::ForceQuit))
@@ -952,15 +968,21 @@ impl Default for Commands {
                 "Remove the last frame from the active view",
                 |p| p.value(Command::FrameRemove),
             )
-            .command("f/current", "Returns the current frame", |p| {
-                p.value(Command::FrameCurrent)
-            })
-            .command("f/prev", "Navigate to previous frame", |p| {
-                p.value(Command::FramePrev)
-            })
-            .command("f/next", "Navigate to next frame", |p| {
-                p.value(Command::FrameNext)
-            })
+            .commands(
+                &["frame/current", "f/current", "fc"],
+                "Returns the current frame",
+                |p| p.value(Command::FrameCurrent),
+            )
+            .commands(
+                &["frame/prev", "f/prev", "fp"],
+                "Navigate to previous frame",
+                |p| p.value(Command::FramePrev),
+            )
+            .commands(
+                &["frame/next", "f/next", "fn"],
+                "Navigate to next frame",
+                |p| p.value(Command::FrameNext),
+            )
             .command("f/resize", "Resize the active view frame(s)", |p| {
                 p.then(tuple::<u32>(
                     natural().label("<width>"),
@@ -1064,7 +1086,8 @@ impl Default for Commands {
                     .skip(whitespace())
                     .then(tuple::<i32>(integer().label("<x>"), integer().label("<y>")))
                     .map(|((_, i), (x, y))| Command::PaintPalette(i, x, y))
-            })
+            });
+        new_self
     }
 }
 
