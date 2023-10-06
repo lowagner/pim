@@ -1190,7 +1190,7 @@ impl Session {
                 // also receive the character input equivalent of the key pressed.
                 // This input, since we are now in command mode, is processed as
                 // text input to the command line. To avoid this, we have to ignore
-                // all such input until the end of the current upate.
+                // all such input until the end of the current update.
                 self.ignore_received_characters = true;
                 self.cmdline_handle_input(':');
             }
@@ -3043,19 +3043,22 @@ impl Session {
     fn cmdline_handle_enter(&mut self) {
         let input = self.cmdline.input();
         // Always hide the command line before executing the command,
-        // because commands will often require being in a specific mode, eg.
+        // because commands will often require being in a specific mode, e.g.
         // visual mode for commands that run on selections.
         self.cmdline_hide();
 
         if input.is_empty() {
             return;
         }
+        // Always add the command, even if it's bad; maybe the user forgot
+        // a letter/syntax but they can go back and edit it rather than
+        // lose it completely.
+        self.cmdline.history.add(&input);
 
         match self.cmdline.parse(&input) {
             Err(e) => self.message(format!("Error: {}", e), MessageType::Error),
             Ok(cmd) => {
                 let result = self.command(cmd);
-                self.cmdline.history.add(input);
                 if result != "" {
                     self.message(result, MessageType::Info);
                 }

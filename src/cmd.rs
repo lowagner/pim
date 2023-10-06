@@ -544,6 +544,7 @@ impl CommandLine {
     }
 
     pub fn history_prev(&mut self) {
+        // TODO: option to avoid using the prefix
         let prefix = self.prefix();
 
         if let Some(entry) = self.history.prev(&prefix).map(str::to_owned) {
@@ -552,6 +553,7 @@ impl CommandLine {
     }
 
     pub fn history_next(&mut self) {
+        // TODO: option to avoid using the prefix
         let prefix = self.prefix();
 
         if let Some(entry) = self.history.next(&prefix).map(str::to_owned) {
