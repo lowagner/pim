@@ -95,7 +95,6 @@ impl Parse for platform::Key {
                 "backspace" => platform::Key::Backspace,
                 "tab" => platform::Key::Tab,
                 "end" => platform::Key::End,
-                "esc" => platform::Key::Escape,
                 other => return Err(format!("unknown key <{}>", other)),
             };
             Ok(key)

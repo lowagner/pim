@@ -1176,6 +1176,7 @@ impl Session {
 
         match old {
             Mode::Command => {
+                // TODO: put this into history
                 self.cmdline.clear();
             }
             _ => {}
@@ -2137,6 +2138,16 @@ impl Session {
                         }
                     }
                     return;
+                }
+                Mode::Normal => {
+                    if state == InputState::Pressed {
+                        match key {
+                            platform::Key::Escape => {
+                                self.toggle_mode(Mode::Command);
+                            }
+                            _ => {}
+                        }
+                    }
                 }
                 Mode::Help => {
                     if state == InputState::Pressed && key == platform::Key::Escape {
