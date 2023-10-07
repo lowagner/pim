@@ -3,6 +3,7 @@ use crate::brush::BrushMode;
 use crate::history::History;
 use crate::parser::*;
 use crate::platform;
+use crate::platform::ModifiersState;
 use crate::session::{Direction, Input, Mode, PanState, Tool, VisualState};
 use std::collections::HashSet;
 
@@ -62,6 +63,7 @@ pub enum Command {
 
     // Frames
     FrameAdd,
+    // TODO: FrameCut
     FrameClone(i32),
     FrameRemove,
     FrameCurrent,
@@ -301,6 +303,7 @@ impl From<Command> for String {
 
 #[derive(PartialEq, Debug, Clone)]
 pub struct KeyMapping {
+    pub modifiers: ModifiersState,
     pub input: Input,
     pub press: Command,
     pub release: Option<Command>,
@@ -350,6 +353,8 @@ impl KeyMapping {
         character
             .or(key)
             .map(move |((input, press), release)| KeyMapping {
+                // TODO: parse from text
+                modifiers: platform::ModifiersState::default(),
                 input,
                 press,
                 release,
@@ -969,17 +974,17 @@ impl Default for Commands {
                 |p| p.value(Command::FrameRemove),
             )
             .commands(
-                &["frame/current", "f/current", "fc"],
+                &["frame/current", "f/current", "fc", "f="],
                 "Returns the current frame",
                 |p| p.value(Command::FrameCurrent),
             )
             .commands(
-                &["frame/prev", "f/prev", "fp"],
+                &["frame/prev", "f/prev", "fp", "f-"],
                 "Navigate to previous frame",
                 |p| p.value(Command::FramePrev),
             )
             .commands(
-                &["frame/next", "f/next", "fn"],
+                &["frame/next", "f/next", "fn", "f+"],
                 "Navigate to next frame",
                 |p| p.value(Command::FrameNext),
             )

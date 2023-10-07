@@ -203,6 +203,7 @@ impl From<char> for Key {
             '=' => Key::Equal, '-' => Key::Minus, '\'' => Key::Apostrophe,
             ';' => Key::Semicolon, ':' => Key::Colon, ' ' => Key::Space,
             '\\' => Key::Backslash,
+
             _ => Key::Unknown,
         }
     }

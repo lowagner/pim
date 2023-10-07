@@ -2815,6 +2815,7 @@ impl Session {
             }
             Command::Map(map) => {
                 let KeyMapping {
+                    modifiers,
                     input,
                     press,
                     release,
@@ -2826,7 +2827,7 @@ impl Session {
                     modes: modes.clone(),
                     command: press,
                     state: InputState::Pressed,
-                    modifiers: platform::ModifiersState::default(),
+                    modifiers,
                     is_toggle: release.is_some(),
                     display: Some(format!("{}", input)),
                 });
@@ -2836,7 +2837,7 @@ impl Session {
                         modes,
                         command: cmd,
                         state: InputState::Released,
-                        modifiers: platform::ModifiersState::default(),
+                        modifiers,
                         is_toggle: true,
                         display: None,
                     });
