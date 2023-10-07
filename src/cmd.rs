@@ -77,6 +77,8 @@ pub enum Command {
     PaletteGradient(Rgba8, Rgba8, usize),
     PaletteSample,
     PaletteSort,
+    // TODO: PaletteSwap
+    // TODO: PaletteGet, PaletteSet
     PaletteWrite(String),
 
     // Navigation
@@ -338,23 +340,31 @@ impl KeyMapping {
             "<cmd>",
         );
 
+        let key_with_modifier = fail("unimplemented"); // TODO
         let character = between('\'', '\'', character())
             .map(Input::Character)
             .skip(whitespace())
             .then(press.clone())
-            .map(|(input, press)| ((input, press), None));
+            .map(|(input, press)| (platform::ModifiersState::default(), (input, press), None));
         let key = param::<platform::Key>()
             .map(Input::Key)
             .skip(whitespace())
             .then(press)
             .skip(optional(whitespace()))
-            .then(optional(between('{', '}', release)));
+            .then(optional(between('{', '}', release)))
+            .map(|(input_and_press, release)| {
+                (
+                    platform::ModifiersState::default(),
+                    input_and_press,
+                    release,
+                )
+            });
 
-        character
+        key_with_modifier
+            .or(character)
             .or(key)
-            .map(move |((input, press), release)| KeyMapping {
-                // TODO: parse from text
-                modifiers: platform::ModifiersState::default(),
+            .map(move |(modifiers, (input, press), release)| KeyMapping {
+                modifiers,
                 input,
                 press,
                 release,

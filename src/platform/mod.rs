@@ -172,7 +172,7 @@ pub enum Key {
     Slash, Backslash,
 
     // Modifiers.
-    Alt, Control, Shift,
+    Shift, Control, Alt,
 
     // Math keys.
     Equal, Minus,

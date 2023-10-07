@@ -104,6 +104,40 @@ impl Parse for platform::Key {
     }
 }
 
+impl Parse for platform::ModifiersState {
+    fn parser() -> Parser<Self> {
+        // TODO: this doesn't appear to be very clean, but it does seem to work.
+        any::<_, Vec<platform::Key>>(
+            peek(param::<platform::Key>().map(|key: platform::Key| {
+                return if key.is_modifier() {
+                    Ok(key)
+                } else {
+                    Err(format!("not a modifier {}", key))
+                };
+            }))
+            .map(|key| key.unwrap()),
+        )
+        .map(|modifiers| {
+            let mut state = platform::ModifiersState {
+                shift: false,
+                alt: false,
+                ctrl: false,
+                meta: false,
+            };
+            for modifier in modifiers {
+                match modifier {
+                    platform::Key::Control => state.ctrl = true,
+                    platform::Key::Shift => state.shift = true,
+                    platform::Key::Alt => state.alt = true,
+                    _ => assert!(false, "unexpected modifier {}", modifier),
+                }
+            }
+            state
+        })
+        .label("<mods>")
+    }
+}
+
 impl Parse for platform::InputState {
     fn parser() -> Parser<Self> {
         word().try_map(|w| match w.as_str() {
@@ -249,5 +283,83 @@ mod test {
         assert_eq!(rest, "");
         assert_eq!(a, Rgba8::new(0xff, 0xaa, 0x44, 127));
         assert_eq!(b, Rgba8::new(0x14, 0x14, 0x14, 255));
+    }
+
+    #[test]
+    fn test_modifiers_parser() {
+        let p = platform::ModifiersState::parser();
+
+        assert_eq!(
+            p.parse("").unwrap().0,
+            platform::ModifiersState {
+                shift: false,
+                alt: false,
+                ctrl: false,
+                meta: false
+            }
+        );
+        assert_eq!(
+            p.parse("<shift>").unwrap().0,
+            platform::ModifiersState {
+                shift: true,
+                alt: false,
+                ctrl: false,
+                meta: false
+            }
+        );
+        assert_eq!(
+            p.parse("<ctrl>").unwrap().0,
+            platform::ModifiersState {
+                shift: false,
+                alt: false,
+                ctrl: true,
+                meta: false
+            }
+        );
+        assert_eq!(
+            p.parse("<alt>").unwrap().0,
+            platform::ModifiersState {
+                shift: false,
+                alt: true,
+                ctrl: false,
+                meta: false
+            }
+        );
+        assert_eq!(
+            p.parse("<shift><ctrl>").unwrap().0,
+            platform::ModifiersState {
+                shift: true,
+                alt: false,
+                ctrl: true,
+                meta: false
+            }
+        );
+        assert_eq!(
+            p.parse("<ctrl><alt>").unwrap().0,
+            platform::ModifiersState {
+                shift: false,
+                alt: true,
+                ctrl: true,
+                meta: false
+            }
+        );
+        assert_eq!(
+            p.parse("<alt><shift>").unwrap().0,
+            platform::ModifiersState {
+                shift: true,
+                alt: true,
+                ctrl: false,
+                meta: false
+            }
+        );
+        assert_eq!(
+            p.parse("<ctrl><alt><shift>").unwrap().0,
+            platform::ModifiersState {
+                shift: true,
+                alt: true,
+                ctrl: true,
+                meta: false
+            }
+        );
     }
 }
