@@ -126,6 +126,12 @@ impl Context {
         avg_frametime: &time::Duration,
         execution: &Execution,
     ) {
+        // TODO: allow layers in the row direction. 
+        // TODO: with layers, hover animation vertically in the row/layer you're editing.
+        // TODO: allow an optional animation overlay in the upper right corner.
+        // TODO: allow showing other open files at the same time in separate rows.
+        // TODO: allow a "keyboard" mode where you can select an entire frame to copy from
+        // one animation to another.
         self::draw_brush(session, &session.brush, &mut self.ui_batch);
         self::draw_paste(session, &mut self.paste_batch);
         self::draw_grid(session, &mut self.ui_batch);

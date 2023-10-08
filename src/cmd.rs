@@ -764,7 +764,7 @@ impl Default for Commands {
     fn default() -> Self {
         let mut new_self = Self::new();
         new_self
-            .command("q", "Quit view", |p| p.value(Command::Quit))
+            .commands(&["quit", "q"], "Quit view", |p| p.value(Command::Quit))
             .command("qa", "Quit all views", |p| p.value(Command::QuitAll))
             .command("q!", "Force quit view", |p| p.value(Command::ForceQuit))
             .command("qa!", "Force quit all views", |p| {
@@ -891,10 +891,10 @@ impl Default for Commands {
             .command("sampler", "Switch to the sampler tool", |p| {
                 p.value(Command::Tool(Tool::Sampler))
             })
-            .command("v/next", "Activate the next view", |p| {
+            .commands(&["view/next", "v/next", "vn", "v+"], "Activate the next view", |p| {
                 p.value(Command::ViewNext)
             })
-            .command("v/prev", "Activate the previous view", |p| {
+            .commands(&["view/prev", "v/prev", "vp", "v-"], "Activate the previous view", |p| {
                 p.value(Command::ViewPrev)
             })
             .command("v/center", "Center the active view", |p| {

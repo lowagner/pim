@@ -312,7 +312,8 @@ impl<R> View<R> {
             // FIXME: This is very inefficient. Since the actual frame contents
             // haven't changed, we don't need to create a full snapshot. We just
             // have to record how many frames are in this snapshot.
-            self.touch();
+            // TODO: there's currently not a way to undo a slice.
+            self.dirty();
 
             return true;
         }
@@ -380,6 +381,10 @@ impl<R> View<R> {
         if let FileStatus::Saved(ref f) = self.file_status {
             self.file_status = FileStatus::Modified(f.clone());
         }
+        self.dirty()
+    }
+
+    pub fn dirty(&mut self) {
         if self.state == ViewState::Okay {
             self.state = ViewState::Dirty(None);
         }
