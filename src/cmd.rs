@@ -115,6 +115,8 @@ pub enum Command {
     Fill(Option<Rgba8>),
 
     SwapColors,
+    // TODO: ForegroundColor (fg), BackgroundColor (bg),
+    // e.g., `fg #123456` for color or `fg 1` for palette.
 
     Mode(Mode),
     Tool(Tool),

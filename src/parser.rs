@@ -11,6 +11,28 @@ use crate::session::{Direction, Mode, VisualState};
 use std::ffi::OsString;
 use std::str::FromStr;
 
+/*
+TODO: new parser framework to make it easier to chain commands.
+we want something like `pan (some-other-command) 1` to work as expected.
+TODO: maybe switch `:` -> `(` since that's how you run a subcommand.
+
+syntax:
+    * (...)   evaluate the command in ... and "push" its return string
+        TODO: should the return string be able to have commands in it
+        that get run?
+        e.g., `echo (echo "echo 5")` -> `echo "echo 5"` -> `echo 5` -> 5
+        maybe we make `echo` just print to the info message toast
+        and return nothing to the command line.
+
+    * `cmd arg_or_expression1 arg_or_expression2 ...`.  Each command
+    can consume a variable number of args, but usually specified beforehand.
+    You can use a semicolon to stop a command from consuming more arguments.
+
+    * `cmd arg ;` forces the command to stop consuming arguments after `arg`.
+
+    * `if (cmd) { } else { }`
+*/
+
 pub type Error = memoir::result::Error;
 
 pub fn identifier() -> Parser<String> {
