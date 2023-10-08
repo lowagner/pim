@@ -1827,6 +1827,7 @@ impl Session {
     }
 
     fn handle_mouse_input(&mut self, button: platform::MouseButton, state: platform::InputState) {
+        // TODO: add right mouse button
         if button != platform::MouseButton::Left {
             return;
         }

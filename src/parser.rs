@@ -70,6 +70,30 @@ pub fn path() -> Parser<String> {
         .label("<path>")
 }
 
+// An implementation of `choice` which doesn't require parsing to the end.
+// It also resets the input for each new option.
+pub fn choose_prefix<T>(choices: Vec<Parser<T>>) -> Parser<T> {
+    let label = choices
+        .iter()
+        .map(|p| p.label.clone())
+        .collect::<Vec<_>>()
+        .join(" | ");
+    let expected = label.clone();
+
+    Parser::new(
+        move |input| {
+            for p in &choices {
+                match p.parse(input) {
+                    Ok((result, rest)) => return Ok((result, rest)),
+                    Err(_) => continue,
+                }
+            }
+            Err((Error::expect(&expected, input), input))
+        },
+        label,
+    )
+}
+
 impl Parse for platform::Key {
     fn parser() -> Parser<Self> {
         let alphanum = character().try_map(|c| {
@@ -77,6 +101,8 @@ impl Parse for platform::Key {
 
             if key == platform::Key::Unknown {
                 return Err(format!("unknown key {:?}", c));
+            } else if key == platform::Key::Space {
+                return Err("use `<space>` for spacebar".to_string());
             }
             Ok(key)
         });
@@ -104,37 +130,43 @@ impl Parse for platform::Key {
     }
 }
 
+impl Parse for platform::Modifier {
+    fn parser() -> Parser<Self> {
+        peek(
+            between('<', '>', any::<_, String>(letter())).try_map(|key| {
+                let key = match key.as_str() {
+                    "ctrl" => platform::Modifier::Control,
+                    "alt" => platform::Modifier::Alt,
+                    "shift" => platform::Modifier::Shift,
+                    other => return Err(format!("unknown modifier <{}>", other)),
+                };
+                Ok(key)
+            }),
+        )
+        .label("<mod>")
+    }
+}
+
 impl Parse for platform::ModifiersState {
     fn parser() -> Parser<Self> {
-        // TODO: this doesn't appear to be very clean, but it does seem to work.
-        any::<_, Vec<platform::Key>>(
-            peek(param::<platform::Key>().map(|key: platform::Key| {
-                return if key.is_modifier() {
-                    Ok(key)
-                } else {
-                    Err(format!("not a modifier {}", key))
+        many::<_, Vec<platform::Modifier>>(param::<platform::Modifier>())
+            .map(|modifiers| {
+                let mut state = platform::ModifiersState {
+                    shift: false,
+                    alt: false,
+                    ctrl: false,
+                    meta: false,
                 };
-            }))
-            .map(|key| key.unwrap()),
-        )
-        .map(|modifiers| {
-            let mut state = platform::ModifiersState {
-                shift: false,
-                alt: false,
-                ctrl: false,
-                meta: false,
-            };
-            for modifier in modifiers {
-                match modifier {
-                    platform::Key::Control => state.ctrl = true,
-                    platform::Key::Shift => state.shift = true,
-                    platform::Key::Alt => state.alt = true,
-                    _ => assert!(false, "unexpected modifier {}", modifier),
+                for modifier in modifiers {
+                    match modifier {
+                        platform::Modifier::Control => state.ctrl = true,
+                        platform::Modifier::Shift => state.shift = true,
+                        platform::Modifier::Alt => state.alt = true,
+                    }
                 }
-            }
-            state
-        })
-        .label("<mods>")
+                state
+            })
+            .label("<mods>")
     }
 }
 
@@ -172,6 +204,7 @@ pub fn color() -> Parser<Rgba8> {
                 if input.is_empty() {
                     return Err("expected color".to_owned());
                 }
+                // TODO: support e.g. #fff and #abc
                 if input.len() < 7 {
                     return Err(format!("{:?} is not a valid color value", input));
                 }
@@ -286,18 +319,9 @@ mod test {
     }
 
     #[test]
-    fn test_modifiers_parser() {
+    fn test_modifiers_parser_success() {
         let p = platform::ModifiersState::parser();
 
-        assert_eq!(
-            p.parse("").unwrap().0,
-            platform::ModifiersState {
-                shift: false,
-                alt: false,
-                ctrl: false,
-                meta: false
-            }
-        );
         assert_eq!(
             p.parse("<shift>").unwrap().0,
             platform::ModifiersState {
@@ -360,6 +384,80 @@ mod test {
                 ctrl: true,
                 meta: false
             }
+        );
+    }
+
+    #[test]
+    fn test_modifiers_parser_failure() {
+        let p = platform::ModifiersState::parser();
+
+        // We don't want ModifiersState to be greedy and assume that nothing is allowed as a blank modifier, otherwise it will match anything.
+        assert!(p.parse("").is_err());
+        assert!(p.parse("asdf").is_err());
+        assert!(p.parse("<tab>").is_err());
+    }
+
+    #[test]
+    fn test_modifiers_add_key_parser() {
+        let p = platform::ModifiersState::parser().then(param::<platform::Key>());
+
+        assert_eq!(
+            p.parse("<ctrl>a").unwrap().0,
+            (
+                platform::ModifiersState {
+                    shift: false,
+                    alt: false,
+                    ctrl: true,
+                    meta: false
+                },
+                platform::Key::A
+            )
+        );
+        assert_eq!(
+            p.parse("<ctrl><shift>p").unwrap().0,
+            (
+                platform::ModifiersState {
+                    shift: true,
+                    alt: false,
+                    ctrl: true,
+                    meta: false
+                },
+                platform::Key::P
+            )
+        );
+        assert!(p.parse("<ctrl>").is_err());
+        assert!(p.parse("<ctrl><shift>").is_err());
+        assert!(p.parse("<ctrl> ").is_err());
+    }
+
+    #[test]
+    fn test_modifiers_with_key_or_plain_key_parser() {
+        let p = peek(platform::ModifiersState::parser().then(param::<platform::Key>()))
+            .or(param::<platform::Key>().map(|key| (platform::ModifiersState::default(), key)));
+
+        assert_eq!(
+            p.parse("<ctrl>a").unwrap().0,
+            (
+                platform::ModifiersState {
+                    shift: false,
+                    alt: false,
+                    ctrl: true,
+                    meta: false
+                },
+                platform::Key::A
+            )
+        );
+        assert_eq!(
+            p.parse("<ctrl>").unwrap().0,
+            (
+                platform::ModifiersState {
+                    shift: false,
+                    alt: false,
+                    ctrl: false,
+                    meta: false
+                },
+                platform::Key::Control
+            )
         );
     }
 }

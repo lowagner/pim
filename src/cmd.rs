@@ -340,37 +340,30 @@ impl KeyMapping {
             "<cmd>",
         );
 
-        let key_with_modifier = fail("unimplemented"); // TODO
-        let character = between('\'', '\'', character())
-            .map(Input::Character)
-            .skip(whitespace())
-            .then(press.clone())
-            .map(|(input, press)| (platform::ModifiersState::default(), (input, press), None));
-        let key = param::<platform::Key>()
-            .map(Input::Key)
+        let key = param::<platform::Key>().map(Input::Key);
+        let key_with_modifier = param::<platform::ModifiersState>().then(key.clone());
+        let no_mod_character = between('\'', '\'', character()).map(|character| {
+            (
+                platform::ModifiersState::default(),
+                Input::Character(character),
+            )
+        });
+        let no_mod_key = key.map(|key| (platform::ModifiersState::default(), key));
+
+        choose_prefix(Vec::from([key_with_modifier, no_mod_character, no_mod_key]))
             .skip(whitespace())
             .then(press)
             .skip(optional(whitespace()))
+            // TODO: `release` might not work with character or key_with_modifier
             .then(optional(between('{', '}', release)))
-            .map(|(input_and_press, release)| {
-                (
-                    platform::ModifiersState::default(),
-                    input_and_press,
-                    release,
-                )
-            });
-
-        key_with_modifier
-            .or(character)
-            .or(key)
-            .map(move |(modifiers, (input, press), release)| KeyMapping {
+            .map(move |(((modifiers, input), press), release)| KeyMapping {
                 modifiers,
                 input,
                 press,
                 release,
                 modes: modes.clone(),
             })
-            .label("<key> <cmd>") // TODO: We should provide the full command somehow.
+            .label("<key-combo> <cmd>") // TODO: We should provide the full command somehow.
     }
 }
 
@@ -1484,6 +1477,9 @@ mod test {
             .skip(whitespace())
             .then(KeyMapping::parser(&[]));
 
+        let (_, rest) = p.parse("map ':' :w").unwrap();
+        assert_eq!(rest, "");
+
         let (_, rest) = p.parse("map <tab> :q! {:q}").unwrap();
         assert_eq!(rest, "");
 
@@ -1494,10 +1490,13 @@ mod test {
 
         let (_, rest) = p.parse("map <ctrl> :tool sampler {:tool/prev}").unwrap();
         assert_eq!(rest, "");
+
+        let (_, rest) = p.parse("map <ctrl>z :undo").unwrap();
+        assert_eq!(rest, "");
     }
 
     #[test]
-    fn tes_value_parser() {
+    fn test_value_parser() {
         let p = Value::parser();
 
         assert_eq!(p.parse("1.0 2.0").unwrap(), (Value::F32Tuple(1.0, 2.0), ""));

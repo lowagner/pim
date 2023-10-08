@@ -18,8 +18,8 @@ map/normal  j             :v/prev                                   --  Go to pr
 map/normal  k             :v/next                                   --  Go to next view
 map         <tab>         :v/prev                                   --  Go to previous view (all modes)
 map         z             :v/center                                 --  Center active view
-map         u             :undo                                     --  Undo active view edit
-map         r             :redo                                     --  Redo active view edit
+map         <ctrl>z       :undo                                     --  Undo active view edit
+map         <ctrl>r       :redo                                     --  Undo active view edit
 map         x             :swap                                     --  Swap foreground/background colors
 map/normal  b             :brush                                    --  Reset brush
 map/normal  g             :flood                                    --  Flood tool

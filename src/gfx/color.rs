@@ -130,6 +130,7 @@ impl FromStr for Rgba8 {
     /// Parse a color code of the form `#ffffff` into an
     /// instance of `Rgba8`. The alpha is always `0xff`.
     fn from_str(hex_code: &str) -> Result<Self, Self::Err> {
+        // TODO: support e.g. #fff and #abc if hex_code is of length 4
         let r: u8 = u8::from_str_radix(&hex_code[1..3], 16)?;
         let g: u8 = u8::from_str_radix(&hex_code[3..5], 16)?;
         let b: u8 = u8::from_str_radix(&hex_code[5..7], 16)?;

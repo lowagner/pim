@@ -172,6 +172,7 @@ pub enum Key {
     Slash, Backslash,
 
     // Modifiers.
+    // TODO: add Meta
     Shift, Control, Alt,
 
     // Math keys.
@@ -287,6 +288,23 @@ impl fmt::Display for Key {
 impl Key {
     pub fn is_modifier(self) -> bool {
         matches!(self, Key::Alt | Key::Control | Key::Shift)
+    }
+}
+
+pub enum Modifier {
+    // TODO: add Meta
+    Shift,
+    Control,
+    Alt,
+}
+
+impl fmt::Display for Modifier {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Modifier::Control => "<ctrl>".fmt(f),
+            Modifier::Shift => "<shift>".fmt(f),
+            Modifier::Alt => "<alt>".fmt(f),
+        }
     }
 }
 
