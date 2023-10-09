@@ -18,6 +18,24 @@ use std::path::Path;
 
 pub const COMMENT: char = '-';
 
+/*
+syntax:
+    * `cmd arg_or_expression1 arg_or_expression2 ...`.  Each command
+    can consume a variable number of args, but usually specified beforehand.
+
+    * `(cmd ...)`: evaluate the command `cmd` with args `...`, so that you
+    can nest commands: `cmd1 (cmd2 ...) (cmd3 ...)` will pass the output
+    of command `cmd2` and `cmd3` to `cmd1`.
+
+    TODO:
+    * `cmd arg ;` forces the command to stop consuming arguments after `arg`.
+    This is most useful if you want to chain multiple commands in one command,
+    e.g., `cmd1 args1... ; cmd2 args2... ; cmd3 args3...`.
+
+    TODO:
+    * `if (cmd) (true-branch) (false-branch)`
+*/
+
 #[derive(Clone, PartialEq, Debug)]
 pub enum Op {
     Incr,
@@ -117,7 +135,6 @@ pub enum Command {
     SwapColors,
     // TODO: ForegroundColor (fg), BackgroundColor (bg),
     // e.g., `fg #123456` for color or `fg 1` for palette.
-
     Mode(Mode),
     Tool(Tool),
     ToolPrev,
@@ -893,12 +910,16 @@ impl Default for Commands {
             .command("sampler", "Switch to the sampler tool", |p| {
                 p.value(Command::Tool(Tool::Sampler))
             })
-            .commands(&["view/next", "v/next", "vn", "v+"], "Activate the next view", |p| {
-                p.value(Command::ViewNext)
-            })
-            .commands(&["view/prev", "v/prev", "vp", "v-"], "Activate the previous view", |p| {
-                p.value(Command::ViewPrev)
-            })
+            .commands(
+                &["view/next", "v/next", "vn", "v+"],
+                "Activate the next view",
+                |p| p.value(Command::ViewNext),
+            )
+            .commands(
+                &["view/prev", "v/prev", "vp", "v-"],
+                "Activate the previous view",
+                |p| p.value(Command::ViewPrev),
+            )
             .command("v/center", "Center the active view", |p| {
                 p.value(Command::ViewCenter)
             })

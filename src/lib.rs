@@ -38,6 +38,7 @@ mod parser;
 mod pixels;
 mod platform;
 mod renderer;
+mod script;
 mod sprite;
 mod timer;
 mod view;

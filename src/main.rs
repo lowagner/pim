@@ -8,6 +8,7 @@ use std::process;
 
 const HEADER: &str = r#"
 Alexis Sellier <self@cloudhead.io>
+Lucas Wagner <lowagner@gmail.com>
 A Modern & Minimalist Pixel Editor
 "#;
 

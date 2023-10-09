@@ -12,17 +12,17 @@ use crate::hashmap;
 use crate::palette::*;
 use crate::platform::{self, InputState, Key, KeyboardInput, LogicalSize, ModifiersState};
 use crate::util;
+
+use crate::gfx::math::*;
+use crate::gfx::rect::Rect;
+use crate::gfx::shape2d::{Fill, Rotation, Shape, Stroke};
+use crate::gfx::{Point, Rgb8, Rgba8, ZDepth};
 use crate::view::path;
 use crate::view::resource::ViewResource;
 use crate::view::{
     self, FileStatus, FileStorage, View, ViewCoords, ViewExtent, ViewId, ViewManager, ViewOp,
     ViewState,
 };
-
-use crate::gfx::math::*;
-use crate::gfx::rect::Rect;
-use crate::gfx::shape2d::{Fill, Rotation, Shape, Stroke};
-use crate::gfx::{Point, Rgb8, Rgba8, ZDepth};
 
 use arrayvec::ArrayVec;
 
