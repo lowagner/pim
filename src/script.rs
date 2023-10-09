@@ -32,9 +32,30 @@ pub enum Argument {
     F64(f64),
     Str(String),
     Rgba8(Rgba8),
-    // TODO: add conditional, e.g., `If`.  this will consume an argument but not use it.
+    If,
     // TODO: we should be able to pause execution, e.g., for an alert box to confirm an action
     Script(Script),
+}
+
+impl Argument {
+    pub fn is_value(&self) -> bool {
+        !matches!(
+            self,
+            Self::If | Self::Script(_)
+        )
+    }
+
+    pub fn is_truthy(&self) -> bool {
+        match self {
+            Self::Null => false,
+            Self::Bool(value) => *value,
+            Self::I64(value) => *value != 0,
+            Self::F64(value) => *value != 0.,
+            Self::Str(value) => *value != "",
+            Self::Rgba8(value) => *value != Rgba8::TRANSPARENT,
+            _ => panic!("unimplemented")
+        }
+    }
 }
 
 pub struct ScriptRunner<'a> {
@@ -80,25 +101,49 @@ impl<'a> ScriptRunner<'a> {
     /// Ensures returning a non-Script-based Argument by executing
     /// any nested scripts embedded in the argument.
     pub fn evaluate_argument(&mut self, executor: &mut dyn ScriptExecutor) -> ArgumentResult {
-        let current_argument_index = self.argument_index;
-        if self.argument_index < self.script.arguments.len() {
-            self.argument_index += 1;
-        } else {
-            return Err(format!("`{}` required another argument", self.command()));
-        }
-        let mut result = self.script.arguments[current_argument_index].clone();
-        loop {
-            match result {
-                Argument::Script(script) => {
-                    let nested_result = script.execute(executor);
-                    if nested_result.is_err() {
-                        return nested_result;
-                    }
-                    result = nested_result.unwrap();
-                }
-                _ => return Ok(result),
+        let mut next_argument = || {
+            let current_argument_index = self.argument_index;
+            if self.argument_index < self.script.arguments.len() {
+                self.argument_index += 1;
+                Ok(self.script.arguments[current_argument_index].clone())
+            } else {
+                Err(format!("`{}` required another argument", self.command()))
             }
-        }
+        };
+        let mut execute_argument = |mut result: ArgumentResult| {
+            while !result.is_err() {
+                let argument = result.unwrap();
+                match argument {
+                    Argument::Script(script) => {
+                        result = script.execute(executor);
+                    },
+                    Argument::If => {
+                        // TODO: need to update a state machine `if_state`; can't call closure from itself
+                        let condition = execute_argument();
+                        if condition.is_err() { return condition; }
+                        if condition.unwrap().is_truthy() {
+                            result = execute_argument();
+                            // Skip the `else` only if present:
+                            if self.argument_index < self.script.arguments.len() {
+                                self.skip_argument();
+                            }
+                        } else {
+                            self.skip_argument();
+                            // Execute the `else` only if present:
+                            result = if self.argument_index < self.script.arguments.len() {
+                                execute_argument()
+                            } else {
+                                Ok(Argument::Null)
+                            }
+                        }
+                        return result;
+                    },
+                    _ => return Ok(argument),
+                }
+            }
+            result
+        };
+        execute_argument(next_argument())
     }
 
     fn run(&mut self, executor: &mut dyn ScriptExecutor) -> ArgumentResult {
@@ -178,6 +223,27 @@ mod test {
 
     #[test]
     fn test_script_run_taking_too_many_arguments() {
+        let script = Script {
+            command: Command::ForegroundColor,
+            arguments: Vec::new(),
+        };
+
+        let mut test_executor = TestExecutor::new();
+        let result = script.execute(&mut test_executor);
+
+        let error_string = "`fg` required another argument".to_string();
+        assert_eq!(
+            test_executor.test_what_ran,
+            Vec::from([
+                WhatRan::Command(Command::ForegroundColor),
+                WhatRan::Argument(Err(error_string.clone())),
+            ])
+        );
+        assert_eq!(result.err(), Some(error_string));
+    }
+
+    #[test]
+    fn test_script_run_skipping_not_enough_arguments() {
         let script = Script {
             command: Command::ForegroundColor,
             arguments: Vec::new(),
