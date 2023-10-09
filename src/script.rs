@@ -5,12 +5,14 @@ use std::fmt;
 #[derive(PartialEq, Debug, Clone)]
 pub enum Command {
     Quit,
+    ForegroundColor,
 }
 
 impl fmt::Display for Command {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Quit => write!(f, "quit"),
+            Self::ForegroundColor => write!(f, "fg"),
             _ => write!(f, "???"),
         }
     }
@@ -31,6 +33,7 @@ pub enum Argument {
     Str(String),
     Rgba8(Rgba8),
     // TODO: add conditional, e.g., `If`.  this will consume an argument but not use it.
+    // TODO: we should be able to pause execution, e.g., for an alert box to confirm an action
     Script(Script),
 }
 
@@ -70,7 +73,7 @@ impl<'a> ScriptRunner<'a> {
             self.argument_index += 1;
             Ok(())
         } else {
-            return Err("ScriptRunner could not provide another argument".to_string());
+            return Err(format!("`{}` required another argument", self.command()));
         }
     }
 
@@ -81,7 +84,7 @@ impl<'a> ScriptRunner<'a> {
         if self.argument_index < self.script.arguments.len() {
             self.argument_index += 1;
         } else {
-            return Err("ScriptRunner could not provide another argument".to_string());
+            return Err(format!("`{}` required another argument", self.command()));
         }
         let mut result = self.script.arguments[current_argument_index].clone();
         loop {
@@ -132,6 +135,7 @@ mod test {
             self.test_what_ran.push(WhatRan::Command(command.clone()));
             match command {
                 Command::Quit => Ok(Argument::Null),
+                Command::ForegroundColor => self.evaluate_argument(runner),
             }
         }
     }
@@ -170,5 +174,26 @@ mod test {
             result.err(),
             Some("`quit` did not use up all the arguments".to_string())
         );
+    }
+
+    #[test]
+    fn test_script_run_taking_too_many_arguments() {
+        let script = Script {
+            command: Command::ForegroundColor,
+            arguments: Vec::new(),
+        };
+
+        let mut test_executor = TestExecutor::new();
+        let result = script.execute(&mut test_executor);
+
+        let error_string = "`fg` required another argument".to_string();
+        assert_eq!(
+            test_executor.test_what_ran,
+            Vec::from([
+                WhatRan::Command(Command::ForegroundColor),
+                WhatRan::Argument(Err(error_string.clone())),
+            ])
+        );
+        assert_eq!(result.err(), Some(error_string));
     }
 }
