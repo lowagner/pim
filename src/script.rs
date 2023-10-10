@@ -2,11 +2,39 @@ use crate::gfx::Rgba8;
 
 use std::fmt;
 
+/*
+TODO: how is parsing going to work here?
+TODO: how do we pull in arguments to a new command?  cmd-line syntax: `()`?
+        :command 'cmd_name' (the_cmd () 123)
+    =>  :cmd_name 5     -- calls `the_cmd` with arguments `5` `123`
+
+        ()          -- evaluate next argument
+        ..          -- skip next argument
+        ()?         -- evaluate next argument if present
+        ..?         -- skip next argument if present
+        run_index   -- evaluates next argument, uses it as index as to which argument to run
+                    -- (index starts at 0 for the first argument after the argument index.)
+                    -- afterwards, sets the argument index to the end.
+        #()         -- number of remaining arguments
+        truthy      -- returns 1 if next argument is truthy otherwise 0
+
+    based on the above, the "optional else" `if` can be built like this:
+        -- note the truthy clause happens second since `run (truthy ())`
+        -- will run argument 0 for false and argument 1 for truthy:
+
+        :command 'if' ( run (truthy ()) (.. ()?) (() ..?) )
+
+    notice that "next argument" or "skip argument" do *not* apply to
+    the script's list of arguments; they apply to arguments being supplied
+    to the script externally.
+*/
+
 #[derive(PartialEq, Debug, Clone)]
 pub enum Command {
     Quit,
     ForegroundColor,
     If,
+    // TODO: Shift: moves the animation over one to start one frame down
 }
 
 impl fmt::Display for Command {
@@ -29,11 +57,14 @@ pub struct Script {
 #[derive(PartialEq, Debug, Clone)]
 pub enum Argument {
     Null,
-    Bool(bool),
+    // TODO: convert "true"/"false" to 1/0 in an I64.
     I64(i64),
+    // TODO: see if we can get rid of F64 as well.
     F64(f64),
     Str(String),
     Rgba8(Rgba8),
+    // TODO: maybe we need an `Argument::End` for end-of-input.
+    // TODO: we probably need an `Argument::SupplyNext` for user-created commands
     // TODO: we should be able to pause execution, e.g., for an alert box to confirm an action
     Script(Script),
 }
@@ -42,20 +73,27 @@ impl fmt::Display for Argument {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Null => write!(f, "null"),
-            Self::Bool(value) => write!(f, "{}", if *value { "true" } else { "false" }),
             Self::I64(value) => write!(f, "{}", *value),
             Self::F64(value) => write!(f, "{}", *value),
             Self::Str(value) => write!(f, "{}", *value),
             Self::Rgba8(value) => write!(f, "{}", *value),
             Self::Script(script) => {
-                let mut check = write!(f, "Script {{command: {}, arguments: Vec2::from([", script.command);
-                if check.is_err() { return check; }
+                let mut check = write!(
+                    f,
+                    "Script {{command: {}, arguments: Vec2::from([",
+                    script.command
+                );
+                if check.is_err() {
+                    return check;
+                }
                 for arg in &script.arguments {
                     check = write!(f, "{}, ", arg);
-                    if check.is_err() { return check; }
+                    if check.is_err() {
+                        return check;
+                    }
                 }
                 write!(f, "])}}")
-            },
+            }
             _ => write!(f, "???"),
         }
     }
@@ -69,12 +107,11 @@ impl Argument {
     pub fn is_truthy(&self) -> bool {
         match self {
             Self::Null => false,
-            Self::Bool(value) => *value,
             Self::I64(value) => *value != 0,
             Self::F64(value) => *value != 0.,
             Self::Str(value) => *value != "",
             Self::Rgba8(value) => *value != Rgba8::TRANSPARENT,
-            _ => panic!("unimplemented")
+            _ => panic!("unimplemented"),
         }
     }
 }
@@ -141,7 +178,7 @@ impl<'a> ScriptRunner<'a> {
             match argument {
                 Argument::Script(script) => {
                     result = script.execute(executor);
-                },
+                }
                 _ => return Ok(argument),
             }
         }
@@ -184,29 +221,35 @@ mod test {
                 Command::Quit => Ok(Argument::Null),
                 Command::ForegroundColor => self.evaluate_argument(runner),
                 Command::If => {
-                    // TODO: see if we can make this a helper function
+                    // TODO: turn this into a macro
                     let conditional = self.evaluate_argument(runner);
-                    // TODO: finalize with error
-                    if conditional.is_err() { return conditional; }
+                    if conditional.is_err() {
+                        return conditional;
+                    }
                     if conditional.unwrap().is_truthy() {
-                        eprint!("heyo inside if {}\n", command);
                         let result = self.evaluate_argument(runner);
-                        eprint!("heyo inside if after {}\n", result.clone().unwrap());
                         if runner.has_another_argument() {
                             // To avoid errors with not using up arguments; i.e.,
                             // we support an optional `else` clause.
-                            runner.skip_argument();
+                            let check = runner.skip_argument();
+                            // We checked if an argument was present before skipping;
+                            // this should be safe.
+                            assert!(check.is_ok());
                         }
                         return result;
                     } else {
-                        runner.skip_argument();
+                        let check = runner.skip_argument();
+                        if check.is_err() {
+                            // We expected another argument to `if` besides just the conditional.
+                            return Err("Expected `if` to have a truthy block".to_string());
+                        }
                         // To support an optional `else` clause, only execute if present.
                         if runner.has_another_argument() {
                             return self.evaluate_argument(runner);
                         }
                         return Ok(Argument::Null);
                     }
-                },
+                }
             }
         }
     }
@@ -222,9 +265,6 @@ mod test {
         // We do it for tests to get `WhatRan`.
         fn evaluate_argument(&mut self, runner: &mut ScriptRunner) -> ArgumentResult {
             let result = runner.evaluate_argument(self);
-            if result.is_ok() {
-                eprint!("heyo inside evaluate argument {}\n", result.clone().unwrap());
-            }
             self.test_what_ran.push(WhatRan::Argument(result.clone()));
             result
         }
@@ -234,7 +274,7 @@ mod test {
     fn test_script_run_leaving_too_many_arguments() {
         let script = Script {
             command: Command::Quit,
-            arguments: Vec::from([Argument::I64(-3), Argument::Bool(true)]),
+            arguments: Vec::from([Argument::I64(-3), Argument::F64(1.23)]),
         };
 
         let mut test_executor = TestExecutor::new();
@@ -262,13 +302,9 @@ mod test {
 
         assert_eq!(
             test_executor.test_what_ran,
-            Vec::from([
-                WhatRan::Command(Command::Quit)
-                ])
+            Vec::from([WhatRan::Command(Command::Quit)])
         );
-        assert!(
-            result.is_ok()
-        );
+        assert!(result.is_ok());
     }
 
     #[test]
@@ -293,13 +329,16 @@ mod test {
     }
 
     #[test]
-    fn test_script_if_can_execute_if() {
+    fn test_script_if_can_execute_true() {
         let script = Script {
             command: Command::If,
-            arguments: Vec::from([Argument::Bool(true), Argument::Script(Script {
-                command: Command::ForegroundColor,
-                arguments: Vec::from([Argument::Rgba8(Rgba8::RED)]),
-            })]),
+            arguments: Vec::from([
+                Argument::I64(1),
+                Argument::Script(Script {
+                    command: Command::ForegroundColor,
+                    arguments: Vec::from([Argument::Rgba8(Rgba8::RED)]),
+                }),
+            ]),
         };
 
         let mut test_executor = TestExecutor::new();
@@ -309,13 +348,87 @@ mod test {
             test_executor.test_what_ran,
             Vec::from([
                 WhatRan::Command(Command::If),
-                WhatRan::Argument(Ok(Argument::Bool(true))),
+                WhatRan::Argument(Ok(Argument::I64(1))),
                 WhatRan::Command(Command::ForegroundColor),
                 WhatRan::Argument(Ok(Argument::Rgba8(Rgba8::RED))),
-                // TODO: we should try to avoid 
-                //WhatRan::Argument(Ok(Argument::Rgba8(Rgba8::RED))),
+                // This second one comes as a result of returning this from the `if`
+                WhatRan::Argument(Ok(Argument::Rgba8(Rgba8::RED))),
             ])
         );
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_script_if_can_execute_false_and_fail_without_enough_arguments() {
+        let mut script = Script {
+            command: Command::If,
+            arguments: Vec::from([
+                Argument::I64(0),
+                // NOTE! not enough arguments
+            ]),
+        };
+
+        let mut test_executor = TestExecutor::new();
+        let result = script.execute(&mut test_executor);
+
+        assert_eq!(
+            test_executor.test_what_ran,
+            Vec::from([
+                WhatRan::Command(Command::If),
+                WhatRan::Argument(Ok(Argument::I64(0))),
+            ])
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_script_if_can_execute_false_and_succeed_without_else() {
+        let mut script = Script {
+            command: Command::If,
+            arguments: Vec::from([
+                Argument::I64(0),
+                Argument::Rgba8(Rgba8::BLACK), // the truthy block.
+                                               // the else block is optional
+            ]),
+        };
+
+        let mut test_executor = TestExecutor::new();
+        let result = script.execute(&mut test_executor);
+
+        assert_eq!(
+            test_executor.test_what_ran,
+            Vec::from([
+                WhatRan::Command(Command::If),
+                WhatRan::Argument(Ok(Argument::I64(0))),
+            ])
+        );
+        assert!(result.is_ok());
+        assert_eq!(result.ok(), Some(Argument::Null));
+    }
+
+    #[test]
+    fn test_script_if_can_execute_false_and_succeed_with_else() {
+        let mut script = Script {
+            command: Command::If,
+            arguments: Vec::from([
+                Argument::I64(0),
+                Argument::Rgba8(Rgba8::BLACK), // the truthy block.
+                Argument::Rgba8(Rgba8::BLUE),  // the falsey block.
+            ]),
+        };
+
+        let mut test_executor = TestExecutor::new();
+        let result = script.execute(&mut test_executor);
+
+        assert_eq!(
+            test_executor.test_what_ran,
+            Vec::from([
+                WhatRan::Command(Command::If),
+                WhatRan::Argument(Ok(Argument::I64(0))),
+                WhatRan::Argument(Ok(Argument::Rgba8(Rgba8::BLUE))),
+            ])
+        );
+        assert!(result.is_ok());
+        assert_eq!(result.ok(), Some(Argument::Rgba8(Rgba8::BLUE)));
     }
 }
