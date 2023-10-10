@@ -59,8 +59,8 @@ pub enum Argument {
     Null,
     // TODO: convert "true"/"false" to 1/0 in an I64.
     I64(i64),
-    // TODO: see if we can get rid of F64 as well.
-    F64(f64),
+    // TODO: for Scale, use an I64 with the number of pixels desired in the X/Y direction.
+    // E.g., we can have PixelsX/PixelsY or width/height
     Str(String),
     Rgba8(Rgba8),
     // TODO: maybe we need an `Argument::End` for end-of-input.
@@ -74,7 +74,6 @@ impl fmt::Display for Argument {
         match self {
             Self::Null => write!(f, "null"),
             Self::I64(value) => write!(f, "{}", *value),
-            Self::F64(value) => write!(f, "{}", *value),
             Self::Str(value) => write!(f, "{}", *value),
             Self::Rgba8(value) => write!(f, "{}", *value),
             Self::Script(script) => {
@@ -108,7 +107,6 @@ impl Argument {
         match self {
             Self::Null => false,
             Self::I64(value) => *value != 0,
-            Self::F64(value) => *value != 0.,
             Self::Str(value) => *value != "",
             Self::Rgba8(value) => *value != Rgba8::TRANSPARENT,
             _ => panic!("unimplemented"),
@@ -274,7 +272,7 @@ mod test {
     fn test_script_run_leaving_too_many_arguments() {
         let script = Script {
             command: Command::Quit,
-            arguments: Vec::from([Argument::I64(-3), Argument::F64(1.23)]),
+            arguments: Vec::from([Argument::I64(-3), Argument::I64(12)]),
         };
 
         let mut test_executor = TestExecutor::new();
