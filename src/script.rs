@@ -4,25 +4,29 @@ use std::fmt;
 
 /*
 TODO: how is parsing going to work here?
-TODO: how do we pull in arguments to a new command?  cmd-line syntax: `()`?
-        :command 'cmd_name' (the_cmd () 123)
+TODO: how do we pull in arguments to a new command?  cmd-line syntax: `$0`, `$1`, etc.
+NOTE we need permanence of argument position (can't "next arg") because conditionals get confusing.
+especially nested scripts which might get executed out of order.
+TODO: we want a lazy evaluator: don't execute an Argument::Script unless needed, but then only once.
+maybe replace inline from a mutable Vec of Arguments.
+
+        :command 'cmd_name' (the_cmd $0 123)
     =>  :cmd_name 5     -- calls `the_cmd` with arguments `5` `123`
 
-        ()          -- evaluate next argument
-        ..          -- skip next argument
-        ()?         -- evaluate next argument if present
-        ..?         -- skip next argument if present
+        $0          -- evaluate argument at index 0.  similarly for $1, etc.
+        $0?         -- evaluate argument at index 1 if present.  similarly for $1?, etc.
+        $#          -- number of arguments
+
         run_index   -- evaluates next argument, uses it as index as to which argument to run
                     -- (index starts at 0 for the first argument after the argument index.)
                     -- afterwards, sets the argument index to the end.
-        #()         -- number of remaining arguments
         truthy      -- returns 1 if next argument is truthy otherwise 0
 
     based on the above, the "optional else" `if` can be built like this:
-        -- note the truthy clause happens second since `run (truthy ())`
+        -- note the truthy clause happens second since `run (truthy $0)`
         -- will run argument 0 for false and argument 1 for truthy:
 
-        :command 'if' ( run (truthy ()) (.. ()?) (() ..?) )
+        :command 'if' ( run (truthy $0) $2? $1 )
 
     notice that "next argument" or "skip argument" do *not* apply to
     the script's list of arguments; they apply to arguments being supplied
@@ -52,6 +56,13 @@ impl fmt::Display for Command {
 pub struct Script {
     command: Command,
     arguments: Vec<Argument>,
+}
+
+impl Script {
+    pub fn execute(&self, executor: &mut dyn ScriptExecutor) -> ArgumentResult {
+        let mut runner = ScriptRunner::new(&self);
+        runner.run(executor)
+    }
 }
 
 #[derive(PartialEq, Debug, Clone)]
@@ -114,11 +125,6 @@ impl Argument {
     }
 }
 
-pub struct ScriptRunner<'a> {
-    script: &'a Script,
-    argument_index: usize,
-}
-
 pub type ArgumentResult = Result<Argument, String>;
 
 // We're using this instead of a closure because rust closures are hard to type correctly.
@@ -126,11 +132,9 @@ pub trait ScriptExecutor {
     fn execute(&mut self, runner: &mut ScriptRunner) -> ArgumentResult;
 }
 
-impl Script {
-    pub fn execute(&self, executor: &mut dyn ScriptExecutor) -> ArgumentResult {
-        let mut runner = ScriptRunner::new(&self);
-        runner.run(executor)
-    }
+pub struct ScriptRunner<'a> {
+    script: &'a Script,
+    argument_index: usize,
 }
 
 impl<'a> ScriptRunner<'a> {
