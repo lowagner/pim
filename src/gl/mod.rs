@@ -837,7 +837,7 @@ impl<'a> renderer::Renderer<'a> for Renderer {
                     .bind_texture(cursors)
                     .expect("binding textures never fails");
                 shd_gate.shade(cursor2d, |mut iface, uni, mut rdr_gate| {
-                    let ui_scale = session.settings["scale"].to_f64();
+                    let ui_scale = session.settings["scale"].to_u64() as f64;
                     let pixel_ratio = platform::pixel_ratio(*scale_factor);
 
                     iface.set(&uni.cursor, bound_cursors.binding());

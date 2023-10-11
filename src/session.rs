@@ -46,7 +46,7 @@ SETTINGS
 
 debug             on/off             Debug mode
 checker           on/off             Alpha checker toggle
-scale             1.0..4.0           UI scale
+scale             1,2,3,4            UI scale
 animation         on/off             View animation toggle
 animation/delay   1..1000            View animation delay (ms)
 background        #000000..#ffffff   Set background appearance to <color>
@@ -521,7 +521,7 @@ impl Default for Settings {
                 "checker" => Value::Bool(false),
                 "background" => Value::Rgba8(color::TRANSPARENT),
                 "input/mouse" => Value::Bool(true),
-                "scale" => Value::F64(1.0),
+                "scale" => Value::U32(1),
                 "animation" => Value::Bool(true),
                 "animation/delay" => Value::U32(160),
                 "ui/palette" => Value::Bool(true),
@@ -1148,7 +1148,7 @@ impl Session {
                 // from the window coordinates. Currently, cursor position
                 // is stored only in `SessionCoords`, which would have
                 // to change.
-                self.rescale(old.to_f64(), new.to_f64());
+                self.rescale(old.to_u64() as f64, new.to_u64() as f64);
             }
             _ => {}
         }
@@ -1304,7 +1304,7 @@ impl Session {
     /// Convert "logical" window coordinates to session coordinates.
     pub fn window_to_session_coords(&self, position: platform::LogicalPosition) -> SessionCoords {
         let (x, y) = (position.x, position.y);
-        let scale: f64 = self.settings["scale"].to_f64();
+        let scale: f64 = self.settings["scale"].to_u64() as f64;
         SessionCoords::new(
             (x / scale).floor() as f32,
             self.height - (y / scale).floor() as f32 - 1.,
@@ -1818,7 +1818,7 @@ impl Session {
     }
 
     pub fn handle_resized(&mut self, size: platform::LogicalSize) {
-        self.resize(size, self.settings["scale"].to_f64());
+        self.resize(size, self.settings["scale"].to_u64() as f64);
         self.effects.push(Effect::SessionResized(size));
     }
 
@@ -2489,7 +2489,8 @@ impl Session {
                             let v = self.active_view();
                             Ok(Value::F32Tuple(v.offset.x, v.offset.y))
                         }
-                        "v/zoom" => Ok(Value::F64(self.active_view().zoom as f64)),
+                        // TODO: i don't know what this is, maybe delete
+                        "v/zoom" => Ok(Value::U32(self.active_view().zoom as u32)),
                         _ => match self.settings.get(s) {
                             None => Err(format!("Error: {} is undefined", s)),
                             Some(result) => Ok(Value::Str(format!("{} = {}", v.clone(), result))),
