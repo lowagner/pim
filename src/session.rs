@@ -485,7 +485,7 @@ pub struct Settings {
 }
 
 impl Settings {
-    const DEPRECATED: &'static [&'static str] = &["frame_delay", "input/delay", "vsync"];
+    const DEPRECATED: &'static [&'static str] = &["vsync"];
 
     /// Lookup a setting.
     pub fn get(&self, setting: &str) -> Option<&Value> {
@@ -537,11 +537,7 @@ impl Default for Settings {
 
                 "p/height" => Value::U32(Session::PALETTE_HEIGHT),
 
-                "debug/crosshair" => Value::Bool(false),
-
-                // Deprecated.
-                "frame_delay" => Value::F64(0.0),
-                "input/delay" => Value::F64(8.0)
+                "debug/crosshair" => Value::Bool(false)
             },
         }
     }
