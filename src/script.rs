@@ -1,21 +1,16 @@
 use crate::gfx::Rgba8;
 
 use std::fmt;
+use std::mem;
 
 /*
 TODO: how is parsing going to work here?
 TODO: how do we pull in arguments to a new command?  cmd-line syntax: `$0`, `$1`, etc.
-NOTE we need permanence of argument position (can't "next arg") because conditionals get confusing.
-especially nested scripts which might get executed out of order.
-TODO: we want a lazy evaluator: don't execute an Argument::Script unless needed, but then only once.
-maybe replace inline from a mutable Vec of Arguments.
 
         :command 'cmd_name' (the_cmd $0 123)
     =>  :cmd_name 5     -- calls `the_cmd` with arguments `5` `123`
 
         $0          -- evaluate argument at index 0.  similarly for $1, etc.
-        $0?         -- evaluate argument at index 1 if present.  similarly for $1?, etc.
-        $#          -- number of arguments
 
         run_index   -- evaluates next argument, uses it as index as to which argument to run
                     -- (index starts at 0 for the first argument after the argument index.)
@@ -26,11 +21,21 @@ maybe replace inline from a mutable Vec of Arguments.
         -- note the truthy clause happens second since `run (truthy $0)`
         -- will run argument 0 for false and argument 1 for truthy:
 
-        :command 'if' ( run (truthy $0) $2? $1 )
+        :command 'if' ( run (truthy $0) $2 $1 )
 
     notice that "next argument" or "skip argument" do *not* apply to
     the script's list of arguments; they apply to arguments being supplied
     to the script externally.
+
+TODO: nested scripts may become confusing.  we probably need to map indices for the external arguments.
+    For example:
+        :command 'paint5' (paint $0 $1 5)
+        :command 'paintline5' (paint/pushmode 'line' ; paint5 $1 $0 ; paint5 $0 $2 ; paint/popmode)
+
+    needs to map `1 -> 0`, `0 -> 1` for the first paint5, then `0 -> 0` and `2 -> 1` for the second paint5.
+    but this might be done automatically as long as `paint5` is called after `$1` and `$0` are evaluated.
+
+TODO: make push have an automatic pop at the end of a script runner.
 */
 
 #[derive(PartialEq, Debug, Clone)]
@@ -39,6 +44,7 @@ pub enum Command {
     ForegroundColor,
     If,
     // TODO: Shift: moves the animation over one to start one frame down
+    // TODO: maybe a `Lookup` command.
 }
 
 impl fmt::Display for Command {
@@ -55,15 +61,21 @@ impl fmt::Display for Command {
 #[derive(PartialEq, Debug, Clone)]
 pub struct Script {
     command: Command,
-    arguments: Vec<Argument>,
+    arguments: Arguments,
 }
 
 impl Script {
-    pub fn execute(&self, executor: &mut dyn ScriptExecutor) -> ArgumentResult {
-        let mut runner = ScriptRunner::new(&self);
-        runner.run(executor)
+    fn run(&self, runner: &mut dyn ScriptRunner, arguments: &mut Arguments) -> ArgumentResult {
+        // Note also that it's on purpose that we're cloning the Script here, so that we
+        // can lazily execute any internal scripts/commands and overwrite the arguments
+        // so that we execute any nested scripts only once.
+        let mut clone_self = self.clone();
+        runner.run(&mut clone_self, arguments)
     }
 }
+
+pub type Arguments = Vec<Argument>;
+pub type ArgumentResult = Result<Argument, String>;
 
 #[derive(PartialEq, Debug, Clone)]
 pub enum Argument {
@@ -74,10 +86,33 @@ pub enum Argument {
     // E.g., we can have PixelsX/PixelsY or width/height
     Str(String),
     Rgba8(Rgba8),
-    // TODO: maybe we need an `Argument::End` for end-of-input.
-    // TODO: we probably need an `Argument::SupplyNext` for user-created commands
     // TODO: we should be able to pause execution, e.g., for an alert box to confirm an action
+    // TODO: add an Argument::LambdaScript type that never gets lazily memo'd.
     Script(Script),
+    // An argument used to define a command so it can be called with other arguments elsewhere.
+    //          :command 'cmd_name' (the_cmd $0 123)
+    //      =>  :cmd_name 5     -- calls `the_cmd` with arguments `5` `123`
+    // The new `cmd_name` script looks like this:
+    //          Script { Command::Lookup("the_cmd"), Argument::[Use(0), I64(123)] }
+    // NOTE: if you ask for an argument beyond the length of the argument list,
+    // it will return Argument::Null.
+    Use(usize),
+}
+
+impl Argument {
+    pub fn is_value(&self) -> bool {
+        !matches!(self, Self::Script(_) | Self::Use(_))
+    }
+
+    pub fn is_truthy(&self) -> bool {
+        match self {
+            Self::Null => false,
+            Self::I64(value) => *value != 0,
+            Self::Str(value) => *value != "",
+            Self::Rgba8(value) => *value != Rgba8::TRANSPARENT,
+            _ => panic!("unimplemented"),
+        }
+    }
 }
 
 impl fmt::Display for Argument {
@@ -85,7 +120,7 @@ impl fmt::Display for Argument {
         match self {
             Self::Null => write!(f, "null"),
             Self::I64(value) => write!(f, "{}", *value),
-            Self::Str(value) => write!(f, "{}", *value),
+            Self::Str(value) => write!(f, "'{}'", *value),
             Self::Rgba8(value) => write!(f, "{}", *value),
             Self::Script(script) => {
                 let mut check = write!(
@@ -109,101 +144,103 @@ impl fmt::Display for Argument {
     }
 }
 
-impl Argument {
-    pub fn is_value(&self) -> bool {
-        !matches!(self, Self::Script(_))
-    }
-
-    pub fn is_truthy(&self) -> bool {
-        match self {
-            Self::Null => false,
-            Self::I64(value) => *value != 0,
-            Self::Str(value) => *value != "",
-            Self::Rgba8(value) => *value != Rgba8::TRANSPARENT,
-            _ => panic!("unimplemented"),
-        }
-    }
-}
-
-pub type ArgumentResult = Result<Argument, String>;
-
 // We're using this instead of a closure because rust closures are hard to type correctly.
-pub trait ScriptExecutor {
-    fn execute(&mut self, runner: &mut ScriptRunner) -> ArgumentResult;
+pub trait ScriptRunner {
+    /// Executes the script with external arguments in `arguments`.
+    // Note that the external `arguments` should *not* have any `Argument::Use` arguments;
+    // But that `script.arguments` can have these, which will use the external arguments.
+    // Note also that it's on purpose that we're modifying the Script here, so that we
+    // can lazily execute any internal scripts/commands and overwrite the arguments
+    // so that we execute any nested scripts only once.
+    fn run(&mut self, script: &mut Script, arguments: &mut Arguments) -> ArgumentResult;
 }
 
-pub struct ScriptRunner<'a> {
-    script: &'a Script,
-    argument_index: usize,
+pub fn evaluate_script_argument(
+    runner: &mut dyn ScriptRunner,
+    script: &mut Script,
+    script_argument_index: usize,
+    external_arguments: &mut Arguments,
+) -> ArgumentResult {
+    if script_argument_index >= script.arguments.len() {
+        return Ok(Argument::Null);
+    }
+
+    if script.arguments[script_argument_index].is_value() {
+        return Ok(script.arguments[script_argument_index].clone());
+    }
+
+    let mut evaluatable_argument =
+        mem::replace(&mut script.arguments[script_argument_index], Argument::Null);
+    match evaluatable_argument {
+        Argument::Script(mut nested_script) => {
+            let result = runner.run(&mut nested_script, external_arguments);
+            if result.is_err() {
+                // TODO: add test for this.
+                return result;
+            }
+            evaluatable_argument = result.unwrap();
+            script.arguments[script_argument_index] = evaluatable_argument.clone();
+        }
+        Argument::Use(external_index) => {
+            // TODO: maybe map `argument_index` for nested scripts.
+            let result =
+                evaluate_external_argument(runner, script, external_arguments, external_index);
+            // Restore the `Use` on script.arguments[script_argument_index]:
+            script.arguments[script_argument_index] = evaluatable_argument;
+            if result.is_err() {
+                return result;
+            }
+            evaluatable_argument = result.unwrap();
+            // We need to modify the external arguments if we want
+            // any other Argument::Use(external_index) to benefit from
+            // this evaluation (and only evaluate it once, like we did above):
+            external_arguments[external_index] = evaluatable_argument.clone();
+        }
+        _ => panic!(
+            "Invalid argument, not evaluatable: {}",
+            evaluatable_argument
+        ),
+    }
+    assert!(
+        evaluatable_argument.is_value(),
+        "Nested scripts not supported ATM"
+    );
+    return Ok(evaluatable_argument);
 }
 
-impl<'a> ScriptRunner<'a> {
-    fn new(script: &'a Script) -> Self {
-        Self {
-            script,
-            argument_index: 0,
-        }
-    }
-
-    pub fn command(&self) -> Command {
-        self.script.command.clone()
-    }
-
-    pub fn has_another_argument(&self) -> bool {
-        self.argument_index < self.script.arguments.len()
-    }
-
-    pub fn skip_argument(&mut self) -> Result<(), String> {
-        if self.argument_index < self.script.arguments.len() {
-            self.argument_index += 1;
-            Ok(())
-        } else {
-            return Err(format!("`{}` required another argument", self.command()));
-        }
-    }
-
-    /// Ensures returning a non-Script-based Argument by executing
-    /// any nested scripts embedded in the argument.
-    pub fn evaluate_argument(&mut self, executor: &mut dyn ScriptExecutor) -> ArgumentResult {
-        let mut next_argument = || {
-            let current_argument_index = self.argument_index;
-            if self.argument_index < self.script.arguments.len() {
-                self.argument_index += 1;
-                Ok(self.script.arguments[current_argument_index].clone())
-            } else {
-                Err(format!("`{}` required another argument", self.command()))
-            }
-        };
-        let mut result = next_argument();
-        while !result.is_err() {
-            let argument = result.unwrap();
-            match argument {
-                Argument::Script(script) => {
-                    result = script.execute(executor);
-                }
-                _ => return Ok(argument),
-            }
-        }
-        result
-    }
-
-    fn run(&mut self, executor: &mut dyn ScriptExecutor) -> ArgumentResult {
-        let result = executor.execute(self);
-
-        if self.argument_index == self.script.arguments.len() {
-            result
-        } else {
-            Err(format!(
-                "`{}` did not use up all the arguments",
-                self.command()
-            ))
-        }
-    }
+// Purposely private.  This should only be called via `evaluate_script_argument`.
+fn evaluate_external_argument(
+    runner: &mut dyn ScriptRunner,
+    script: &mut Script,
+    external_arguments: &mut Arguments,
+    external_index: usize,
+) -> ArgumentResult {
+    return Err("not implemented".to_string());
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
+
+    #[test]
+    fn test_argument_values() {
+        // value-type arguments:
+        assert!(Argument::Null.is_value());
+        assert!(Argument::I64(123).is_value());
+        assert!(Argument::Str("asdf".to_string()).is_value());
+        assert!(Argument::Rgba8(Rgba8::RED).is_value());
+
+        // non-value arguments; these need further evaluation to be used:
+        assert_eq!(
+            Argument::Script(Script {
+                command: Command::Quit,
+                arguments: vec![]
+            })
+            .is_value(),
+            false
+        );
+        assert_eq!(Argument::Use(3).is_value(), false);
+    }
 
     #[derive(PartialEq, Debug, Clone)]
     enum WhatRan {
@@ -211,85 +248,50 @@ mod test {
         Argument(ArgumentResult),
     }
 
-    struct TestExecutor {
+    struct TestRunner {
         test_what_ran: Vec<WhatRan>,
     }
 
-    impl ScriptExecutor for TestExecutor {
-        fn execute(&mut self, runner: &mut ScriptRunner) -> ArgumentResult {
-            let command = runner.command();
+    impl ScriptRunner for TestRunner {
+        fn run(&mut self, script: &mut Script, arguments: &mut Arguments) -> ArgumentResult {
+            let command = script.command.clone();
             self.test_what_ran.push(WhatRan::Command(command.clone()));
             match command {
                 Command::Quit => Ok(Argument::Null),
-                Command::ForegroundColor => self.evaluate_argument(runner),
+                Command::ForegroundColor => self.evaluate_argument(script, 0, arguments),
                 Command::If => {
-                    // TODO: turn this into a macro
-                    let conditional = self.evaluate_argument(runner);
+                    let conditional = self.evaluate_argument(script, 0, arguments);
                     if conditional.is_err() {
-                        return conditional;
-                    }
-                    if conditional.unwrap().is_truthy() {
-                        let result = self.evaluate_argument(runner);
-                        if runner.has_another_argument() {
-                            // To avoid errors with not using up arguments; i.e.,
-                            // we support an optional `else` clause.
-                            let check = runner.skip_argument();
-                            // We checked if an argument was present before skipping;
-                            // this should be safe.
-                            assert!(check.is_ok());
-                        }
-                        return result;
+                        conditional
+                    } else if conditional.unwrap().is_truthy() {
+                        self.evaluate_argument(script, 1, arguments)
                     } else {
-                        let check = runner.skip_argument();
-                        if check.is_err() {
-                            // We expected another argument to `if` besides just the conditional.
-                            return Err("Expected `if` to have a truthy block".to_string());
-                        }
-                        // To support an optional `else` clause, only execute if present.
-                        if runner.has_another_argument() {
-                            return self.evaluate_argument(runner);
-                        }
-                        return Ok(Argument::Null);
+                        self.evaluate_argument(script, 2, arguments)
                     }
                 }
             }
         }
     }
 
-    impl TestExecutor {
+    impl TestRunner {
         fn new() -> Self {
             Self {
                 test_what_ran: Vec::new(),
             }
         }
 
-        // You probably don't need to wrap your next argument function.
+        // You probably don't need to wrap the `evaluate_argument` function.
         // We do it for tests to get `WhatRan`.
-        fn evaluate_argument(&mut self, runner: &mut ScriptRunner) -> ArgumentResult {
-            let result = runner.evaluate_argument(self);
+        fn evaluate_argument(
+            &mut self,
+            script: &mut Script,
+            index: usize,
+            external_arguments: &mut Arguments,
+        ) -> ArgumentResult {
+            let result = evaluate_script_argument(self, script, index, external_arguments);
             self.test_what_ran.push(WhatRan::Argument(result.clone()));
             result
         }
-    }
-
-    #[test]
-    fn test_script_run_leaving_too_many_arguments() {
-        let script = Script {
-            command: Command::Quit,
-            arguments: Vec::from([Argument::I64(-3), Argument::I64(12)]),
-        };
-
-        let mut test_executor = TestExecutor::new();
-        let result = script.execute(&mut test_executor);
-
-        assert_eq!(
-            test_executor.test_what_ran,
-            Vec::from([WhatRan::Command(Command::Quit)])
-        );
-        assert_eq!(
-            result.err(),
-            Some("`quit` did not use up all the arguments".to_string())
-        );
     }
 
     #[test]
@@ -299,11 +301,12 @@ mod test {
             arguments: Vec::new(),
         };
 
-        let mut test_executor = TestExecutor::new();
-        let result = script.execute(&mut test_executor);
+        let mut test_runner = TestRunner::new();
+        let mut arguments = vec![];
+        let result = script.run(&mut test_runner, &mut arguments);
 
         assert_eq!(
-            test_executor.test_what_ran,
+            test_runner.test_what_ran,
             Vec::from([WhatRan::Command(Command::Quit)])
         );
         assert!(result.is_ok());
@@ -316,18 +319,18 @@ mod test {
             arguments: Vec::new(),
         };
 
-        let mut test_executor = TestExecutor::new();
-        let result = script.execute(&mut test_executor);
+        let mut test_runner = TestRunner::new();
+        let mut arguments = vec![];
+        let result = script.run(&mut test_runner, &mut arguments);
 
-        let error_string = "`fg` required another argument".to_string();
         assert_eq!(
-            test_executor.test_what_ran,
+            test_runner.test_what_ran,
             Vec::from([
                 WhatRan::Command(Command::ForegroundColor),
-                WhatRan::Argument(Err(error_string.clone())),
+                WhatRan::Argument(Ok(Argument::Null)),
             ])
         );
-        assert_eq!(result.err(), Some(error_string));
+        assert!(result.is_ok());
     }
 
     #[test]
@@ -343,11 +346,12 @@ mod test {
             ]),
         };
 
-        let mut test_executor = TestExecutor::new();
-        let result = script.execute(&mut test_executor);
+        let mut test_runner = TestRunner::new();
+        let mut arguments = vec![];
+        let result = script.run(&mut test_runner, &mut arguments);
 
         assert_eq!(
-            test_executor.test_what_ran,
+            test_runner.test_what_ran,
             Vec::from([
                 WhatRan::Command(Command::If),
                 WhatRan::Argument(Ok(Argument::I64(1))),
@@ -361,7 +365,7 @@ mod test {
     }
 
     #[test]
-    fn test_script_if_can_execute_false_and_fail_without_enough_arguments() {
+    fn test_script_if_can_execute_false_and_returns_null_without_enough_arguments() {
         let mut script = Script {
             command: Command::If,
             arguments: Vec::from([
@@ -370,17 +374,19 @@ mod test {
             ]),
         };
 
-        let mut test_executor = TestExecutor::new();
-        let result = script.execute(&mut test_executor);
+        let mut test_runner = TestRunner::new();
+        let mut arguments = vec![];
+        let result = script.run(&mut test_runner, &mut arguments);
 
         assert_eq!(
-            test_executor.test_what_ran,
+            test_runner.test_what_ran,
             Vec::from([
                 WhatRan::Command(Command::If),
                 WhatRan::Argument(Ok(Argument::I64(0))),
+                WhatRan::Argument(Ok(Argument::Null)),
             ])
         );
-        assert!(result.is_err());
+        assert!(result.is_ok());
     }
 
     #[test]
@@ -394,14 +400,16 @@ mod test {
             ]),
         };
 
-        let mut test_executor = TestExecutor::new();
-        let result = script.execute(&mut test_executor);
+        let mut test_runner = TestRunner::new();
+        let mut arguments = vec![];
+        let result = script.run(&mut test_runner, &mut arguments);
 
         assert_eq!(
-            test_executor.test_what_ran,
+            test_runner.test_what_ran,
             Vec::from([
                 WhatRan::Command(Command::If),
                 WhatRan::Argument(Ok(Argument::I64(0))),
+                WhatRan::Argument(Ok(Argument::Null)),
             ])
         );
         assert!(result.is_ok());
@@ -419,11 +427,12 @@ mod test {
             ]),
         };
 
-        let mut test_executor = TestExecutor::new();
-        let result = script.execute(&mut test_executor);
+        let mut test_runner = TestRunner::new();
+        let mut arguments = vec![];
+        let result = script.run(&mut test_runner, &mut arguments);
 
         assert_eq!(
-            test_executor.test_what_ran,
+            test_runner.test_what_ran,
             Vec::from([
                 WhatRan::Command(Command::If),
                 WhatRan::Argument(Ok(Argument::I64(0))),
