@@ -29,10 +29,20 @@ TODO: how do we pull in arguments to a new command?  cmd-line syntax: `$0`, `$1`
 TODO: nested scripts may become confusing.  we probably need to map indices for the external arguments.
     For example:
         :command 'paint5' (paint $0 $1 5)
-        :command 'paintline5' (paint/pushmode 'line' ; paint5 $1 $0 ; paint5 $0 $2 ; paint/popmode)
+        :command 'dot5' paint5 $2 $0
 
-    needs to map `1 -> 0`, `0 -> 1` for the first paint5, then `0 -> 0` and `2 -> 1` for the second paint5.
-    but this might be done automatically as long as `paint5` is called after `$1` and `$0` are evaluated.
+    needs to map external argument 2 to paint's argument 0, external argument 0 to paint's argument 1.
+
+        paint5: Script { command: Paint, arguments: [Use(0), Use(1), I64(5)] }
+        dot5: Script { command: Evaluate("paint5"), arguments: [Use(2), Use(0)] }
+
+    note that we need to evaluate paint5.arguments with dot5.arguments as "external"
+    but then dot5.arguments need to link to truly external arguments.
+
+    could just push to a script stack:
+
+        root: Script { command: Root, arguments [external-arguments] }
+        [root, dot5, paint5].
 
 TODO: we should maybe use variables for writing commands.
 e.g., `:set 'if' (run (truth $0) $2 $1)` should be fine.
@@ -49,9 +59,9 @@ pub enum Command {
     // TODO: Sequential(Vec<Command>),
 
     // Gets the value of a variable that is known to the compiler; evaluates it.
-    GetKnownVariable(String),
+    Evaluate(String),
     // Gets the value of a named variable at $0; technically evaluating it.
-    // TODO: this won't work well with a Script due to an offset that doesn't happen with GetKnownVariable.
+    // TODO: this won't work well with a Script due to an offset that doesn't happen with Evaluate.
     //      E.g., `:get 'my-fn' Arg1 Arg2` will be shifted from `$my-fn Arg1 Arg2`.
     //      $0 will refer to 'my-fn' in the former, while $0 will refer to Arg1 in the latter.
     //      let's keep $0 as the first argument (Arg1), so we'll need to copy the argument array for `GetVariable`.
@@ -59,6 +69,8 @@ pub enum Command {
     // Sets the value of a named variable at $0 to $1
     SetVariable,
 
+    // TODO: UiScale (1,2,3,4)
+    // TODO: FitPixelWidth, FitPixelHeight; zoom to fit that many pixels within the screen based on available area
     ForegroundColor,
     BackgroundColor,
     // TODO: Shift: moves the animation over one to start one frame down
@@ -70,7 +82,7 @@ impl fmt::Display for Command {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::If => write!(f, "if"),
-            Self::GetKnownVariable(value) => write!(f, "${}", value),
+            Self::Evaluate(value) => write!(f, "${}", value),
             Self::SetVariable => write!(f, "set"),
             Self::ForegroundColor => write!(f, "fg"),
             Self::BackgroundColor => write!(f, "bg"),
@@ -305,7 +317,7 @@ mod test {
                         self.evaluate_argument(script, 2, arguments)
                     }
                 }
-                Command::GetKnownVariable(name) => {
+                Command::Evaluate(name) => {
                     let variable = self.get_variable(name);
                     evaluate_argument(self, &variable, arguments)
                 }
@@ -560,7 +572,7 @@ mod test {
             command: Command::If,
             arguments: Vec::from([
                 Argument::Script(Script {
-                    command: Command::GetKnownVariable(variable_name.clone()),
+                    command: Command::Evaluate(variable_name.clone()),
                     arguments: vec![],
                 }),
                 Argument::Use(0),
@@ -594,14 +606,14 @@ mod test {
             vec![
                 // First run:
                 WhatRan::Command(Command::If),
-                WhatRan::Command(Command::GetKnownVariable(variable_name.clone())),
+                WhatRan::Command(Command::Evaluate(variable_name.clone())),
                 WhatRan::Argument(Ok(Argument::I64(1))),
                 WhatRan::Command(Command::ForegroundColor),
                 WhatRan::Argument(Ok(Argument::Color(Rgba8::BLACK))),
                 WhatRan::Argument(Ok(Argument::Color(Rgba8::BLACK))),
                 // Second run:
                 WhatRan::Command(Command::If),
-                WhatRan::Command(Command::GetKnownVariable(variable_name.clone())),
+                WhatRan::Command(Command::Evaluate(variable_name.clone())),
                 WhatRan::Argument(Ok(Argument::I64(0))),
                 WhatRan::Command(Command::BackgroundColor),
                 WhatRan::Argument(Ok(Argument::Color(Rgba8::RED))),
