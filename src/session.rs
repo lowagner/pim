@@ -11,6 +11,7 @@ use crate::flood::FloodFiller;
 use crate::hashmap;
 use crate::palette::*;
 use crate::platform::{self, InputState, Key, KeyboardInput, LogicalSize, ModifiersState};
+use crate::script;
 use crate::util;
 
 use crate::gfx::math::*;

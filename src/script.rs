@@ -1,5 +1,6 @@
 use crate::gfx::Rgba8;
 
+use std::collections::HashMap;
 use std::fmt;
 
 /*
@@ -53,6 +54,7 @@ pub enum Command {
     SetVariable,
     // Sets the value of a named variable at $0 to $1, and doesn't allow future changes to this variable.
     ConstVariable,
+    // TODO: Map: uses mode $0, with keybinding at $1, to evaluate command at $2.  optional command at $3 for release
 
     // TODO: UiScale (1,2,3,4)
     // TODO: FitPixelWidth, FitPixelHeight; zoom to fit that many pixels within the screen based on available area
@@ -265,10 +267,56 @@ pub fn evaluate(
     Err("external arguments to script should not include $0, $1, etc.".to_string())
 }
 
+pub enum Variable {
+    Const(Argument),
+    Mutable(Argument),
+    // If we look up a variable and remap it:
+    // TODO: MutableAlias(String) and ConstAlias(String)
+}
+
+pub struct Variables {
+    variables: HashMap<String, Variable>,
+}
+
+impl Variables {
+    pub fn new() -> Self {
+        Self {
+            variables: HashMap::new(),
+        }
+    }
+
+    /// Returns the variable, or Null, if not present in the map.
+    pub fn get(&self, name: String) -> Argument {
+        self.variables
+            .get(&name)
+            .map_or(Argument::Null, |v| match v {
+                Variable::Const(var) => var.clone(),
+                Variable::Mutable(var) => var.clone(),
+            })
+    }
+
+    /// Sets the variable, returning the old value if it was present in the map.
+    /// WARNING! Will return an error if the variable is const.
+    pub fn set(&mut self, name: String, variable: Variable) -> ArgumentResult {
+        match self.variables.get(&name) {
+            None => {}
+            Some(var) => match var {
+                Variable::Mutable(_) => {}
+                Variable::Const(_) => return Err(format!("variable {} is const", name)),
+            },
+        }
+        self.variables
+            .insert(name, variable)
+            .map_or(Ok(Argument::Null), |v| match v {
+                Variable::Mutable(var) => Ok(var),
+                Variable::Const(_) => panic!("i thought we checked for this already"),
+            })
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
-    use std::collections::HashMap;
 
     #[test]
     fn test_argument_values() {
@@ -296,14 +344,9 @@ mod test {
         Argument(ArgumentResult),
     }
 
-    enum Variable {
-        Const(Argument),
-        Mutable(Argument),
-    }
-
     struct TestRunner {
         test_what_ran: Vec<WhatRan>,
-        variables: HashMap<String, Variable>,
+        variables: Variables,
     }
 
     impl ScriptRunner for TestRunner {
@@ -329,7 +372,7 @@ mod test {
                 Command::Evaluate(name) => {
                     // Need to make a clone here since executing commands could
                     // modify `self`, which could break the reference here.
-                    let argument: Argument = self.get_variable(name);
+                    let argument: Argument = self.variables.get(name);
                     // No need to double up on WhatRan, just run directly:
                     evaluate(self, &script_stack, Evaluate::Argument(&argument))
                 }
@@ -337,8 +380,8 @@ mod test {
                 // E.g., if we do `set "var-name" (echo $0 ; echo $1)`, then we
                 // can call with `var-name 'hello' 'world'`.  This is the way
                 // we create new commands.
-                Command::SetVariable => self.set_variable_from_script(&script_stack, false),
-                Command::ConstVariable => self.set_variable_from_script(&script_stack, true),
+                Command::SetVariable => self.set_variable(&script_stack, false),
+                Command::ConstVariable => self.set_variable(&script_stack, true),
                 Command::ForegroundColor => self.evaluate(&script_stack, Evaluate::Index(0)),
                 Command::BackgroundColor => self.evaluate(&script_stack, Evaluate::Index(0)),
                 Command::Quit => Ok(Argument::Null),
@@ -350,36 +393,12 @@ mod test {
         fn new() -> Self {
             Self {
                 test_what_ran: Vec::new(),
-                variables: HashMap::new(),
+                variables: Variables::new(),
             }
         }
 
-        fn get_variable(&self, name: String) -> Argument {
-            self.variables
-                .get(&name)
-                .map_or(Argument::Null, |v| match v {
-                    Variable::Const(var) => var.clone(),
-                    Variable::Mutable(var) => var.clone(),
-                })
-        }
 
-        fn set_variable(&mut self, name: String, variable: Variable) -> ArgumentResult {
-            match self.variables.get(&name) {
-                None => {}
-                Some(var) => match var {
-                    Variable::Mutable(_) => {}
-                    Variable::Const(_) => return Err(format!("variable {} is const", name)),
-                },
-            }
-            self.variables
-                .insert(name, variable)
-                .map_or(Ok(Argument::Null), |v| match v {
-                    Variable::Mutable(var) => Ok(var),
-                    Variable::Const(_) => panic!("i thought we checked for this already"),
-                })
-        }
-
-        fn set_variable_from_script(
+        fn set_variable(
             &mut self,
             script_stack: &Vec<&Script>,
             is_const: bool,
@@ -397,7 +416,7 @@ mod test {
                     } else {
                         Argument::Null
                     };
-                    self.set_variable(
+                    self.variables.set(
                         name,
                         if is_const {
                             Variable::Const(argument)
@@ -634,14 +653,14 @@ mod test {
 
         test_runner
             .variables
-            .insert(variable_name.clone(), Variable::Mutable(Argument::I64(1)));
+            .set(variable_name.clone(), Variable::Mutable(Argument::I64(1)));
         let mut result = script.run(&mut test_runner, arguments.clone());
         assert!(result.is_ok());
         assert_eq!(result.ok(), Some(Argument::Color(Rgba8::BLACK)));
 
         test_runner
             .variables
-            .insert(variable_name.clone(), Variable::Mutable(Argument::I64(0)));
+            .set(variable_name.clone(), Variable::Mutable(Argument::I64(0)));
         result = script.run(&mut test_runner, arguments);
         assert!(result.is_ok());
         assert_eq!(result.ok(), Some(Argument::Color(Rgba8::RED)));
