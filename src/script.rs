@@ -49,8 +49,10 @@ pub enum Command {
     //      let's keep $0 as the first argument (Arg1), so we'll need to copy the argument array for `GetVariable`.
     //      probably the easiest thing to do is "LoadVariableName" and "EvaluateVariableName" with some extra state.
     // GetVariable,
-    // Sets the value of a named variable at $0 to $1
+    // Sets the value of a named variable at $0 to $1, allowing future changes.
     SetVariable,
+    // Sets the value of a named variable at $0 to $1, and doesn't allow future changes to this variable.
+    ConstVariable,
 
     // TODO: UiScale (1,2,3,4)
     // TODO: FitPixelWidth, FitPixelHeight; zoom to fit that many pixels within the screen based on available area
@@ -68,6 +70,7 @@ impl fmt::Display for Command {
             Self::If => write!(f, "if"),
             Self::Evaluate(value) => write!(f, "${}", value),
             Self::SetVariable => write!(f, "set"),
+            Self::ConstVariable => write!(f, "const"),
             Self::ForegroundColor => write!(f, "fg"),
             Self::BackgroundColor => write!(f, "bg"),
             Self::Quit => write!(f, "quit"),
@@ -83,7 +86,10 @@ pub struct Script {
 
 impl Script {
     fn run(&self, runner: &mut dyn ScriptRunner, arguments: Arguments) -> ArgumentResult {
-        let root = Script { command: Command::Root, arguments };
+        let root = Script {
+            command: Command::Root,
+            arguments,
+        };
         runner.run(vec![&root, self])
     }
 
@@ -110,7 +116,9 @@ pub enum Argument {
     // TODO: we should be able to pause execution, e.g., for an alert box to confirm an action
 
     // An argument that is itself the output of another Script.
-    // Note that these are lazily evaluated and never memoized, so this script
+    // Note that these are never memoized and lazily evaluated
+    // (i.e., only if needed; e.g., `b` will never be evaluated
+    // if `a` evaluates to false in `if a b c`), so this script
     // can be called multiple times as a lambda function.
     Script(Script),
 
@@ -191,9 +199,9 @@ pub enum Evaluate<'a> {
 /// Executes a script argument, following trails like `Argument::Use`
 /// down to previous arguments in the script stack, as well as nested
 /// scripts via `Argument::Script`.
-// Note we purposely move/copy the script stack because all sorts
-// of redirection are possible, i.e., due to `Argument::Use`
-// or additional nested scripts being run via `Argument::Script`.
+// In this function we don't copy the script stack, but will do it
+// internally if we need to, e.g., due to evaluating any nested
+// scripts via `Argument::Script`.
 //
 // Technical details on why we need a stack of scripts.  For example:
 //    :command 'paint5' (paint $0 $1 5)
@@ -233,7 +241,7 @@ pub fn evaluate(
                     return Ok(Argument::Null);
                 }
                 &script.arguments[evaluate_this_index]
-            },
+            }
         };
         if argument.is_value() {
             return Ok(argument.clone());
@@ -251,10 +259,7 @@ pub fn evaluate(
                 evaluate_this = Evaluate::Index(*previous_stack_argument_index);
             }
             // is_value() and this matcher should be disjoint.
-            _ => panic!(
-                "Invalid argument, not evaluatable: {}",
-                *argument
-            ),
+            _ => panic!("Invalid argument, not evaluatable: {}", *argument),
         }
     }
     Err("external arguments to script should not include $0, $1, etc.".to_string())
@@ -291,14 +296,21 @@ mod test {
         Argument(ArgumentResult),
     }
 
+    enum Variable {
+        Const(Argument),
+        Mutable(Argument),
+    }
+
     struct TestRunner {
         test_what_ran: Vec<WhatRan>,
-        variables: HashMap<String, Argument>,
+        variables: HashMap<String, Variable>,
     }
 
     impl ScriptRunner for TestRunner {
         fn run(&mut self, script_stack: Vec<&Script>) -> ArgumentResult {
-            if script_stack.len() == 0 { return Ok(Argument::Null); }
+            if script_stack.len() == 0 {
+                return Ok(Argument::Null);
+            }
             let script: &Script = &script_stack[script_stack.len() - 1];
             let command = script.command.clone();
             self.test_what_ran.push(WhatRan::Command(command.clone()));
@@ -313,40 +325,20 @@ mod test {
                     } else {
                         self.evaluate(&script_stack, Evaluate::Index(2))
                     }
-                },
+                }
                 Command::Evaluate(name) => {
                     // Need to make a clone here since executing commands could
                     // modify `self`, which could break the reference here.
                     let argument: Argument = self.get_variable(name);
                     // No need to double up on WhatRan, just run directly:
                     evaluate(self, &script_stack, Evaluate::Argument(&argument))
-                },
-                Command::SetVariable => {
-                    let maybe_name = self.evaluate(&script_stack, Evaluate::Index(0));
-                    if maybe_name.is_err() {
-                        return maybe_name;
-                    }
-                    let name_argument = maybe_name.unwrap();
-                    match name_argument {
-                        // Note that variables[name] could technically be a Script.
-                        // You can call `get "var-name"` with extra arguments,
-                        // e.g., `get "var-name" 1 #aabbcc` and do something with them
-                        // if e.g., `set "var-name" (echo $0 ; echo $1)`.  I.e., this
-                        // is the way we create new commands.
-                        Argument::String(name) => {
-                            self.variables.insert(
-                                name,
-                                if script.arguments.len() >= 2 {
-                                    script.arguments[1].clone()
-                                } else {
-                                    Argument::Null
-                                },
-                            );
-                            Ok(Argument::Null)
-                        }
-                        _ => Err("Invalid type for variable name".to_string()),
-                    }
-                },
+                }
+                // Note that variables can technically be `Script`s.
+                // E.g., if we do `set "var-name" (echo $0 ; echo $1)`, then we
+                // can call with `var-name 'hello' 'world'`.  This is the way
+                // we create new commands.
+                Command::SetVariable => self.set_variable_from_script(&script_stack, false),
+                Command::ConstVariable => self.set_variable_from_script(&script_stack, true),
                 Command::ForegroundColor => self.evaluate(&script_stack, Evaluate::Index(0)),
                 Command::BackgroundColor => self.evaluate(&script_stack, Evaluate::Index(0)),
                 Command::Quit => Ok(Argument::Null),
@@ -364,8 +356,58 @@ mod test {
 
         fn get_variable(&self, name: String) -> Argument {
             self.variables
-                    .get(&name)
-                    .map_or(Argument::Null, |o| o.clone())
+                .get(&name)
+                .map_or(Argument::Null, |v| match v {
+                    Variable::Const(var) => var.clone(),
+                    Variable::Mutable(var) => var.clone(),
+                })
+        }
+
+        fn set_variable(&mut self, name: String, variable: Variable) -> ArgumentResult {
+            match self.variables.get(&name) {
+                None => {}
+                Some(var) => match var {
+                    Variable::Mutable(_) => {}
+                    Variable::Const(_) => return Err(format!("variable {} is const", name)),
+                },
+            }
+            self.variables
+                .insert(name, variable)
+                .map_or(Ok(Argument::Null), |v| match v {
+                    Variable::Mutable(var) => Ok(var),
+                    Variable::Const(_) => panic!("i thought we checked for this already"),
+                })
+        }
+
+        fn set_variable_from_script(
+            &mut self,
+            script_stack: &Vec<&Script>,
+            is_const: bool,
+        ) -> ArgumentResult {
+            let maybe_name = self.evaluate(&script_stack, Evaluate::Index(0));
+            if maybe_name.is_err() {
+                return maybe_name;
+            }
+            let name_argument = maybe_name.unwrap();
+            match name_argument {
+                Argument::String(name) => {
+                    let script: &Script = &script_stack.last().unwrap();
+                    let argument = if script.arguments.len() >= 2 {
+                        script.arguments[1].clone()
+                    } else {
+                        Argument::Null
+                    };
+                    self.set_variable(
+                        name,
+                        if is_const {
+                            Variable::Const(argument)
+                        } else {
+                            Variable::Mutable(argument)
+                        },
+                    )
+                }
+                _ => Err("Invalid type for variable name".to_string()),
+            }
         }
 
         // You probably don't need to wrap the `evaluate` function.
@@ -373,7 +415,7 @@ mod test {
         fn evaluate(
             &mut self,
             script_stack: &Vec<&Script>,
-            evaluate_this: Evaluate
+            evaluate_this: Evaluate,
         ) -> ArgumentResult {
             let result = evaluate(self, script_stack, evaluate_this);
             self.test_what_ran.push(WhatRan::Argument(result.clone()));
@@ -592,14 +634,14 @@ mod test {
 
         test_runner
             .variables
-            .insert(variable_name.clone(), Argument::I64(1));
+            .insert(variable_name.clone(), Variable::Mutable(Argument::I64(1)));
         let mut result = script.run(&mut test_runner, arguments.clone());
         assert!(result.is_ok());
         assert_eq!(result.ok(), Some(Argument::Color(Rgba8::BLACK)));
 
         test_runner
             .variables
-            .insert(variable_name.clone(), Argument::I64(0));
+            .insert(variable_name.clone(), Variable::Mutable(Argument::I64(0)));
         result = script.run(&mut test_runner, arguments);
         assert!(result.is_ok());
         assert_eq!(result.ok(), Some(Argument::Color(Rgba8::RED)));
@@ -621,6 +663,51 @@ mod test {
                 WhatRan::Command(Command::BackgroundColor),
                 WhatRan::Argument(Ok(Argument::Color(Rgba8::RED))),
                 WhatRan::Argument(Ok(Argument::Color(Rgba8::RED))),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_script_allows_setting_mutable_variables() {
+        let variable_name = "forkroot".to_string();
+        let mut script = Script {
+            command: Command::SetVariable,
+            arguments: Vec::from([
+                Argument::String(variable_name.clone()),
+                Argument::Script(Script {
+                    command: Command::ForegroundColor,
+                    arguments: vec![Argument::Use(1)],
+                }),
+            ]),
+        };
+        let mut test_runner = TestRunner::new();
+
+        let mut result = script.run(&mut test_runner, vec![]);
+        assert!(result.is_ok());
+        assert_eq!(result.ok(), Some(Argument::Null)); // variable wasn't anything previously
+
+        script = Script {
+            command: Command::Evaluate(variable_name.clone()),
+            arguments: vec![
+                Argument::Color(Rgba8::RED),
+                Argument::Color(Rgba8::BLUE),
+                Argument::Color(Rgba8::BLACK),
+            ],
+        };
+        result = script.run(&mut test_runner, vec![]);
+        assert!(result.is_ok());
+        assert_eq!(result.ok(), Some(Argument::Color(Rgba8::BLUE)));
+
+        assert_eq!(
+            test_runner.test_what_ran,
+            vec![
+                // First run:
+                WhatRan::Command(Command::SetVariable),
+                WhatRan::Argument(Ok(Argument::String(variable_name.clone()))),
+                // Second run:
+                WhatRan::Command(Command::Evaluate(variable_name.clone())),
+                WhatRan::Command(Command::ForegroundColor),
+                WhatRan::Argument(Ok(Argument::Color(Rgba8::BLUE))),
             ]
         );
     }
