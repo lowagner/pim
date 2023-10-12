@@ -4,55 +4,37 @@ use std::fmt;
 
 /*
 TODO: how is parsing going to work here?
-TODO: how do we pull in arguments to a new command?  cmd-line syntax: `$0`, `$1`, etc.
 
-        :command 'cmd_name' (the_cmd $0 123)
+        :set 'cmd_name' (the_cmd $0 123)
     =>  :cmd_name 5     -- calls `the_cmd` with arguments `5` `123`
 
         $0          -- evaluate argument at index 0.  similarly for $1, etc.
-
-        run_index   -- evaluates next argument, uses it as index as to which argument to run
+        run         -- evaluates next argument, uses it as index as to which argument to run
                     -- (index starts at 0 for the first argument after the argument index.)
-                    -- afterwards, sets the argument index to the end.
-        truthy      -- returns 1 if next argument is truthy otherwise 0
+        truthy      -- returns 1 if all arguments are truthy otherwise 0
 
-    based on the above, the "optional else" `if` can be built like this:
+    based on the above, `if` can be built like this:
         -- note the truthy clause happens second since `run (truthy $0)`
         -- will run argument 0 for false and argument 1 for truthy:
 
-        :command 'if' ( run (truthy $0) $2 $1 )
+        :set 'if' ( run (truthy $0) $2 $1 )
 
-    notice that "next argument" or "skip argument" do *not* apply to
-    the script's list of arguments; they apply to arguments being supplied
-    to the script externally.
+    then we can do `if (conditional) (truthy) (falsy)`.
 
-TODO: nested scripts may become confusing.  we probably need to map indices for the external arguments.
-    For example:
-        :command 'paint5' (paint $0 $1 5)
-        :command 'dot5' paint5 $2 $0
-
-    needs to map external argument 2 to paint's argument 0, external argument 0 to paint's argument 1.
-
-        paint5: Script { command: Paint, arguments: [Use(0), Use(1), I64(5)] }
-        dot5: Script { command: Evaluate("paint5"), arguments: [Use(2), Use(0)] }
-
-    note that we need to evaluate paint5.arguments with dot5.arguments as "external"
-    but then dot5.arguments need to link to truly external arguments.
-
-    could just push to a script stack:
-
-        root: Script { command: Root, arguments [external-arguments] }
-        [root, dot5, paint5].
-
-TODO: we should maybe use variables for writing commands.
-e.g., `:set 'if' (run (truth $0) $2 $1)` should be fine.
-then we can do `:get 'if' (conditional) (truthy) (falsey)` or just `if (conditional) (truthy) (falsy)`
+TODO: we should probably have an error if people try to overwrite 'if', 'set', etc.
 
 TODO: make push have an automatic pop at the end of a script runner.
 */
 
 #[derive(PartialEq, Debug, Clone)]
 pub enum Command {
+    // A sort of throw-away command to make going through arguments
+    // from a script stack more easy.  Do not use outside of this file.
+    // See `Script::run` and `evaluate(...)` for more info.
+    // The associated arguments for this command are the arguments that
+    // the user passes in to run the script.
+    Root,
+
     If,
     // Runs each inner Command in turn, returning early if any is an Err,
     // returning Ok with last result otherwise.
@@ -65,6 +47,7 @@ pub enum Command {
     //      E.g., `:get 'my-fn' Arg1 Arg2` will be shifted from `$my-fn Arg1 Arg2`.
     //      $0 will refer to 'my-fn' in the former, while $0 will refer to Arg1 in the latter.
     //      let's keep $0 as the first argument (Arg1), so we'll need to copy the argument array for `GetVariable`.
+    //      probably the easiest thing to do is "LoadVariableName" and "EvaluateVariableName" with some extra state.
     // GetVariable,
     // Sets the value of a named variable at $0 to $1
     SetVariable,
@@ -81,6 +64,7 @@ pub enum Command {
 impl fmt::Display for Command {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::Root => write!(f, ":"),
             Self::If => write!(f, "if"),
             Self::Evaluate(value) => write!(f, "${}", value),
             Self::SetVariable => write!(f, "set"),
@@ -98,9 +82,12 @@ pub struct Script {
 }
 
 impl Script {
-    fn run(&self, runner: &mut dyn ScriptRunner, arguments: &Arguments) -> ArgumentResult {
-        runner.run(self, arguments)
+    fn run(&self, runner: &mut dyn ScriptRunner, arguments: Arguments) -> ArgumentResult {
+        let root = Script { command: Command::Root, arguments };
+        runner.run(vec![&root, self])
     }
+
+    // TODO: add method to print Script back as a command sequence
 }
 
 pub type Arguments = Vec<Argument>;
@@ -118,6 +105,8 @@ pub enum Argument {
     Color(Rgba8),
 
     // Non-value-based (AKA evaluatable) arguments follow.
+    // TODO: we probably can have a zero-arg Variable here,
+    //      e.g., Variable(String) which will be executed without any arguments.
     // TODO: we should be able to pause execution, e.g., for an alert box to confirm an action
 
     // An argument that is itself the output of another Script.
@@ -183,87 +172,92 @@ impl fmt::Display for Argument {
 // We're using this instead of a closure because rust closures are hard to type correctly.
 pub trait ScriptRunner {
     /// Executes the script with external arguments in `external_arguments`.
-    // Note that the `external_arguments` should *not* have any `Argument::Use` arguments;
-    // But that `script.arguments` can have these, which will use the external arguments.
-    fn run(&mut self, script: &Script, external_arguments: &Arguments) -> ArgumentResult;
+    // Executes the script on the top of the stack, using lower parts of the stack
+    // to trace `Argument::Use` arguments.  Note that the lowest script in the stack
+    // should *not* have any `Argument::Use` arguments.  We purposely move/copy this
+    // stack because all sorts of redirection is possible, i.e., due to `Argument::Use`
+    // or additional nested scripts being run via `Argument::Script`.
+    fn run(&mut self, script_stack: Vec<&Script>) -> ArgumentResult;
 }
 
-pub fn evaluate_script_argument(
-    runner: &mut dyn ScriptRunner,
-    script: &Script,
-    argument_index: usize,
-    external_arguments: &Arguments,
-) -> ArgumentResult {
-    if argument_index >= script.arguments.len() {
-        return Ok(Argument::Null);
-    }
-    return evaluate_argument(
-        runner,
-        &script.arguments[argument_index],
-        external_arguments,
-    );
+pub enum Evaluate<'a> {
+    /// Pass an argument directly to evaluate.
+    Argument(&'a Argument),
+    /// Pass an index into the most recent script's argument list
+    /// to evaluate that argument.
+    Index(usize),
 }
 
-pub fn evaluate_argument(
+/// Executes a script argument, following trails like `Argument::Use`
+/// down to previous arguments in the script stack, as well as nested
+/// scripts via `Argument::Script`.
+// Note we purposely move/copy the script stack because all sorts
+// of redirection are possible, i.e., due to `Argument::Use`
+// or additional nested scripts being run via `Argument::Script`.
+//
+// Technical details on why we need a stack of scripts.  For example:
+//    :command 'paint5' (paint $0 $1 5)
+//    :command 'dot5' (paint5 $2 $0)
+//
+// `dot5` needs to map external argument 2 to paint's argument 0,
+// and external argument 0 to paint's argument 1.
+//    let paint5 = Script { command: Paint, arguments: [Use(0), Use(1), I64(5)] };
+//    let dot5 = Script { command: Evaluate("paint5"), arguments: [Use(2), Use(0)] };
+//
+// The "easy" fix is to just push to a script stack:
+//    let root = Script { command: Root, arguments: [/*external-arguments*/] };
+//    let script_stack = [root, dot5, paint5];
+//
+pub fn evaluate(
     runner: &mut dyn ScriptRunner,
-    script_argument: &Argument,
-    external_arguments: &Arguments,
+    script_stack: &Vec<&Script>,
+    mut evaluate_this: Evaluate,
 ) -> ArgumentResult {
-    if script_argument.is_value() {
-        return Ok(script_argument.clone());
+    assert!(script_stack.len() > 0);
+    if script_stack.len() > 1000 {
+        return Err("script call stack overflow".to_string());
     }
-
-    let mut evaluatable_argument = Argument::Null;
-    match &script_argument {
-        Argument::Script(nested_script) => {
-            let result = runner.run(&nested_script, external_arguments);
-            if result.is_err() {
-                // TODO: add test for this.
-                return result;
-            }
-            evaluatable_argument = result.unwrap();
+    let mut script_index: usize = script_stack.len();
+    let mut iteration = 0;
+    while script_index > 0 {
+        script_index -= 1;
+        iteration += 1;
+        if iteration > 1000 {
+            return Err("script took too many iterations".to_string());
         }
-        Argument::Use(external_index) => {
-            let result = evaluate_external_argument(runner, external_arguments, *external_index);
-            if result.is_err() {
-                // TODO: add test for this.
-                return result;
-            }
-            evaluatable_argument = result.unwrap();
+        let argument: &Argument = match evaluate_this {
+            Evaluate::Argument(evaluate_this_argument) => evaluate_this_argument,
+            Evaluate::Index(evaluate_this_index) => {
+                let script: &Script = &script_stack[script_index];
+                if evaluate_this_index >= script.arguments.len() {
+                    return Ok(Argument::Null);
+                }
+                &script.arguments[evaluate_this_index]
+            },
+        };
+        if argument.is_value() {
+            return Ok(argument.clone());
         }
-        _ => panic!(
-            "Invalid argument, not evaluatable: {}",
-            evaluatable_argument
-        ),
+        match argument {
+            Argument::Script(nested_script) => {
+                let mut new_stack = vec![];
+                // TODO: add test for this (i.e., Use() + Script()`.
+                // We need to only grab the stack from 0 to script_index.
+                new_stack.extend_from_slice(&script_stack[0..script_index + 1]);
+                new_stack.push(&nested_script);
+                return runner.run(new_stack);
+            }
+            Argument::Use(previous_stack_argument_index) => {
+                evaluate_this = Evaluate::Index(*previous_stack_argument_index);
+            }
+            // is_value() and this matcher should be disjoint.
+            _ => panic!(
+                "Invalid argument, not evaluatable: {}",
+                *argument
+            ),
+        }
     }
-    assert!(
-        evaluatable_argument.is_value(),
-        "Nested scripts not supported ATM"
-    );
-    return Ok(evaluatable_argument);
-}
-
-// Purposely private.  This should only be called via `evaluate_script_argument`.
-fn evaluate_external_argument(
-    runner: &mut dyn ScriptRunner,
-    external_arguments: &Arguments,
-    external_index: usize,
-) -> ArgumentResult {
-    if external_index >= external_arguments.len() {
-        return Ok(Argument::Null);
-    }
-    if external_arguments[external_index].is_value() {
-        return Ok(external_arguments[external_index].clone());
-    }
-
-    match &external_arguments[external_index] {
-        Argument::Script(nested_script) => runner.run(&nested_script, external_arguments),
-        Argument::Use(_) => panic!("External arguments should not have Argument::Use"),
-        _ => panic!(
-            "Invalid argument, not evaluatable: {}",
-            external_arguments[external_index]
-        ),
-    }
+    Err("external arguments to script should not include $0, $1, etc.".to_string())
 }
 
 #[cfg(test)]
@@ -303,26 +297,32 @@ mod test {
     }
 
     impl ScriptRunner for TestRunner {
-        fn run(&mut self, script: &Script, arguments: &Arguments) -> ArgumentResult {
+        fn run(&mut self, script_stack: Vec<&Script>) -> ArgumentResult {
+            if script_stack.len() == 0 { return Ok(Argument::Null); }
+            let script: &Script = &script_stack[script_stack.len() - 1];
             let command = script.command.clone();
             self.test_what_ran.push(WhatRan::Command(command.clone()));
             match command {
+                Command::Root => panic!("root command should not be run"),
                 Command::If => {
-                    let conditional = self.evaluate_argument(script, 0, arguments);
+                    let conditional = self.evaluate(&script_stack, Evaluate::Index(0));
                     if conditional.is_err() {
                         conditional
                     } else if conditional.unwrap().is_truthy() {
-                        self.evaluate_argument(script, 1, arguments)
+                        self.evaluate(&script_stack, Evaluate::Index(1))
                     } else {
-                        self.evaluate_argument(script, 2, arguments)
+                        self.evaluate(&script_stack, Evaluate::Index(2))
                     }
-                }
+                },
                 Command::Evaluate(name) => {
-                    let variable = self.get_variable(name);
-                    evaluate_argument(self, &variable, arguments)
-                }
+                    // Need to make a clone here since executing commands could
+                    // modify `self`, which could break the reference here.
+                    let argument: Argument = self.get_variable(name);
+                    // No need to double up on WhatRan, just run directly:
+                    evaluate(self, &script_stack, Evaluate::Argument(&argument))
+                },
                 Command::SetVariable => {
-                    let maybe_name = self.evaluate_argument(script, 0, arguments);
+                    let maybe_name = self.evaluate(&script_stack, Evaluate::Index(0));
                     if maybe_name.is_err() {
                         return maybe_name;
                     }
@@ -336,8 +336,8 @@ mod test {
                         Argument::String(name) => {
                             self.variables.insert(
                                 name,
-                                if arguments.len() >= 2 {
-                                    arguments[1].clone()
+                                if script.arguments.len() >= 2 {
+                                    script.arguments[1].clone()
                                 } else {
                                     Argument::Null
                                 },
@@ -346,9 +346,9 @@ mod test {
                         }
                         _ => Err("Invalid type for variable name".to_string()),
                     }
-                }
-                Command::ForegroundColor => self.evaluate_argument(script, 0, arguments),
-                Command::BackgroundColor => self.evaluate_argument(script, 0, arguments),
+                },
+                Command::ForegroundColor => self.evaluate(&script_stack, Evaluate::Index(0)),
+                Command::BackgroundColor => self.evaluate(&script_stack, Evaluate::Index(0)),
                 Command::Quit => Ok(Argument::Null),
             }
         }
@@ -364,19 +364,18 @@ mod test {
 
         fn get_variable(&self, name: String) -> Argument {
             self.variables
-                .get(&name)
-                .map_or(Argument::Null, |o| o.clone())
+                    .get(&name)
+                    .map_or(Argument::Null, |o| o.clone())
         }
 
-        // You probably don't need to wrap the `evaluate_argument` function.
+        // You probably don't need to wrap the `evaluate` function.
         // We do it for tests to get `WhatRan`.
-        fn evaluate_argument(
+        fn evaluate(
             &mut self,
-            script: &Script,
-            index: usize,
-            external_arguments: &Arguments,
+            script_stack: &Vec<&Script>,
+            evaluate_this: Evaluate
         ) -> ArgumentResult {
-            let result = evaluate_script_argument(self, script, index, external_arguments);
+            let result = evaluate(self, script_stack, evaluate_this);
             self.test_what_ran.push(WhatRan::Argument(result.clone()));
             result
         }
@@ -391,7 +390,7 @@ mod test {
 
         let mut test_runner = TestRunner::new();
         let arguments = vec![];
-        let result = script.run(&mut test_runner, &arguments);
+        let result = script.run(&mut test_runner, arguments);
 
         assert_eq!(
             test_runner.test_what_ran,
@@ -409,7 +408,7 @@ mod test {
 
         let mut test_runner = TestRunner::new();
         let arguments = vec![];
-        let result = script.run(&mut test_runner, &arguments);
+        let result = script.run(&mut test_runner, arguments);
 
         assert_eq!(
             test_runner.test_what_ran,
@@ -436,7 +435,7 @@ mod test {
 
         let mut test_runner = TestRunner::new();
         let arguments = vec![];
-        let result = script.run(&mut test_runner, &arguments);
+        let result = script.run(&mut test_runner, arguments);
 
         assert_eq!(
             test_runner.test_what_ran,
@@ -464,7 +463,7 @@ mod test {
 
         let mut test_runner = TestRunner::new();
         let arguments = vec![];
-        let result = script.run(&mut test_runner, &arguments);
+        let result = script.run(&mut test_runner, arguments);
 
         assert_eq!(
             test_runner.test_what_ran,
@@ -490,7 +489,7 @@ mod test {
 
         let mut test_runner = TestRunner::new();
         let arguments = vec![];
-        let result = script.run(&mut test_runner, &arguments);
+        let result = script.run(&mut test_runner, arguments);
 
         assert_eq!(
             test_runner.test_what_ran,
@@ -517,7 +516,7 @@ mod test {
 
         let mut test_runner = TestRunner::new();
         let arguments = vec![];
-        let result = script.run(&mut test_runner, &arguments);
+        let result = script.run(&mut test_runner, arguments);
 
         assert_eq!(
             test_runner.test_what_ran,
@@ -549,7 +548,7 @@ mod test {
                 arguments: vec![Argument::Color(Rgba8::RED)],
             }),
         ];
-        let result = script.run(&mut test_runner, &arguments);
+        let result = script.run(&mut test_runner, arguments);
 
         assert_eq!(
             test_runner.test_what_ran,
@@ -594,12 +593,16 @@ mod test {
         test_runner
             .variables
             .insert(variable_name.clone(), Argument::I64(1));
-        let result = script.run(&mut test_runner, &arguments);
+        let mut result = script.run(&mut test_runner, arguments.clone());
+        assert!(result.is_ok());
+        assert_eq!(result.ok(), Some(Argument::Color(Rgba8::BLACK)));
 
         test_runner
             .variables
             .insert(variable_name.clone(), Argument::I64(0));
-        let result = script.run(&mut test_runner, &arguments);
+        result = script.run(&mut test_runner, arguments);
+        assert!(result.is_ok());
+        assert_eq!(result.ok(), Some(Argument::Color(Rgba8::RED)));
 
         assert_eq!(
             test_runner.test_what_ran,
@@ -620,7 +623,5 @@ mod test {
                 WhatRan::Argument(Ok(Argument::Color(Rgba8::RED))),
             ]
         );
-        assert!(result.is_ok());
-        assert_eq!(result.ok(), Some(Argument::Color(Rgba8::RED)));
     }
 }
