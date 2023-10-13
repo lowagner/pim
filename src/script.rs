@@ -46,8 +46,7 @@ pub enum Command {
     // TODO: option 1: if 0, don't run anything.  1, 2, etc. index the arguments directly as $1, $2, etc.
     // TODO: option 2: if 0, run argument $1.  1, 2, etc. index the arguments at offset $2, $3, etc.
     // TODO: RunIndex,
-
-    // Gets the value of a variable that is known to the compiler; evaluates it.
+    /// Gets the value of a variable that is known to the compiler; evaluates it.
     Evaluate(String),
     // Gets the value of a named variable at $0; technically evaluating it.
     // TODO: this won't work well with a Script due to an offset that doesn't happen with Evaluate.
@@ -55,12 +54,20 @@ pub enum Command {
     //      $0 will refer to 'my-fn' in the former, while $0 will refer to Arg1 in the latter.
     //      let's keep $0 as the first argument (Arg1), so we'll need to copy the argument array for `GetVariable`.
     //      probably the easiest thing to do is "LoadVariableName" and "EvaluateVariableName" with some extra state.
+    //      The other thing that's hard to do with this is if someone uses `Get/Execute "if" ...`
+    //      for any of the primitive operations; we'd need to handle those specially.
     // GetVariable,
-    // Sets a variable with name $0 to the value at $1, allowing future changes.
+    /// Sets a variable with name $0 to the value at $1, allowing future changes.
+    /// E.g., `:set 'my-mut' 123` will set `my-mut` to evaluate to 123.
+    /// You can also define lambda functions with e.g., `:set 'my-fn' (fg $0)`
     SetVariable,
-    // Sets a variable with name $0 to the value at $1, and doesn't allow future changes to this variable.
+    /// Sets a variable with name $0 to the value at $1, and doesn't allow future changes to this variable.
+    /// E.g., `:const 'my-const' 123` will set `my-const` to evaluate to 123.
+    /// You can also define lambda functions with e.g., `:const 'my-fn' (fg $0)`
     ConstVariable,
-    // Uses $0 to alias the name of a variable at $1, and doesn't allow future changes to this variable.
+    /// Uses $0 to alias the name of a variable at $1, and doesn't allow future changes to this alias name.
+    /// E.g., `:alias 'my-alias' 'fg'` will set `my-alias` to act as `fg`.
+    /// Note that the alias is constant, but what the variable it points to can change.
     CreateAlias,
 
     // TODO: Map: uses mode $0, with keybinding at $1, to evaluate command at $2.  optional command at $3 for release
@@ -69,6 +76,7 @@ pub enum Command {
     // TODO: FitPixelWidth, FitPixelHeight; zoom to fit that many pixels within the screen based on available area
     ForegroundColor,
     BackgroundColor,
+
     // TODO: Shift: moves the animation over one to start one frame down
     // TODO: maybe a `Lookup` command.
     Quit,
@@ -886,5 +894,117 @@ mod test {
         assert_eq!(variables.get(y.clone()), Argument::I64(123));
         assert_eq!(variables.get(z.clone()), Argument::I64(123)); // not an alias, but should make sense!
     }
-    // TODO: test variables.set_from_script() works for Const, Mutable, and Alias
+
+    #[test]
+    fn test_variables_set_from_mutable_script() {
+        let mut variables = Variables::new();
+        let var_name = "blast-turtle".to_string();
+        let lambda = Script {
+            command: Command::ForegroundColor,
+            arguments: vec![Argument::I64(30)],
+        };
+        let mut script = Script {
+            command: Command::SetVariable,
+            arguments: vec![
+                Argument::String(var_name.clone()),
+                Argument::Script(lambda.clone()),
+            ],
+        };
+
+        assert_eq!(variables.set_from_script(&script), Ok(Argument::Null));
+        assert_eq!(
+            variables.get(var_name.clone()),
+            Argument::Script(lambda.clone())
+        );
+
+        // Double check that we can mutate:
+        script.arguments[1] = Argument::I64(-123);
+        assert_eq!(
+            variables.set_from_script(&script),
+            Ok(Argument::Script(lambda))
+        );
+        assert_eq!(variables.get(var_name), Argument::I64(-123));
+    }
+
+    #[test]
+    fn test_variables_set_from_const_script() {
+        let mut variables = Variables::new();
+        let var_name = "blast-dog".to_string();
+        let lambda = Script {
+            command: Command::ForegroundColor,
+            arguments: vec![Argument::I64(29)],
+        };
+        let mut script = Script {
+            command: Command::ConstVariable,
+            arguments: vec![
+                Argument::String(var_name.clone()),
+                Argument::Script(lambda.clone()),
+            ],
+        };
+
+        assert_eq!(variables.set_from_script(&script), Ok(Argument::Null));
+        assert_eq!(
+            variables.get(var_name.clone()),
+            Argument::Script(lambda.clone())
+        );
+
+        // Double check that we cannot reassign:
+        script.arguments[1] = Argument::I64(603);
+        assert_eq!(
+            variables.set_from_script(&script),
+            Err(format!(
+                "variable `{}` is not reassignable",
+                var_name.clone()
+            ))
+        );
+        assert_eq!(variables.get(var_name), Argument::Script(lambda));
+    }
+
+    #[test]
+    fn test_variables_set_from_alias_script() {
+        let mut variables = Variables::new();
+        let alias_name = "blast-cat".to_string();
+        let alias_value = "blast-frog".to_string();
+        let mut script = Script {
+            command: Command::CreateAlias,
+            arguments: vec![
+                Argument::String(alias_name.clone()),
+                Argument::String(alias_value.clone()),
+            ],
+        };
+
+        assert_eq!(variables.set_from_script(&script), Ok(Argument::Null));
+        assert_eq!(
+            *variables.map.get(&alias_name).expect("should be here"),
+            Variable::Alias(alias_value.clone())
+        );
+        let mut aliased_value = Argument::String("hello".to_string());
+        variables.set(
+            alias_value.clone(),
+            Variable::Mutable(aliased_value.clone()),
+        );
+        assert_eq!(variables.get(alias_name.clone()), aliased_value.clone());
+
+        // Double check that we cannot reassign:
+        script.arguments[1] = Argument::String("change-to-this".to_string());
+        assert_eq!(
+            variables.set_from_script(&script),
+            Err(format!(
+                "variable `{}` is not reassignable",
+                alias_name.clone()
+            ))
+        );
+        assert_eq!(
+            *variables.map.get(&alias_name).expect("should be here"),
+            Variable::Alias(alias_value.clone())
+        );
+        assert_eq!(variables.get(alias_name.clone()), aliased_value.clone());
+        // But we can modify the underlying value:
+        aliased_value = Argument::I64(8675309);
+        variables.set(
+            alias_value.clone(),
+            Variable::Mutable(aliased_value.clone()),
+        );
+        assert_eq!(variables.get(alias_name), aliased_value);
+    }
 }
