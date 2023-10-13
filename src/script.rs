@@ -279,20 +279,28 @@ pub fn evaluate(
 
 #[derive(PartialEq, Debug, Clone)]
 pub enum Variable {
-    Const(Argument),
+    // A variable that can be reassigned:
     Mutable(Argument),
+    // A variable that can't be reassigned:
+    Const(Argument),
     // To look up a variable and remap it:
     Alias(String),
 }
 
+impl Variable {
+    pub fn is_mutable(&self) -> bool {
+        matches!(self, Self::Mutable(_))
+    }
+}
+
 pub struct Variables {
-    variables: HashMap<String, Variable>,
+    map: HashMap<String, Variable>,
 }
 
 impl Variables {
     pub fn new() -> Self {
         Self {
-            variables: HashMap::new(),
+            map: HashMap::new(),
         }
     }
 
@@ -300,14 +308,14 @@ impl Variables {
     // Notice that we resolve aliases here so that you'll definitely get an argument.
     pub fn get(&self, mut name: String) -> Argument {
         for _iteration in 1..24 {
-            match &self.variables.get(&name) {
+            match &self.map.get(&name) {
                 None => return Argument::Null,
                 Some(variable) => match variable {
                     Variable::Const(arg) => return arg.clone(),
                     Variable::Mutable(arg) => return arg.clone(),
                     Variable::Alias(alias) => {
                         name = alias.clone();
-                    },
+                    }
                 },
             }
         }
@@ -318,18 +326,25 @@ impl Variables {
     /// Sets the variable, returning the old value if it was present in the map.
     /// WARNING! Will return an error if the variable is const.
     pub fn set(&mut self, name: String, variable: Variable) -> ArgumentResult {
-        match self.variables.get(&name) {
+        match self.map.get(&name) {
             None => {}
             Some(var) => match var {
-                Variable::Mutable(_) => {}
-                _ => return Err(format!("variable {} is const", name)),
+                Variable::Mutable(_) => {
+                    if !variable.is_mutable() {
+                        eprint!(
+                            "overwriting mutable variable `{}` with a const or alias\n",
+                            name
+                        );
+                    }
+                }
+                _ => return Err(format!("variable `{}` is not reassignable", name)),
             },
         }
         // TODO: optimization for aliases of aliases, we could drill down since aliases
         // are constant.  e.g., X -> Y -> Z should collapse to X -> Z and Y -> Z.
         // if we create X -> Y first, then Y -> Z, the next time we mutate self
         // and notice that X -> Y which is itself an alias, we can update to X -> Z.
-        self.variables
+        self.map
             .insert(name, variable)
             .map_or(Ok(Argument::Null), |v| match v {
                 Variable::Mutable(var) => Ok(var),
@@ -337,10 +352,7 @@ impl Variables {
             })
     }
 
-    fn set_from_script(
-        &mut self,
-        script: &Script
-    ) -> ArgumentResult {
+    fn set_from_script(&mut self, script: &Script) -> ArgumentResult {
         if script.arguments.len() == 0 {
             return Err("setting a variable requires at least one argument".to_string());
         }
@@ -804,6 +816,55 @@ mod test {
     }
 
     #[test]
+    fn test_variables_can_add_const_variables() {
+        let mut variables = Variables::new();
+
+        let var_name = "wyzx".to_string();
+        // Nothing in variables yet:
+        assert_eq!(variables.get(var_name.clone()), Argument::Null);
+
+        // First assignment is fine:
+        assert_eq!(
+            variables.set(var_name.clone(), Variable::Const(Argument::I64(456))),
+            // The previous value of this variable was null:
+            Ok(Argument::Null)
+        );
+        assert_eq!(variables.get(var_name.clone()), Argument::I64(456));
+
+        // Can't reassign:
+        assert_eq!(
+            variables.set(var_name.clone(), Variable::Const(Argument::I64(789))),
+            Err(format!("variable `{}` is not reassignable", var_name))
+        );
+        assert_eq!(variables.get(var_name.clone()), Argument::I64(456)); // No change!
+    }
+
+    #[test]
+    fn test_variables_can_set_mutable_variables() {
+        let mut variables = Variables::new();
+
+        let var_name = "cdef".to_string();
+        // Nothing in variables yet:
+        assert_eq!(variables.get(var_name.clone()), Argument::Null);
+
+        // First assignment is fine:
+        assert_eq!(
+            variables.set(var_name.clone(), Variable::Mutable(Argument::I64(456))),
+            // The previous value of this variable was null:
+            Ok(Argument::Null)
+        );
+        assert_eq!(variables.get(var_name.clone()), Argument::I64(456));
+
+        // Can't reassign:
+        assert_eq!(
+            variables.set(var_name.clone(), Variable::Mutable(Argument::I64(789))),
+            // Returns the old value:
+            Ok(Argument::I64(456))
+        );
+        assert_eq!(variables.get(var_name.clone()), Argument::I64(789));
+    }
+
+    #[test]
     fn test_variables_can_resolve_aliases() {
         let mut variables = Variables::new();
 
@@ -825,7 +886,5 @@ mod test {
         assert_eq!(variables.get(y.clone()), Argument::I64(123));
         assert_eq!(variables.get(z.clone()), Argument::I64(123)); // not an alias, but should make sense!
     }
-    // TODO: test variables.set(Const) twice fails
-    // TODO: test variables.set(Mutable) is ok
     // TODO: test variables.set_from_script() works for Const, Mutable, and Alias
 }
