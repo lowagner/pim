@@ -11,7 +11,10 @@ use crate::flood::FloodFiller;
 use crate::hashmap;
 use crate::palette::*;
 use crate::platform::{self, InputState, Key, KeyboardInput, LogicalSize, ModifiersState};
-use crate::script;
+use crate::script::{
+    self, evaluate, get_or_set_color, Argument, ArgumentResult, Evaluate, Script, ScriptRunner,
+    Variables,
+};
 use crate::util;
 
 use crate::gfx::math::*;
@@ -647,6 +650,9 @@ pub struct Session {
     /// the command is processed. For example, when displaying a message before
     /// an expensive process is kicked off.
     queue: Vec<InternalCommand>,
+
+    /// Variables and functions that are created/used on the command line.
+    variables: Variables,
 }
 
 impl Session {
@@ -738,6 +744,7 @@ impl Session {
             avg_time: time::Duration::from_secs(0),
             frame_number: 0,
             queue: Vec::new(),
+            variables: Variables::new(),
         }
     }
 
@@ -3105,6 +3112,8 @@ impl Session {
         if color.a == 0x0 {
             return;
         }
+        // TODO: make fg/bg behavior customizable here.
+        // here it switches fg -> bg and sets fg to the new value.
         if color != self.fg {
             self.bg = self.fg;
             self.fg = color;
@@ -3115,6 +3124,58 @@ impl Session {
     fn sample_color(&mut self) {
         if let Some(color) = self.hover_color {
             self.pick_color(color);
+        }
+    }
+
+    fn evaluate(&mut self, script_stack: &Vec<&Script>, evaluate_this: Evaluate) -> ArgumentResult {
+        evaluate(self, script_stack, evaluate_this)
+    }
+}
+
+impl ScriptRunner for Session {
+    fn run(&mut self, script_stack: Vec<&Script>) -> ArgumentResult {
+        if script_stack.len() == 0 {
+            return Ok(Argument::Null);
+        }
+        let script: &Script = &script_stack[script_stack.len() - 1];
+        let command = script.command.clone();
+        match command {
+            script::Command::Root => panic!("root command should not be run"),
+            script::Command::If => {
+                let conditional = self.evaluate(&script_stack, Evaluate::Index(0));
+                if conditional.is_err() {
+                    conditional
+                } else if conditional.unwrap().is_truthy() {
+                    self.evaluate(&script_stack, Evaluate::Index(1))
+                } else {
+                    self.evaluate(&script_stack, Evaluate::Index(2))
+                }
+            }
+            script::Command::Evaluate(name) => {
+                // Need to make a clone here since executing commands could
+                // modify `self`, which could break the reference here.
+                let argument: Argument = self.variables.get(name);
+                self.evaluate(&script_stack, Evaluate::Argument(&argument))
+            }
+            // Note that variables can technically be `Script`s.
+            // E.g., if we do `set "var-name" (echo $0 ; echo $1)`, then we
+            // can call with `var-name 'hello' 'world'`.  This is the way
+            // we create new commands.
+            script::Command::SetVariable => self.variables.set_from_script(&script),
+            script::Command::ConstVariable => self.variables.set_from_script(&script),
+            script::Command::CreateAlias => self.variables.set_from_script(&script),
+            script::Command::ForegroundColor => {
+                let color_arg = self.evaluate(&script_stack, Evaluate::Index(0));
+                get_or_set_color(&mut self.fg, &self.palette, color_arg)
+            }
+            script::Command::BackgroundColor => {
+                let color_arg = self.evaluate(&script_stack, Evaluate::Index(0));
+                get_or_set_color(&mut self.bg, &self.palette, color_arg)
+            }
+            script::Command::Quit => {
+                self.quit_view_safe(self.views.active_id);
+                Ok(Argument::Null)
+            }
         }
     }
 }
