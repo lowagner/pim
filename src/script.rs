@@ -1,7 +1,9 @@
 use crate::gfx::Rgba8;
+use crate::palette::Palette;
 
 use std::collections::HashMap;
 use std::fmt;
+use std::mem;
 
 /*
 TODO: how is parsing going to work here?
@@ -100,8 +102,8 @@ impl fmt::Display for Command {
 
 #[derive(PartialEq, Debug, Clone)]
 pub struct Script {
-    command: Command,
-    arguments: Arguments,
+    pub command: Command,
+    pub arguments: Arguments,
 }
 
 impl Script {
@@ -176,11 +178,7 @@ impl fmt::Display for Argument {
             Self::String(value) => write!(f, "'{}'", *value),
             Self::Color(value) => write!(f, "{}", *value),
             Self::Script(script) => {
-                let mut check = write!(
-                    f,
-                    "Script {{command: {}, arguments: Vec2::from([",
-                    script.command
-                );
+                let mut check = write!(f, "Script {{command: `{}`, arguments: [", script.command);
                 if check.is_err() {
                     return check;
                 }
@@ -190,7 +188,7 @@ impl fmt::Display for Argument {
                         return check;
                     }
                 }
-                write!(f, "])}}")
+                write!(f, "]}}")
             }
             _ => write!(f, "???"),
         }
@@ -206,6 +204,43 @@ pub trait ScriptRunner {
     // stack because all sorts of redirection is possible, i.e., due to `Argument::Use`
     // or additional nested scripts being run via `Argument::Script`.
     fn run(&mut self, script_stack: Vec<&Script>) -> ArgumentResult;
+}
+
+/// Essentially a getter/setter for color, with a Null argument making
+/// this behave as a getter and a non-Null argument as a setter, though
+/// we return the old value as we swap in the new value.
+/// We will use the palette in case an integer argument is passed in.
+pub fn get_or_set_color(
+    maybe_set_color: &mut Rgba8,
+    palette: &Palette,
+    color_result: ArgumentResult,
+) -> ArgumentResult {
+    if color_result.is_err() {
+        return color_result;
+    }
+    match color_result.unwrap() {
+        // Without an argument, we're expecting to get the current color.
+        Argument::Null => Ok(Argument::Color(maybe_set_color.clone())),
+        // With a (valid) argument, we're expecting to set the new color
+        // and return the old color.
+        Argument::I64(value) => {
+            // Purposely underflow here for negative values;
+            // that will just become a very large positive number,
+            // and we'll check the palette size first.
+            let palette_index = value as usize;
+            if palette_index < palette.size() {
+                let mut color = palette.colors[palette_index];
+                mem::swap(&mut color, maybe_set_color);
+                return Ok(Argument::Color(color));
+            }
+            Err(format!("no palette color with index {}", value))
+        }
+        Argument::Color(mut color) => {
+            mem::swap(&mut color, maybe_set_color);
+            Ok(Argument::Color(color))
+        }
+        arg => Err(format!("invalid argument to get_or_set_color: {}", arg)),
+    }
 }
 
 pub enum Evaluate<'a> {
@@ -307,6 +342,7 @@ pub struct Variables {
 
 impl Variables {
     pub fn new() -> Self {
+        // TODO: should probably add a few const variables like `null`, etc.
         Self {
             map: HashMap::new(),
         }
@@ -360,7 +396,7 @@ impl Variables {
             })
     }
 
-    fn set_from_script(&mut self, script: &Script) -> ArgumentResult {
+    pub fn set_from_script(&mut self, script: &Script) -> ArgumentResult {
         if script.arguments.len() == 0 {
             return Err("setting a variable requires at least one argument".to_string());
         }
@@ -1006,5 +1042,92 @@ mod test {
             Variable::Mutable(aliased_value.clone()),
         );
         assert_eq!(variables.get(alias_name), aliased_value);
+    }
+
+    #[test]
+    fn test_get_or_set_color_works_with_palette() {
+        let mut palette = Palette::new(12.0, 50);
+        palette.add(Rgba8 {
+            r: 111,
+            g: 22,
+            b: 3,
+            a: 255,
+        });
+        palette.add(Rgba8 {
+            r: 44,
+            g: 55,
+            b: 66,
+            a: 255,
+        });
+
+        // The color we'll try to modify.
+        let mut color = Rgba8 {
+            r: 255,
+            g: 254,
+            b: 253,
+            a: 255,
+        };
+        let mut trailing_color = color;
+
+        // going "under" the palette size:
+        assert_eq!(
+            get_or_set_color(&mut color, &palette, Ok(Argument::I64(-1))),
+            Err("no palette color with index -1".to_string())
+        );
+        assert_eq!(color, trailing_color); // no change
+
+        // being within palette size:
+        assert_eq!(
+            get_or_set_color(&mut color, &palette, Ok(Argument::I64(1))),
+            Ok(Argument::Color(trailing_color))
+        );
+        assert_eq!(color, palette.colors[1]);
+        trailing_color = color;
+
+        // going over the palette size:
+        assert_eq!(
+            get_or_set_color(&mut color, &palette, Ok(Argument::I64(2))),
+            Err("no palette color with index 2".to_string())
+        );
+        assert_eq!(color, trailing_color); // no change
+
+        // another test within palette size:
+        assert_eq!(
+            get_or_set_color(&mut color, &palette, Ok(Argument::I64(0))),
+            Ok(Argument::Color(trailing_color))
+        );
+        assert_eq!(color, palette.colors[0]);
+    }
+
+    #[test]
+    fn test_get_or_set_color_works_with_pure_colors() {
+        // Palette should be ignored.
+        let palette = Palette::new(12.0, 50);
+
+        // The color we'll try to modify.
+        let mut color = Rgba8 {
+            r: 255,
+            g: 254,
+            b: 253,
+            a: 255,
+        };
+        let mut trailing_color = color;
+
+        // Test once:
+        let mut new_color = Rgba8 {r: 53, g: 27, b: 13, a: 0xff};
+        assert_eq!(
+            get_or_set_color(&mut color, &palette, Ok(Argument::Color(new_color))),
+            Ok(Argument::Color(trailing_color))
+        );
+        assert_eq!(color, new_color);
+        trailing_color = color;
+
+        // Test again:
+        new_color = Rgba8 {r: 101, g: 1, b: 77, a: 0xff};
+        assert_eq!(
+            get_or_set_color(&mut color, &palette, Ok(Argument::Color(new_color))),
+            Ok(Argument::Color(trailing_color))
+        );
+        assert_eq!(color, new_color);
     }
 }
