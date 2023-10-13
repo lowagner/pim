@@ -27,6 +27,8 @@ TODO: we should probably have an error if people try to overwrite 'if', 'set', e
 TODO: make push have an automatic pop at the end of a script runner.
 */
 
+/// The commands that are possible in a script.
+// Note these are designed to be quickly cloned, so don't put large amounts of data in them.
 #[derive(PartialEq, Debug, Clone)]
 pub enum Command {
     // A sort of throw-away command to make going through arguments
@@ -37,9 +39,13 @@ pub enum Command {
     Root,
 
     If,
-    // Runs each inner Command in turn, returning early if any is an Err,
+    // Evaluates each Argument in turn, returning early if any is an Err,
     // returning Ok with last result otherwise.
-    // TODO: Sequential(Vec<Command>),
+    // TODO: Sequential,
+    // Evaluates the first argument, then uses it as an index into the remaining arguments.
+    // TODO: option 1: if 0, don't run anything.  1, 2, etc. index the arguments directly as $1, $2, etc.
+    // TODO: option 2: if 0, run argument $1.  1, 2, etc. index the arguments at offset $2, $3, etc.
+    // TODO: RunIndex,
 
     // Gets the value of a variable that is known to the compiler; evaluates it.
     Evaluate(String),
@@ -50,10 +56,13 @@ pub enum Command {
     //      let's keep $0 as the first argument (Arg1), so we'll need to copy the argument array for `GetVariable`.
     //      probably the easiest thing to do is "LoadVariableName" and "EvaluateVariableName" with some extra state.
     // GetVariable,
-    // Sets the value of a named variable at $0 to $1, allowing future changes.
+    // Sets a variable with name $0 to the value at $1, allowing future changes.
     SetVariable,
-    // Sets the value of a named variable at $0 to $1, and doesn't allow future changes to this variable.
+    // Sets a variable with name $0 to the value at $1, and doesn't allow future changes to this variable.
     ConstVariable,
+    // Uses $0 to alias the name of a variable at $1, and doesn't allow future changes to this variable.
+    CreateAlias,
+
     // TODO: Map: uses mode $0, with keybinding at $1, to evaluate command at $2.  optional command at $3 for release
 
     // TODO: UiScale (1,2,3,4)
@@ -73,6 +82,7 @@ impl fmt::Display for Command {
             Self::Evaluate(value) => write!(f, "${}", value),
             Self::SetVariable => write!(f, "set"),
             Self::ConstVariable => write!(f, "const"),
+            Self::CreateAlias => write!(f, "alias"),
             Self::ForegroundColor => write!(f, "fg"),
             Self::BackgroundColor => write!(f, "bg"),
             Self::Quit => write!(f, "quit"),
@@ -267,11 +277,12 @@ pub fn evaluate(
     Err("external arguments to script should not include $0, $1, etc.".to_string())
 }
 
+#[derive(PartialEq, Debug, Clone)]
 pub enum Variable {
     Const(Argument),
     Mutable(Argument),
-    // If we look up a variable and remap it:
-    // TODO: MutableAlias(String) and ConstAlias(String)
+    // To look up a variable and remap it:
+    Alias(String),
 }
 
 pub struct Variables {
@@ -285,14 +296,23 @@ impl Variables {
         }
     }
 
-    /// Returns the variable, or Null, if not present in the map.
-    pub fn get(&self, name: String) -> Argument {
-        self.variables
-            .get(&name)
-            .map_or(Argument::Null, |v| match v {
-                Variable::Const(var) => var.clone(),
-                Variable::Mutable(var) => var.clone(),
-            })
+    /// Returns the Argument represented by this name, returning Null if not present in the map.
+    // Notice that we resolve aliases here so that you'll definitely get an argument.
+    pub fn get(&self, mut name: String) -> Argument {
+        for _iteration in 1..24 {
+            match &self.variables.get(&name) {
+                None => return Argument::Null,
+                Some(variable) => match variable {
+                    Variable::Const(arg) => return arg.clone(),
+                    Variable::Mutable(arg) => return arg.clone(),
+                    Variable::Alias(alias) => {
+                        name = alias.clone();
+                    },
+                },
+            }
+        }
+        eprint!("don't nest aliases this much!\n");
+        return Argument::Null;
     }
 
     /// Sets the variable, returning the old value if it was present in the map.
@@ -302,15 +322,54 @@ impl Variables {
             None => {}
             Some(var) => match var {
                 Variable::Mutable(_) => {}
-                Variable::Const(_) => return Err(format!("variable {} is const", name)),
+                _ => return Err(format!("variable {} is const", name)),
             },
         }
+        // TODO: optimization for aliases of aliases, we could drill down since aliases
+        // are constant.  e.g., X -> Y -> Z should collapse to X -> Z and Y -> Z.
+        // if we create X -> Y first, then Y -> Z, the next time we mutate self
+        // and notice that X -> Y which is itself an alias, we can update to X -> Z.
         self.variables
             .insert(name, variable)
             .map_or(Ok(Argument::Null), |v| match v {
                 Variable::Mutable(var) => Ok(var),
-                Variable::Const(_) => panic!("i thought we checked for this already"),
+                _ => panic!("i thought we checked for this already"),
             })
+    }
+
+    fn set_from_script(
+        &mut self,
+        script: &Script
+    ) -> ArgumentResult {
+        if script.arguments.len() == 0 {
+            return Err("setting a variable requires at least one argument".to_string());
+        }
+
+        let name = match &script.arguments[0] {
+            Argument::String(argument_name) => argument_name.clone(),
+            _ => return Err("variable name must be a known string".to_string()),
+        };
+
+        let value_argument = if script.arguments.len() >= 2 {
+            script.arguments[1].clone()
+        } else {
+            Argument::Null
+        };
+        let value = match script.command {
+            Command::ConstVariable => Variable::Const(value_argument),
+            Command::SetVariable => Variable::Mutable(value_argument),
+            Command::CreateAlias => {
+                match value_argument {
+                    Argument::String(alias) => Variable::Alias(alias),
+                    // TODO: we can probably relax this at some point,
+                    // but i don't see a huge use case for it.
+                    _ => return Err("alias must be to a known string".to_string()),
+                }
+            }
+            _ => return Err("script is invalid for setting a variable".to_string()),
+        };
+
+        self.set(name, value)
     }
 }
 
@@ -373,6 +432,7 @@ mod test {
                     // Need to make a clone here since executing commands could
                     // modify `self`, which could break the reference here.
                     let argument: Argument = self.variables.get(name);
+
                     // No need to double up on WhatRan, just run directly:
                     evaluate(self, &script_stack, Evaluate::Argument(&argument))
                 }
@@ -380,8 +440,9 @@ mod test {
                 // E.g., if we do `set "var-name" (echo $0 ; echo $1)`, then we
                 // can call with `var-name 'hello' 'world'`.  This is the way
                 // we create new commands.
-                Command::SetVariable => self.set_variable(&script_stack, false),
-                Command::ConstVariable => self.set_variable(&script_stack, true),
+                Command::SetVariable => self.variables.set_from_script(&script),
+                Command::ConstVariable => self.variables.set_from_script(&script),
+                Command::CreateAlias => self.variables.set_from_script(&script),
                 Command::ForegroundColor => self.evaluate(&script_stack, Evaluate::Index(0)),
                 Command::BackgroundColor => self.evaluate(&script_stack, Evaluate::Index(0)),
                 Command::Quit => Ok(Argument::Null),
@@ -394,38 +455,6 @@ mod test {
             Self {
                 test_what_ran: Vec::new(),
                 variables: Variables::new(),
-            }
-        }
-
-
-        fn set_variable(
-            &mut self,
-            script_stack: &Vec<&Script>,
-            is_const: bool,
-        ) -> ArgumentResult {
-            let maybe_name = self.evaluate(&script_stack, Evaluate::Index(0));
-            if maybe_name.is_err() {
-                return maybe_name;
-            }
-            let name_argument = maybe_name.unwrap();
-            match name_argument {
-                Argument::String(name) => {
-                    let script: &Script = &script_stack.last().unwrap();
-                    let argument = if script.arguments.len() >= 2 {
-                        script.arguments[1].clone()
-                    } else {
-                        Argument::Null
-                    };
-                    self.variables.set(
-                        name,
-                        if is_const {
-                            Variable::Const(argument)
-                        } else {
-                            Variable::Mutable(argument)
-                        },
-                    )
-                }
-                _ => Err("Invalid type for variable name".to_string()),
             }
         }
 
@@ -722,7 +751,6 @@ mod test {
             vec![
                 // First run:
                 WhatRan::Command(Command::SetVariable),
-                WhatRan::Argument(Ok(Argument::String(variable_name.clone()))),
                 // Second run:
                 WhatRan::Command(Command::Evaluate(variable_name.clone())),
                 WhatRan::Command(Command::ForegroundColor),
@@ -730,4 +758,74 @@ mod test {
             ]
         );
     }
+
+    #[test]
+    fn test_script_allows_setting_const_variables() {
+        let variable_name = "artichoke".to_string();
+        let mut script = Script {
+            command: Command::ConstVariable,
+            arguments: Vec::from([
+                Argument::String(variable_name.clone()),
+                Argument::Script(Script {
+                    command: Command::BackgroundColor,
+                    arguments: vec![Argument::Use(2)],
+                }),
+            ]),
+        };
+        let mut test_runner = TestRunner::new();
+
+        let mut result = script.run(&mut test_runner, vec![]);
+        assert!(result.is_ok());
+        assert_eq!(result.ok(), Some(Argument::Null)); // variable wasn't anything previously
+
+        script = Script {
+            command: Command::Evaluate(variable_name.clone()),
+            arguments: vec![
+                Argument::Color(Rgba8::RED),
+                Argument::Color(Rgba8::BLUE),
+                Argument::Color(Rgba8::BLACK),
+            ],
+        };
+        result = script.run(&mut test_runner, vec![]);
+        assert!(result.is_ok());
+        assert_eq!(result.ok(), Some(Argument::Color(Rgba8::BLACK)));
+
+        assert_eq!(
+            test_runner.test_what_ran,
+            vec![
+                // First run:
+                WhatRan::Command(Command::ConstVariable),
+                // Second run:
+                WhatRan::Command(Command::Evaluate(variable_name.clone())),
+                WhatRan::Command(Command::BackgroundColor),
+                WhatRan::Argument(Ok(Argument::Color(Rgba8::BLACK))),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_variables_can_resolve_aliases() {
+        let mut variables = Variables::new();
+
+        let x = "X".to_string();
+        let y = "Y".to_string();
+        let z = "Z".to_string();
+
+        _ = variables.set(x.clone(), Variable::Alias(y.clone()));
+        // If Y isn't defined yet:
+        assert_eq!(variables.get(x.clone()), Argument::Null);
+
+        _ = variables.set(y.clone(), Variable::Alias(z.clone()));
+        // Z isn't defined yet, either:
+        assert_eq!(variables.get(x.clone()), Argument::Null);
+        assert_eq!(variables.get(y.clone()), Argument::Null);
+
+        _ = variables.set(z.clone(), Variable::Const(Argument::I64(123)));
+        assert_eq!(variables.get(x.clone()), Argument::I64(123));
+        assert_eq!(variables.get(y.clone()), Argument::I64(123));
+        assert_eq!(variables.get(z.clone()), Argument::I64(123)); // not an alias, but should make sense!
+    }
+    // TODO: test variables.set(Const) twice fails
+    // TODO: test variables.set(Mutable) is ok
+    // TODO: test variables.set_from_script() works for Const, Mutable, and Alias
 }
