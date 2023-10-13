@@ -178,7 +178,7 @@ impl fmt::Display for Argument {
             Self::String(value) => write!(f, "'{}'", *value),
             Self::Color(value) => write!(f, "{}", *value),
             Self::Script(script) => {
-                let mut check = write!(f, "Script {{command: `{}`, arguments: [", script.command);
+                let mut check = write!(f, "{{command: `{}`, arguments: [", script.command);
                 if check.is_err() {
                     return check;
                 }
@@ -190,7 +190,7 @@ impl fmt::Display for Argument {
                 }
                 write!(f, "]}}")
             }
-            _ => write!(f, "???"),
+            Self::Use(value) => write!(f, "${}", *value),
         }
     }
 }
@@ -1114,7 +1114,12 @@ mod test {
         let mut trailing_color = color;
 
         // Test once:
-        let mut new_color = Rgba8 {r: 53, g: 27, b: 13, a: 0xff};
+        let mut new_color = Rgba8 {
+            r: 53,
+            g: 27,
+            b: 13,
+            a: 0xff,
+        };
         assert_eq!(
             get_or_set_color(&mut color, &palette, Ok(Argument::Color(new_color))),
             Ok(Argument::Color(trailing_color))
@@ -1123,11 +1128,84 @@ mod test {
         trailing_color = color;
 
         // Test again:
-        new_color = Rgba8 {r: 101, g: 1, b: 77, a: 0xff};
+        new_color = Rgba8 {
+            r: 101,
+            g: 1,
+            b: 77,
+            a: 0xff,
+        };
         assert_eq!(
             get_or_set_color(&mut color, &palette, Ok(Argument::Color(new_color))),
             Ok(Argument::Color(trailing_color))
         );
         assert_eq!(color, new_color);
+    }
+
+    #[test]
+    fn test_get_or_set_color_returns_current_color_with_null_argument() {
+        // Palette should be ignored.
+        let palette = Palette::new(12.0, 50);
+
+        // The color we'll try to modify.
+        let mut color = Rgba8 {
+            r: 255,
+            g: 254,
+            b: 253,
+            a: 255,
+        };
+        let initial_color = color;
+
+        assert_eq!(
+            get_or_set_color(&mut color, &palette, Ok(Argument::Null)),
+            Ok(Argument::Color(initial_color))
+        );
+        assert_eq!(color, initial_color);
+    }
+
+    #[test]
+    fn test_get_or_set_color_returns_error_with_invalid_arguments() {
+        // Palette should be ignored.
+        let palette = Palette::new(12.0, 50);
+
+        // The color we'll try to modify.
+        let mut color = Rgba8 {
+            r: 255,
+            g: 254,
+            b: 253,
+            a: 255,
+        };
+        let initial_color = color;
+
+        // String doesn't work.  TODO: would it be good to add e.g., 'red', 'blue', etc. someday?
+        assert_eq!(
+            get_or_set_color(
+                &mut color,
+                &palette,
+                Ok(Argument::String("asdf".to_string()))
+            ),
+            Err("invalid argument to get_or_set_color: 'asdf'".to_string())
+        );
+        assert_eq!(color, initial_color);
+
+        // Script doesn't work:
+        assert_eq!(
+            get_or_set_color(
+                &mut color,
+                &palette,
+                Ok(Argument::Script(Script {
+                    command: Command::Root,
+                    arguments: vec![]
+                }))
+            ),
+            Err("invalid argument to get_or_set_color: {command: `:`, arguments: []}".to_string())
+        );
+        assert_eq!(color, initial_color);
+
+        // Use doesn't work:
+        assert_eq!(
+            get_or_set_color(&mut color, &palette, Ok(Argument::Use(1234))),
+            Err("invalid argument to get_or_set_color: $1234".to_string())
+        );
+        assert_eq!(color, initial_color);
     }
 }
