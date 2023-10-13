@@ -12,7 +12,7 @@ use crate::hashmap;
 use crate::palette::*;
 use crate::platform::{self, InputState, Key, KeyboardInput, LogicalSize, ModifiersState};
 use crate::script::{
-    self, evaluate, get_or_set_color, Argument, ArgumentResult, Evaluate, Script, ScriptRunner,
+    self, Argument, ArgumentResult, Evaluate, Script, ScriptRunner,
     Variables,
 };
 use crate::util;
@@ -3128,7 +3128,7 @@ impl Session {
     }
 
     fn evaluate(&mut self, script_stack: &Vec<&Script>, evaluate_this: Evaluate) -> ArgumentResult {
-        evaluate(self, script_stack, evaluate_this)
+        script::evaluate(self, script_stack, evaluate_this)
     }
 }
 
@@ -3166,11 +3166,31 @@ impl ScriptRunner for Session {
             script::Command::CreateAlias => self.variables.set_from_script(&script),
             script::Command::ForegroundColor => {
                 let color_arg = self.evaluate(&script_stack, Evaluate::Index(0));
-                get_or_set_color(&mut self.fg, &self.palette, color_arg)
+                script::get_or_set_color(&mut self.fg, &self.palette, color_arg)
             }
             script::Command::BackgroundColor => {
                 let color_arg = self.evaluate(&script_stack, Evaluate::Index(0));
-                get_or_set_color(&mut self.bg, &self.palette, color_arg)
+                script::get_or_set_color(&mut self.bg, &self.palette, color_arg)
+            }
+            script::Command::Paint => {
+                let x_result = script::get_coordinate(self.evaluate(&script_stack, Evaluate::Index(0)));
+                if x_result.is_err() { return Err(x_result.unwrap_err()); }
+                let y_result = script::get_coordinate(self.evaluate(&script_stack, Evaluate::Index(1)));
+                if y_result.is_err() { return Err(y_result.unwrap_err()); }
+
+                let mut color = self.fg; // default to foreground color
+                let color_arg = self.evaluate(&script_stack, Evaluate::Index(2));
+                let color_result = script::get_or_set_color(&mut color, &self.palette, color_arg);
+                if color_result.is_err() {
+                    return color_result;
+                }
+
+                self.active_view_mut().paint_color(color, x_result.unwrap() as i32, y_result.unwrap() as i32);
+
+                // TODO: there's probably something better to return here.
+                // We could consider returning the "undo" script that would return the pixel
+                // to what it is.
+                Ok(Argument::Color(color))
             }
             script::Command::Quit => {
                 self.quit_view_safe(self.views.active_id);

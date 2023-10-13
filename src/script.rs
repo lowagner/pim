@@ -76,8 +76,26 @@ pub enum Command {
 
     // TODO: UiScale (1,2,3,4)
     // TODO: FitPixelWidth, FitPixelHeight; zoom to fit that many pixels within the screen based on available area
+    /// Uses $0 to set the foreground color, if not null, and returns the old value.
+    /// If $0 is null, returns the current foreground color without changing it.
+    /// If $1 is a valid color, e.g., a hex color (#123456) or a palette index (0),
+    /// then the foreground color will be updated to that color and the old color
+    /// will be returned (in hex).  For example:
+    ///     `fg 1`          sets foreground color to what is in palette 1
+    ///     `fg #fedcba`    sets the foreground color to #fedcba
+    ///     `fg`            just returns the foreground color without changing it
     ForegroundColor,
+    /// Same as `ForegroundColor` but for the background color.  For example:
+    ///     `bg 0`          sets background color to what is in palette 0
+    ///     `bg #012345`    sets the background color to #012345
+    ///     `bg`            just returns the background color without changing it
     BackgroundColor,
+
+    /// Uses $0 for x, $1 for y, and $2 as an optional color (defaults to foreground color).
+    /// E.g., `paint 5 10` to paint the pixel at (5, 10) with the foreground color,
+    /// and `paint 11 12 #123456` to paint the pixel at (11, 12) with #123456.
+    /// Note that an integer for the color also works as an index to the palette.
+    Paint,
 
     // TODO: Shift: moves the animation over one to start one frame down
     // TODO: maybe a `Lookup` command.
@@ -95,6 +113,7 @@ impl fmt::Display for Command {
             Self::CreateAlias => write!(f, "alias"),
             Self::ForegroundColor => write!(f, "fg"),
             Self::BackgroundColor => write!(f, "bg"),
+            Self::Paint => write!(f, "paint"),
             Self::Quit => write!(f, "quit"),
         }
     }
@@ -204,6 +223,20 @@ pub trait ScriptRunner {
     // stack because all sorts of redirection is possible, i.e., due to `Argument::Use`
     // or additional nested scripts being run via `Argument::Script`.
     fn run(&mut self, script_stack: Vec<&Script>) -> ArgumentResult;
+}
+
+pub type CoordinateResult = Result<i64, String>;
+
+/// Gets a coordinate (e.g., x or y, but not both) from an argument.
+/// Only I64 types are valid currently.
+pub fn get_coordinate(coordinate_result: ArgumentResult) -> CoordinateResult {
+    if coordinate_result.is_err() {
+        return Err(coordinate_result.unwrap_err());
+    }
+    match coordinate_result.unwrap() {
+        Argument::I64(value) => return Ok(value),
+        result => return Err(format!("invalid coordinate: {}", result)),
+    }
 }
 
 /// Essentially a getter/setter for color, with a Null argument making
@@ -459,9 +492,20 @@ mod test {
         Argument(ArgumentResult),
     }
 
+    #[derive(PartialEq, Debug, Clone, Copy)]
+    struct Painted {
+        x: i64,
+        y: i64,
+        color: Rgba8,
+    }
+
     struct TestRunner {
         test_what_ran: Vec<WhatRan>,
         variables: Variables,
+        fg: Rgba8,
+        bg: Rgba8,
+        palette: Palette,
+        test_painted: Vec<Painted>,
     }
 
     impl ScriptRunner for TestRunner {
@@ -499,8 +543,27 @@ mod test {
                 Command::SetVariable => self.variables.set_from_script(&script),
                 Command::ConstVariable => self.variables.set_from_script(&script),
                 Command::CreateAlias => self.variables.set_from_script(&script),
-                Command::ForegroundColor => self.evaluate(&script_stack, Evaluate::Index(0)),
-                Command::BackgroundColor => self.evaluate(&script_stack, Evaluate::Index(0)),
+                Command::ForegroundColor => {
+                    let color_arg = self.evaluate(&script_stack, Evaluate::Index(0));
+                    get_or_set_color(&mut self.fg, &self.palette, color_arg)
+                }
+                Command::BackgroundColor => {
+                    let color_arg = self.evaluate(&script_stack, Evaluate::Index(0));
+                    get_or_set_color(&mut self.bg, &self.palette, color_arg)
+                },
+                Command::Paint => {
+                    let x_result = get_coordinate(self.evaluate(&script_stack, Evaluate::Index(0)));
+                    if x_result.is_err() { return Err(x_result.unwrap_err()); }
+                    let y_result = get_coordinate(self.evaluate(&script_stack, Evaluate::Index(1)));
+                    if y_result.is_err() { return Err(y_result.unwrap_err()); }
+
+                    let mut color = self.fg; // default to foreground color
+                    let color_arg = self.evaluate(&script_stack, Evaluate::Index(2));
+                    let color_result = get_or_set_color(&mut color, &self.palette, color_arg);
+
+                    self.test_painted.push(Painted { x: x_result.unwrap(), y: y_result.unwrap(), color });
+                    Ok(Argument::Color(color))
+                },
                 Command::Quit => Ok(Argument::Null),
             }
         }
@@ -508,9 +571,25 @@ mod test {
 
     impl TestRunner {
         fn new() -> Self {
+            let mut palette = Palette::new(12.0, 50);
+            palette.add(Rgba8::BLACK);
+            palette.add(Rgba8{r: 11, g: 15, b: 19, a: 0xff});
+            palette.add(Rgba8{r: 22, g: 25, b: 28, a: 0xff});
+            palette.add(Rgba8{r: 33, g: 35, b: 37, a: 0xff});
+            palette.add(Rgba8{r: 44, g: 45, b: 46, a: 0xff});
+            palette.add(Rgba8{r: 55, g: 55, b: 55, a: 0xff});
+            palette.add(Rgba8{r: 66, g: 65, b: 64, a: 0xff});
+            palette.add(Rgba8{r: 77, g: 75, b: 73, a: 0xff});
+            palette.add(Rgba8{r: 88, g: 85, b: 82, a: 0xff});
+            palette.add(Rgba8{r: 99, g: 95, b: 91, a: 0xff});
+            palette.add(Rgba8::WHITE);
             Self {
+                palette,
                 test_what_ran: Vec::new(),
                 variables: Variables::new(),
+                fg: Rgba8::WHITE,
+                bg: Rgba8::BLACK,
+                test_painted: vec![],
             }
         }
 
@@ -590,8 +669,9 @@ mod test {
                 WhatRan::Argument(Ok(Argument::I64(1))),
                 WhatRan::Command(Command::ForegroundColor),
                 WhatRan::Argument(Ok(Argument::Color(Rgba8::RED))),
-                // This second one comes as a result of returning this from the `if`
-                WhatRan::Argument(Ok(Argument::Color(Rgba8::RED))),
+                // This second one comes as a result of returning this from the foreground;
+                // this is what it was previously:
+                WhatRan::Argument(Ok(Argument::Color(Rgba8::WHITE))),
             ])
         );
         assert!(result.is_ok());
@@ -703,11 +783,12 @@ mod test {
                 WhatRan::Argument(Ok(Argument::I64(0))),
                 WhatRan::Command(Command::BackgroundColor),
                 WhatRan::Argument(Ok(Argument::Color(Rgba8::RED))),
-                WhatRan::Argument(Ok(Argument::Color(Rgba8::RED)))
+                // The original BG color before we changed it to red:
+                WhatRan::Argument(Ok(Argument::Color(Rgba8::BLACK)))
             ]
         );
         assert!(result.is_ok());
-        assert_eq!(result.ok(), Some(Argument::Color(Rgba8::RED)));
+        assert_eq!(result.ok(), Some(Argument::Color(Rgba8::BLACK)));
     }
 
     #[test]
@@ -741,14 +822,16 @@ mod test {
             .set(variable_name.clone(), Variable::Mutable(Argument::I64(1)));
         let mut result = script.run(&mut test_runner, arguments.clone());
         assert!(result.is_ok());
-        assert_eq!(result.ok(), Some(Argument::Color(Rgba8::BLACK)));
+        assert_eq!(result.ok(), Some(Argument::Color(Rgba8::WHITE))); // previous FG color
+        assert_eq!(test_runner.fg, Rgba8::BLACK);
 
         test_runner
             .variables
             .set(variable_name.clone(), Variable::Mutable(Argument::I64(0)));
         result = script.run(&mut test_runner, arguments);
         assert!(result.is_ok());
-        assert_eq!(result.ok(), Some(Argument::Color(Rgba8::RED)));
+        assert_eq!(result.ok(), Some(Argument::Color(Rgba8::BLACK))); // previous BG color
+        assert_eq!(test_runner.bg, Rgba8::RED);
 
         assert_eq!(
             test_runner.test_what_ran,
@@ -759,14 +842,14 @@ mod test {
                 WhatRan::Argument(Ok(Argument::I64(1))),
                 WhatRan::Command(Command::ForegroundColor),
                 WhatRan::Argument(Ok(Argument::Color(Rgba8::BLACK))),
-                WhatRan::Argument(Ok(Argument::Color(Rgba8::BLACK))),
+                WhatRan::Argument(Ok(Argument::Color(Rgba8::WHITE))), // previous FG color
                 // Second run:
                 WhatRan::Command(Command::If),
                 WhatRan::Command(Command::Evaluate(variable_name.clone())),
                 WhatRan::Argument(Ok(Argument::I64(0))),
                 WhatRan::Command(Command::BackgroundColor),
                 WhatRan::Argument(Ok(Argument::Color(Rgba8::RED))),
-                WhatRan::Argument(Ok(Argument::Color(Rgba8::RED))),
+                WhatRan::Argument(Ok(Argument::Color(Rgba8::BLACK))), // previous BG color
             ]
         );
     }
@@ -800,7 +883,8 @@ mod test {
         };
         result = script.run(&mut test_runner, vec![]);
         assert!(result.is_ok());
-        assert_eq!(result.ok(), Some(Argument::Color(Rgba8::BLUE)));
+        assert_eq!(result.ok(), Some(Argument::Color(Rgba8::WHITE))); // previous value of FG
+        assert_eq!(test_runner.fg, Rgba8::BLUE);
 
         assert_eq!(
             test_runner.test_what_ran,
@@ -856,6 +940,61 @@ mod test {
                 WhatRan::Command(Command::BackgroundColor),
                 WhatRan::Argument(Ok(Argument::Color(Rgba8::BLACK))),
             ]
+        );
+    }
+
+    // TODO: test that we don't recurse infinitely if a function calls itself
+
+    #[test]
+    fn test_evaluate_can_follow_path_of_use_arguments() {
+        let function1 = "dot5".to_string();
+        let function2 = "paint5".to_string();
+        let mut test_runner = TestRunner::new();
+        test_runner.variables.set(function1.clone(), Variable::Const(Argument::Script(Script {
+            command: Command::Evaluate(function2.to_string()),
+            arguments: vec![
+                Argument::Use(2),
+                Argument::Use(0),
+            ],
+        })));
+        test_runner.variables.set(function2.clone(), Variable::Const(Argument::Script(Script {
+            command: Command::Paint,
+            arguments: vec![
+                Argument::Use(0),
+                Argument::Use(1),
+                Argument::I64(5),
+            ],
+        })));
+        let script = Script {
+            command: Command::Evaluate(function1.clone()),
+            arguments: vec![
+                Argument::I64(10), // used as x coordinate in paint
+                Argument::String("not used anywhere".to_string()),
+                Argument::I64(37), // used as y coordinate in paint
+            ],
+        };
+
+        let mut result = script.run(&mut test_runner, vec![]);
+        assert!(result.is_ok());
+        assert_eq!(result.ok(), Some(Argument::Color(test_runner.palette.colors[5])));
+
+        assert_eq!(
+            test_runner.test_what_ran,
+            vec![
+                // First run:
+                WhatRan::Command(Command::Evaluate(function1.clone())),
+                // Second run:
+                WhatRan::Command(Command::Evaluate(function2.clone())),
+                // Actual call:
+                WhatRan::Command(Command::Paint),
+                WhatRan::Argument(Ok(Argument::I64(37))), // x coordinate
+                WhatRan::Argument(Ok(Argument::I64(10))), // y coordinate
+                WhatRan::Argument(Ok(Argument::I64(5))), // color palette
+            ]
+        );
+        assert_eq!(
+            test_runner.test_painted,
+            vec![Painted {x: 37, y: 10, color: test_runner.palette.colors[5]}],
         );
     }
 
