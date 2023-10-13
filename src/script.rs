@@ -107,7 +107,7 @@ impl fmt::Display for Command {
         match self {
             Self::Root => write!(f, ":"),
             Self::If => write!(f, "if"),
-            Self::Evaluate(value) => write!(f, "${}", value),
+            Self::Evaluate(value) => write!(f, "{}", value),
             Self::SetVariable => write!(f, "set"),
             Self::ConstVariable => write!(f, "const"),
             Self::CreateAlias => write!(f, "alias"),
@@ -126,6 +126,9 @@ pub struct Script {
 }
 
 impl Script {
+    // TODO: i don't think we need to add `root` in.  there's no such thing as external arguments;
+    // they'll be added to the argument list for the compiled Script in question.
+    // i.e., we should be able to avoid passing in `arguments` here.
     fn run(&self, runner: &mut dyn ScriptRunner, arguments: Arguments) -> ArgumentResult {
         let root = Script {
             command: Command::Root,
@@ -144,12 +147,18 @@ pub type ArgumentResult = Result<Argument, String>;
 pub enum Argument {
     // Value-based arguments.
     Null,
+
     // TODO: convert "true"/"false" to 1/0 in an I64.
     I64(i64),
     // TODO: for Scale, use an I64 with the number of pixels desired in the X/Y direction.
     // E.g., we can have PixelsX/PixelsY or width/height
     String(String),
     Color(Rgba8),
+    // TODO: for keys (e.g. a-z, <tab>, <backspace>, <ctrl>, etc.)
+    //      and also mods (<ctrl>a, <alt>c, etc.)
+    // Note that commands that take Input should also take a String that is a single
+    // character long, e.g., 'A' or 'ö'.
+    // Input(Input),
 
     // Non-value-based (AKA evaluatable) arguments follow.
     // TODO: we probably can have a zero-arg Variable here,
@@ -304,6 +313,8 @@ pub enum Evaluate<'a> {
 //    let root = Script { command: Root, arguments: [/*external-arguments*/] };
 //    let script_stack = [root, dot5, paint5];
 //
+// TODO: i don't think we need to add `root` in.  there's no such thing as external arguments;
+// they'll be added to the argument list for the Script in question.
 pub fn evaluate(
     runner: &mut dyn ScriptRunner,
     script_stack: &Vec<&Script>,
@@ -350,7 +361,7 @@ pub fn evaluate(
             _ => panic!("Invalid argument, not evaluatable: {}", *argument),
         }
     }
-    Err("external arguments to script should not include $0, $1, etc.".to_string())
+    Err("arguments to root script should not include $0, $1, etc.".to_string())
 }
 
 #[derive(PartialEq, Debug, Clone)]
