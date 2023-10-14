@@ -4,6 +4,7 @@ use crate::palette::Palette;
 use std::collections::HashMap;
 use std::fmt;
 use std::mem;
+use std::str::FromStr;
 
 /*
 TODO: how is parsing going to work here?
@@ -20,7 +21,11 @@ TODO: how is parsing going to work here?
         -- note the truthy clause happens second since `run (truthy $0)`
         -- will run argument 0 for false and argument 1 for truthy:
 
-        :set 'if' ( run (truthy $0) $2 $1 )
+    option 1:
+        :set 'if' (run (truthy $0) $2 $1)
+    option 2 (NOT USED!)
+        :set('if' run(truthy($0) $2 $1))
+    with option 1 we can avoid parentheses if we use a simple command.
 
     then we can do `if (conditional) (truthy) (falsy)`.
 
@@ -127,19 +132,49 @@ pub enum Command {
 impl fmt::Display for Command {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Root => write!(f, ":"),
-            Self::If => write!(f, "if"),
-            Self::Even => write!(f, "even"),
-            Self::Odd => write!(f, "odd"),
-            Self::Sum => write!(f, "sum"),
-            Self::Evaluate(value) => write!(f, "{}", value),
-            Self::SetVariable => write!(f, "set"),
-            Self::ConstVariable => write!(f, "const"),
-            Self::CreateAlias => write!(f, "alias"),
-            Self::ForegroundColor => write!(f, "fg"),
-            Self::BackgroundColor => write!(f, "bg"),
-            Self::Paint => write!(f, "paint"),
-            Self::Quit => write!(f, "quit"),
+            Command::Root => write!(f, ":"),
+            Command::If => write!(f, "if"),
+            Command::Even => write!(f, "even"),
+            Command::Odd => write!(f, "odd"),
+            Command::Sum => write!(f, "sum"),
+            Command::Evaluate(value) => write!(f, "{}", value),
+            Command::SetVariable => write!(f, "set"),
+            Command::ConstVariable => write!(f, "const"),
+            Command::CreateAlias => write!(f, "alias"),
+            Command::ForegroundColor => write!(f, "fg"),
+            Command::BackgroundColor => write!(f, "bg"),
+            Command::Paint => write!(f, "paint"),
+            Command::Quit => write!(f, "quit"),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct EmptyCommandParseError;
+
+impl FromStr for Command {
+    type Err = EmptyCommandParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.trim() {
+            "if" => Ok(Command::If),
+            "even" => Ok(Command::Even),
+            "odd" => Ok(Command::Odd),
+            "sum" => Ok(Command::Sum),
+            "set" => Ok(Command::SetVariable),
+            "const" => Ok(Command::ConstVariable),
+            "alias" => Ok(Command::CreateAlias),
+            "fg" => Ok(Command::ForegroundColor),
+            "bg" => Ok(Command::BackgroundColor),
+            "paint" => Ok(Command::Paint),
+            "quit" => Ok(Command::Quit),
+            name => {
+                if name.len() > 0 {
+                    Ok(Command::Evaluate(name.to_string()))
+                } else {
+                    Err(EmptyCommandParseError)
+                }
+            }
         }
     }
 }
@@ -529,6 +564,10 @@ pub enum Variable {
     Const(Argument),
     // To look up a variable and remap it:
     Alias(String),
+    // Built-in function, e.g., `if` or `paint`:
+    // TODO: figure out how we want to do this.  we could put
+    // in a script, or we could put in a lambda function here, e.g., `BuiltIn(String, Function)`
+    // BuiltIn(String),
 }
 
 impl Variable {
@@ -809,10 +848,7 @@ mod test {
 
         assert_eq!(
             test_runner.test_what_ran,
-            Vec::from([
-            WhatRan::Begin(Command::Quit),
-            WhatRan::End(Command::Quit),
-            ])
+            Vec::from([WhatRan::Begin(Command::Quit), WhatRan::End(Command::Quit),])
         );
         assert!(result.is_ok());
     }
@@ -1699,5 +1735,22 @@ mod test {
             Err("invalid argument to get_or_set_color: $1234".to_string())
         );
         assert_eq!(color, initial_color);
+    }
+
+    #[test]
+    fn test_command_parsing() {
+        assert_eq!(Command::from_str("if"), Ok(Command::If));
+        assert_eq!(Command::from_str("even"), Ok(Command::Even));
+        assert_eq!(Command::from_str("odd"), Ok(Command::Odd));
+        assert_eq!(Command::from_str("sum"), Ok(Command::Sum));
+        assert_eq!(Command::from_str("set"), Ok(Command::SetVariable));
+        assert_eq!(Command::from_str("const"), Ok(Command::ConstVariable));
+        assert_eq!(Command::from_str("alias"), Ok(Command::CreateAlias));
+        assert_eq!(Command::from_str("fg"), Ok(Command::ForegroundColor));
+        assert_eq!(Command::from_str("bg"), Ok(Command::BackgroundColor));
+        assert_eq!(Command::from_str("paint"), Ok(Command::Paint));
+        assert_eq!(Command::from_str("quit"), Ok(Command::Quit));
+        assert_eq!(Command::from_str("gnarly345"), Ok(Command::Evaluate("gnarly345".to_string())));
+        assert_eq!(Command::from_str(""), Err(EmptyCommandParseError));
     }
 }
