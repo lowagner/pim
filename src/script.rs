@@ -24,6 +24,14 @@ TODO: how is parsing going to work here?
 
     then we can do `if (conditional) (truthy) (falsy)`.
 
+TODO: add test/functionality for parsing like this:
+        :set 'check' (paint cx cy (if (even (sum cx cy)) fg bg))
+    i.e., `fg` and `bg` here are variables that we evaluate without any arguments.
+    we could create a specialized argument for this, but i think it's better to
+    just parse as `Argument::Script({ command: Evaluate("fg"), args: [] })`.
+
+TODO: add `cx`/`cy` as functions/commands to get cursor position x/y
+
 TODO: we should probably have an error if people try to overwrite 'if', 'set', etc.
 
 TODO: make push have an automatic pop at the end of a script runner.
@@ -40,7 +48,19 @@ pub enum Command {
     // the user passes in to run the script.
     Root,
 
+    /// Runs $0, checks if it's truthy, then evaluates $1 if so, otherwise $2.
+    /// Note that $1 and $2 are optional.
+    // TODO: if $2 is missing, return I64(0); if $1 is missing, return I64(1)
     If,
+    /// Returns 1 if $0 is even, otherwise 0.  This is an error if $0 does
+    /// not evaluate to an integer.
+    Even,
+    /// Returns 1 if $0 is odd, otherwise 0.  This is an error if $0 does
+    /// not evaluate to an integer.
+    Odd,
+    /// Sums all arguments, using $0 as the type to return.
+    /// E.g., if $0 is an integer, then $1, $2, etc. will be cast to integers.
+    Sum,
     // Evaluates each Argument in turn, returning early if any is an Err,
     // returning Ok with last result otherwise.
     // TODO: Sequential,
@@ -49,6 +69,8 @@ pub enum Command {
     // TODO: option 2: if 0, run argument $1.  1, 2, etc. index the arguments at offset $2, $3, etc.
     // TODO: RunIndex,
     /// Gets the value of a variable that is known to the compiler; evaluates it.
+    /// This will also evaluate scripts, etc., returning an argument that evaluates as
+    /// a value, i.e., `argument.is_value()` is true.
     Evaluate(String),
     // Gets the value of a named variable at $0; technically evaluating it.
     // TODO: this won't work well with a Script due to an offset that doesn't happen with Evaluate.
@@ -74,7 +96,7 @@ pub enum Command {
 
     // TODO: Map: uses mode $0, with keybinding at $1, to evaluate command at $2.  optional command at $3 for release
 
-    // TODO: UiScale (1,2,3,4)
+    // TODO: UiScale (1,2,3,4).  TODO: make it a percentage?  e.g., `ui/scale% 100` for scale=1, etc.
     // TODO: FitPixelWidth, FitPixelHeight; zoom to fit that many pixels within the screen based on available area
     /// Uses $0 to set the foreground color, if not null, and returns the old value.
     /// If $0 is null, returns the current foreground color without changing it.
@@ -107,6 +129,9 @@ impl fmt::Display for Command {
         match self {
             Self::Root => write!(f, ":"),
             Self::If => write!(f, "if"),
+            Self::Even => write!(f, "even"),
+            Self::Odd => write!(f, "odd"),
+            Self::Sum => write!(f, "sum"),
             Self::Evaluate(value) => write!(f, "{}", value),
             Self::SetVariable => write!(f, "set"),
             Self::ConstVariable => write!(f, "const"),
@@ -210,6 +235,26 @@ impl Argument {
             _ => panic!("unimplemented"),
         }
     }
+
+    pub fn get_i64(&self, what_for: &str) -> I64Result {
+        // TODO: add parsing for strings, etc.
+        match self {
+            Argument::Null => Ok(0),
+            Argument::I64(value) => return Ok(*value),
+            result => return Err(format!("invalid {}: {}", what_for, result)),
+        }
+    }
+}
+
+pub type I64Result = Result<i64, String>;
+
+/// Gets a coordinate (e.g., x or y, but not both) from an argument.
+/// Only I64 types are valid currently.
+pub fn get_coordinate(coordinate_result: ArgumentResult) -> I64Result {
+    if coordinate_result.is_err() {
+        return Err(coordinate_result.unwrap_err());
+    }
+    return coordinate_result.unwrap().get_i64("coordinate");
 }
 
 impl fmt::Display for Argument {
@@ -267,13 +312,42 @@ macro_rules! script_runner {
                 let result = match command.clone() {
                     Command::Root => Err("root command should not be run".to_string()),
                     Command::If => {
-                        let conditional = self.script_evaluate(&script_stack, Evaluate::Index(0));
-                        if conditional.is_err() {
-                            conditional
-                        } else if conditional.unwrap().is_truthy() {
+                        let conditional =
+                            self.script_evaluate(&script_stack, Evaluate::Index(0))?;
+                        if conditional.is_truthy() {
                             self.script_evaluate(&script_stack, Evaluate::Index(1))
                         } else {
                             self.script_evaluate(&script_stack, Evaluate::Index(2))
+                        }
+                    }
+                    Command::Even => {
+                        let value = self
+                            .script_evaluate(&script_stack, Evaluate::Index(0))?
+                            .get_i64("i64 for even")?;
+                        Ok(Argument::I64(if value % 2 == 0 { 1 } else { 0 }))
+                    }
+                    Command::Odd => {
+                        let value = self
+                            .script_evaluate(&script_stack, Evaluate::Index(0))?
+                            .get_i64("i64 for odd")?;
+                        Ok(Argument::I64(if value % 2 == 1 { 1 } else { 0 }))
+                    }
+                    Command::Sum => {
+                        let starting_value =
+                            self.script_evaluate(&script_stack, Evaluate::Index(0))?;
+                        let argument_count = script_stack.last().unwrap().arguments.len() as u32;
+                        match starting_value {
+                            Argument::I64(i64_value) => {
+                                let mut sum = i64_value;
+                                for index in 1..argument_count {
+                                    sum += self
+                                        .script_evaluate(&script_stack, Evaluate::Index(index))?
+                                        .get_i64("i64 for sum")?;
+                                }
+                                Ok(Argument::I64(sum))
+                            }
+                            // TODO: implement some of these sums (i.e., for other value-like args)
+                            _ => Err("sum for things besides i64 not implemented yet".to_string()),
                         }
                     }
                     Command::Evaluate(name) => {
@@ -293,30 +367,26 @@ macro_rules! script_runner {
                     Command::ConstVariable => self.variables.set_from_script(&script),
                     Command::CreateAlias => self.variables.set_from_script(&script),
                     Command::ForegroundColor => {
-                        let color_arg = self.script_evaluate(&script_stack, Evaluate::Index(0));
+                        let color_arg = self.script_evaluate(&script_stack, Evaluate::Index(0))?;
                         get_or_set_color(&mut self.fg, &self.palette, color_arg)
                     }
                     Command::BackgroundColor => {
-                        let color_arg = self.script_evaluate(&script_stack, Evaluate::Index(0));
+                        let color_arg = self.script_evaluate(&script_stack, Evaluate::Index(0))?;
                         get_or_set_color(&mut self.bg, &self.palette, color_arg)
                     }
                     Command::Paint => {
-                        let x_result =
-                            get_coordinate(self.script_evaluate(&script_stack, Evaluate::Index(0)));
-                        if x_result.is_err() {
-                            return Err(x_result.unwrap_err());
-                        }
-                        let y_result =
-                            get_coordinate(self.script_evaluate(&script_stack, Evaluate::Index(1)));
-                        if y_result.is_err() {
-                            return Err(y_result.unwrap_err());
-                        }
+                        let x = get_coordinate(
+                            self.script_evaluate(&script_stack, Evaluate::Index(0)),
+                        )?;
+                        let y = get_coordinate(
+                            self.script_evaluate(&script_stack, Evaluate::Index(1)),
+                        )?;
 
                         let mut color = self.fg; // default to foreground color
-                        let color_arg = self.script_evaluate(&script_stack, Evaluate::Index(2));
+                        let color_arg = self.script_evaluate(&script_stack, Evaluate::Index(2))?;
                         let color_result = get_or_set_color(&mut color, &self.palette, color_arg);
 
-                        self.script_paint(x_result.unwrap(), y_result.unwrap(), color)
+                        self.script_paint(x, y, color)
                     }
                     Command::Quit => {
                         self.script_quit();
@@ -330,20 +400,6 @@ macro_rules! script_runner {
     };
 }
 
-pub type CoordinateResult = Result<i64, String>;
-
-/// Gets a coordinate (e.g., x or y, but not both) from an argument.
-/// Only I64 types are valid currently.
-pub fn get_coordinate(coordinate_result: ArgumentResult) -> CoordinateResult {
-    if coordinate_result.is_err() {
-        return Err(coordinate_result.unwrap_err());
-    }
-    match coordinate_result.unwrap() {
-        Argument::I64(value) => return Ok(value),
-        result => return Err(format!("invalid coordinate: {}", result)),
-    }
-}
-
 /// Essentially a getter/setter for color, with a Null argument making
 /// this behave as a getter and a non-Null argument as a setter, though
 /// we return the old value as we swap in the new value.
@@ -351,12 +407,9 @@ pub fn get_coordinate(coordinate_result: ArgumentResult) -> CoordinateResult {
 pub fn get_or_set_color(
     maybe_set_color: &mut Rgba8,
     palette: &Palette,
-    color_result: ArgumentResult,
+    color_result: Argument,
 ) -> ArgumentResult {
-    if color_result.is_err() {
-        return color_result;
-    }
-    match color_result.unwrap() {
+    match color_result {
         // Without an argument, we're expecting to get the current color.
         Argument::Null => Ok(Argument::Color(maybe_set_color.clone())),
         // With a (valid) argument, we're expecting to set the new color
@@ -938,6 +991,72 @@ mod test {
     }
 
     #[test]
+    fn test_script_can_look_back_multiple_script_arguments() {
+        // TODO: test parsing from `(if (even (sum $0 $1)) color0 color1)`
+        let mut test_runner = TestRunner::new();
+        let function = Script {
+            command: Command::If,
+            arguments: vec![
+                Argument::Script(Script {
+                    command: Command::Even,
+                    arguments: vec![Argument::Script(Script {
+                        command: Command::Sum,
+                        arguments: vec![
+                            Argument::Use(Use {
+                                index: 0,
+                                lookback: -3,
+                            }),
+                            // Put a null in here to ensure we don't stop the sum at null:
+                            Argument::Null,
+                            Argument::I64(0),
+                            Argument::Use(Use {
+                                index: 1,
+                                lookback: -3,
+                            }),
+                        ],
+                    })],
+                }),
+                Argument::Color(Rgba8::BLUE),
+                Argument::Color(Rgba8::GREEN),
+            ],
+        };
+        let checkerboard = "checkerboard".to_string();
+        test_runner.variables.set(
+            checkerboard.clone(),
+            Variable::Const(Argument::Script(function)),
+        );
+
+        let script = Script {
+            command: Command::Evaluate(checkerboard.clone()),
+            arguments: vec![Argument::I64(3), Argument::I64(5)], // (x, y) coordinates
+        };
+        let result = script.run(&mut test_runner, vec![]);
+
+        assert_eq!(
+            test_runner.test_what_ran,
+            vec![
+                WhatRan::Command(Command::Evaluate(checkerboard.clone())),
+                WhatRan::Command(Command::If),
+                WhatRan::Command(Command::Even),
+                WhatRan::Command(Command::Sum),
+                WhatRan::Argument(Ok(Argument::I64(3))),
+                WhatRan::Argument(Ok(Argument::Null)),
+                WhatRan::Argument(Ok(Argument::I64(0))),
+                WhatRan::Argument(Ok(Argument::I64(5))),
+                // result of the sum:
+                WhatRan::Argument(Ok(Argument::I64(8))),
+                // result of even
+                WhatRan::Argument(Ok(Argument::I64(1))),
+                WhatRan::Argument(Ok(Argument::Color(Rgba8::BLUE)))
+            ]
+        );
+        assert!(result.is_ok());
+        assert_eq!(result.ok(), Some(Argument::Color(Rgba8::BLUE)));
+    }
+
+    // TODO: add test for Odd
+
+    #[test]
     fn test_script_allows_variable_arguments() {
         let variable_name = "cabbage".to_string();
         let script = Script {
@@ -1409,14 +1528,14 @@ mod test {
 
         // going "under" the palette size:
         assert_eq!(
-            get_or_set_color(&mut color, &palette, Ok(Argument::I64(-1))),
+            get_or_set_color(&mut color, &palette, Argument::I64(-1)),
             Err("no palette color with index -1".to_string())
         );
         assert_eq!(color, trailing_color); // no change
 
         // being within palette size:
         assert_eq!(
-            get_or_set_color(&mut color, &palette, Ok(Argument::I64(1))),
+            get_or_set_color(&mut color, &palette, Argument::I64(1)),
             Ok(Argument::Color(trailing_color))
         );
         assert_eq!(color, palette.colors[1]);
@@ -1424,14 +1543,14 @@ mod test {
 
         // going over the palette size:
         assert_eq!(
-            get_or_set_color(&mut color, &palette, Ok(Argument::I64(2))),
+            get_or_set_color(&mut color, &palette, Argument::I64(2)),
             Err("no palette color with index 2".to_string())
         );
         assert_eq!(color, trailing_color); // no change
 
         // another test within palette size:
         assert_eq!(
-            get_or_set_color(&mut color, &palette, Ok(Argument::I64(0))),
+            get_or_set_color(&mut color, &palette, Argument::I64(0)),
             Ok(Argument::Color(trailing_color))
         );
         assert_eq!(color, palette.colors[0]);
@@ -1459,7 +1578,7 @@ mod test {
             a: 0xff,
         };
         assert_eq!(
-            get_or_set_color(&mut color, &palette, Ok(Argument::Color(new_color))),
+            get_or_set_color(&mut color, &palette, Argument::Color(new_color)),
             Ok(Argument::Color(trailing_color))
         );
         assert_eq!(color, new_color);
@@ -1473,7 +1592,7 @@ mod test {
             a: 0xff,
         };
         assert_eq!(
-            get_or_set_color(&mut color, &palette, Ok(Argument::Color(new_color))),
+            get_or_set_color(&mut color, &palette, Argument::Color(new_color)),
             Ok(Argument::Color(trailing_color))
         );
         assert_eq!(color, new_color);
@@ -1494,7 +1613,7 @@ mod test {
         let initial_color = color;
 
         assert_eq!(
-            get_or_set_color(&mut color, &palette, Ok(Argument::Null)),
+            get_or_set_color(&mut color, &palette, Argument::Null),
             Ok(Argument::Color(initial_color))
         );
         assert_eq!(color, initial_color);
@@ -1516,11 +1635,7 @@ mod test {
 
         // String doesn't work.  TODO: would it be good to add e.g., 'red', 'blue', etc. someday?
         assert_eq!(
-            get_or_set_color(
-                &mut color,
-                &palette,
-                Ok(Argument::String("asdf".to_string()))
-            ),
+            get_or_set_color(&mut color, &palette, Argument::String("asdf".to_string())),
             Err("invalid argument to get_or_set_color: 'asdf'".to_string())
         );
         assert_eq!(color, initial_color);
@@ -1530,10 +1645,10 @@ mod test {
             get_or_set_color(
                 &mut color,
                 &palette,
-                Ok(Argument::Script(Script {
+                Argument::Script(Script {
                     command: Command::Root,
                     arguments: vec![]
-                }))
+                })
             ),
             Err("invalid argument to get_or_set_color: {command: `:`, arguments: []}".to_string())
         );
@@ -1544,10 +1659,10 @@ mod test {
             get_or_set_color(
                 &mut color,
                 &palette,
-                Ok(Argument::Use(Use {
+                Argument::Use(Use {
                     index: 1234,
                     lookback: -1
-                }))
+                })
             ),
             Err("invalid argument to get_or_set_color: $1234".to_string())
         );
