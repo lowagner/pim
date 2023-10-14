@@ -421,10 +421,6 @@ pub fn evaluate(
     let mut script_index: usize = script_stack.len() - 1;
     let mut iteration = 0;
     loop {
-        iteration += 1;
-        if iteration > 1000 {
-            return Err("script took too many iterations".to_string());
-        }
         let argument: &Argument = match evaluate_this {
             Evaluate::Argument(evaluate_this_argument) => evaluate_this_argument,
             Evaluate::Index(evaluate_this_index) => {
@@ -464,6 +460,10 @@ pub fn evaluate(
             }
             // is_value() and this matcher should be disjoint.
             _ => panic!("Invalid argument, not evaluatable: {}", *argument),
+        }
+        iteration += 1;
+        if iteration > 1000 {
+            return Err("script took too many iterations".to_string());
         }
     }
 }
@@ -516,8 +516,19 @@ impl Variables {
     }
 
     /// Sets the variable, returning the old value if it was present in the map.
-    /// WARNING! Will return an error if the variable is const.
+    /// NOTE! Will return an error if the variable was present and const.
     pub fn set(&mut self, name: String, variable: Variable) -> ArgumentResult {
+        match &variable {
+            Variable::Alias(alias) => {
+                if name == *alias {
+                    return Err(format!(
+                        "alias can't be self referential: {} -> {}",
+                        name, *alias
+                    ));
+                }
+            }
+            _ => {}
+        }
         match self.map.get(&name) {
             None => {}
             Some(var) => match var {
@@ -1240,6 +1251,22 @@ mod test {
         assert_eq!(variables.get(x.clone()), Argument::I64(123));
         assert_eq!(variables.get(y.clone()), Argument::I64(123));
         assert_eq!(variables.get(z.clone()), Argument::I64(123)); // not an alias, but should make sense!
+    }
+
+    #[test]
+    fn test_variables_errors_on_self_referential_alias() {
+        let mut variables = Variables::new();
+
+        let name = "xyz".to_string();
+
+        assert_eq!(
+            variables.set(name.clone(), Variable::Alias(name.clone())),
+            Err(format!(
+                "alias can't be self referential: {} -> {}",
+                name.clone(),
+                name.clone()
+            ))
+        )
     }
 
     #[test]
