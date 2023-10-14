@@ -2,7 +2,7 @@
 //! Session
 use crate::autocomplete::FileCompleter;
 use crate::brush::*;
-use crate::cmd::{self, Command, CommandLine, KeyMapping, Op, Value};
+use crate::cmd::{self, Cmd, CommandLine, KeyMapping, Op, Value};
 use crate::color;
 use crate::data;
 use crate::event::{Event, TimedEvent};
@@ -11,10 +11,8 @@ use crate::flood::FloodFiller;
 use crate::hashmap;
 use crate::palette::*;
 use crate::platform::{self, InputState, Key, KeyboardInput, LogicalSize, ModifiersState};
-use crate::script::{
-    self, Argument, ArgumentResult, Evaluate, Script, ScriptRunner,
-    Variables,
-};
+use crate::script::{self, Argument, ArgumentResult, Evaluate, Script, ScriptRunner, Variables, Command, get_or_set_color, get_coordinate, evaluate};
+use crate::script_runner;
 use crate::util;
 
 use crate::gfx::math::*;
@@ -396,7 +394,7 @@ pub struct KeyBinding {
     /// Whether the key should be pressed or released.
     pub state: InputState,
     /// The `Command` to run when this binding is triggered.
-    pub command: Command,
+    pub command: Cmd,
     /// Whether this key binding controls a toggle.
     pub is_toggle: bool,
     /// How this key binding should be displayed to the user.
@@ -655,6 +653,7 @@ pub struct Session {
     variables: Variables,
 }
 
+script_runner!{Session}
 impl Session {
     /// Maximum number of views in a session.
     pub const MAX_VIEWS: usize = 64;
@@ -1922,7 +1921,7 @@ impl Session {
                             Mode::Visual(VisualState::Pasting) => {
                                 // Re-center the selection in-case we've switched layer.
                                 self.center_selection(self.cursor);
-                                self.command(Command::SelectionPaste);
+                                self.command(Cmd::SelectionPaste);
                             }
                             Mode::Present | Mode::Help => {}
                         }
@@ -2385,40 +2384,40 @@ impl Session {
     ///////////////////////////////////////////////////////////////////////////
 
     /// Process a command.
-    fn command(&mut self, cmd: Command) -> String {
+    fn command(&mut self, cmd: Cmd) -> String {
         debug!("command: {:?}", cmd);
 
         let mut result: String = "".to_string();
         match cmd {
-            Command::Mode(m) => {
+            Cmd::Mode(m) => {
                 self.toggle_mode(m);
             }
-            Command::Quit => {
+            Cmd::Quit => {
                 self.quit_view_safe(self.views.active_id);
             }
-            Command::QuitAll => {
+            Cmd::QuitAll => {
                 // TODO (rust)
                 let ids: Vec<ViewId> = self.views.ids().collect();
                 for id in ids {
                     self.quit_view_safe(id);
                 }
             }
-            Command::SwapColors => {
+            Cmd::SwapColors => {
                 std::mem::swap(&mut self.fg, &mut self.bg);
             }
-            Command::BrushSet(mode) => {
+            Cmd::BrushSet(mode) => {
                 self.brush.set(mode);
             }
-            Command::BrushUnset(mode) => {
+            Cmd::BrushUnset(mode) => {
                 self.brush.unset(mode);
             }
-            Command::BrushToggle(mode) => {
+            Cmd::BrushToggle(mode) => {
                 self.brush.toggle(mode);
             }
-            Command::Brush => {
+            Cmd::Brush => {
                 self.unimplemented();
             }
-            Command::BrushSize(op) => {
+            Cmd::BrushSize(op) => {
                 let b = &mut self.brush;
                 match op {
                     Op::Incr => {
@@ -2437,7 +2436,7 @@ impl Session {
                     b.size = Self::MIN_BRUSH_SIZE;
                 }
             }
-            Command::FrameResize(fw, fh) => {
+            Cmd::FrameResize(fw, fh) => {
                 if fw == 0 || fh == 0 {
                     self.message(
                         "Error: cannot set frame dimension to `0`",
@@ -2463,27 +2462,27 @@ impl Session {
                 self.check_selection();
                 self.organize_views();
             }
-            Command::FrameCurrent => {
+            Cmd::FrameCurrent => {
                 let (frame, _) = self.current_frame();
                 result = frame.to_string();
             }
-            Command::FramePrev => {
+            Cmd::FramePrev => {
                 let (frame, max_frames) = self.current_frame();
                 // Use wrap around (-1 == max_frames - 1 mod max_frames):
                 let new_frame = (frame + max_frames - 1) % max_frames;
                 result = new_frame.to_string();
                 self.center_active_view_frame(new_frame);
             }
-            Command::FrameNext => {
+            Cmd::FrameNext => {
                 let (frame, max_frames) = self.current_frame();
                 // Use wrap around:
                 let new_frame = (frame + 1) % max_frames;
                 result = new_frame.to_string();
                 self.center_active_view_frame(new_frame);
             }
-            Command::ForceQuit => self.quit_view(self.views.active_id),
-            Command::ForceQuitAll => self.quit(ExitReason::Normal),
-            Command::Echo(ref v) => {
+            Cmd::ForceQuit => self.quit_view(self.views.active_id),
+            Cmd::ForceQuitAll => self.quit(ExitReason::Normal),
+            Cmd::Echo(ref v) => {
                 let result = match v {
                     Value::Str(s) => Ok(Value::Str(s.clone())),
                     Value::Ident(s) => match s.as_str() {
@@ -2511,18 +2510,18 @@ impl Session {
                     Err(e) => self.message(e, MessageType::Error),
                 }
             }
-            Command::PaletteAdd(rgba) => {
+            Cmd::PaletteAdd(rgba) => {
                 self.palette.add(rgba);
                 self.center_palette();
             }
-            Command::PaletteClear => {
+            Cmd::PaletteClear => {
                 self.palette.clear();
             }
-            Command::PaletteGradient(colorstart, colorend, steps) => {
+            Cmd::PaletteGradient(colorstart, colorend, steps) => {
                 self.palette.gradient(colorstart, colorend, steps);
                 self.center_palette();
             }
-            Command::PaletteSort => {
+            Cmd::PaletteSort => {
                 // Sort by total luminosity. This is pretty lame, but it's
                 // something to work with.
                 self.palette.colors.sort_by(|a, b| {
@@ -2530,7 +2529,7 @@ impl Session {
                         .cmp(&(b.r as u32 + b.g as u32 + b.b as u32))
                 });
             }
-            Command::PaletteSample => {
+            Cmd::PaletteSample => {
                 {
                     let v = self.active_view();
                     let (_, pixels) = self
@@ -2546,10 +2545,10 @@ impl Session {
                         }
                     }
                 }
-                self.command(Command::PaletteSort);
+                self.command(Cmd::PaletteSort);
                 self.center_palette();
             }
-            Command::PaletteWrite(path) => match File::create(&path) {
+            Cmd::PaletteWrite(path) => match File::create(&path) {
                 Ok(mut f) => {
                     for color in self.palette.colors.iter() {
                         writeln!(&mut f, "{}", color).ok();
@@ -2567,7 +2566,7 @@ impl Session {
                     self.message(format!("Error: `{}`: {}", path, err), MessageType::Error);
                 }
             },
-            Command::Zoom(op) => {
+            Cmd::Zoom(op) => {
                 let center = if let Some(s) = self.selection {
                     let v = self.active_view();
                     let coords = s.bounds().center().map(|n| n as f32);
@@ -2594,27 +2593,27 @@ impl Session {
                     }
                 }
             }
-            Command::Reset => {
+            Cmd::Reset => {
                 if let Err(e) = self.reset() {
                     self.message(format!("Error: {}", e), MessageType::Error);
                 } else {
                     self.message("Settings reset to default values", MessageType::Okay);
                 }
             }
-            Command::Fill(None) => {
+            Cmd::Fill(None) => {
                 let bg = self.bg;
                 self.active_view_mut().clear(bg);
             }
-            Command::Fill(Some(color)) => {
+            Cmd::Fill(Some(color)) => {
                 self.active_view_mut().clear(color);
             }
-            Command::Pan(x, y) => {
+            Cmd::Pan(x, y) => {
                 self.pan(
                     -(x * Self::PAN_PIXELS) as f32,
                     -(y * Self::PAN_PIXELS) as f32,
                 );
             }
-            Command::ViewNext => {
+            Cmd::ViewNext => {
                 let id = self.views.active_id;
 
                 if let Some(id) = self
@@ -2626,7 +2625,7 @@ impl Session {
                     self.center_active_view();
                 }
             }
-            Command::ViewPrev => {
+            Cmd::ViewPrev => {
                 let id = self.views.active_id;
 
                 if let Some(id) = self
@@ -2638,13 +2637,13 @@ impl Session {
                     self.center_active_view();
                 }
             }
-            Command::ViewCenter => {
+            Cmd::ViewCenter => {
                 self.center_active_view();
             }
-            Command::FrameAdd => {
+            Cmd::FrameAdd => {
                 self.active_view_mut().extend();
             }
-            Command::FrameClone(n) => {
+            Cmd::FrameClone(n) => {
                 let v = self.active_view_mut();
                 let l = v.animation.len() as i32;
                 if n >= -1 && n < l {
@@ -2656,15 +2655,15 @@ impl Session {
                     );
                 }
             }
-            Command::FrameRemove => {
+            Cmd::FrameRemove => {
                 self.active_view_mut().shrink();
                 self.check_selection();
             }
-            Command::Slice(None) => {
+            Cmd::Slice(None) => {
                 let v = self.active_view_mut();
                 v.slice(1);
             }
-            Command::Slice(Some(nframes)) => {
+            Cmd::Slice(Some(nframes)) => {
                 let v = self.active_view_mut();
                 if !v.slice(nframes) {
                     self.message(
@@ -2673,7 +2672,7 @@ impl Session {
                     );
                 }
             }
-            Command::Set(ref k, ref v) => {
+            Cmd::Set(ref k, ref v) => {
                 if Settings::DEPRECATED.contains(&k.as_str()) {
                     self.message(
                         format!("Warning: the setting `{}` has been deprecated", k),
@@ -2692,9 +2691,9 @@ impl Session {
                     }
                 }
             }
-            Command::Toggle(ref k) => match self.settings.get(k) {
+            Cmd::Toggle(ref k) => match self.settings.get(k) {
                 Some(Value::Bool(b)) => {
-                    self.command(Command::Set(k.clone(), Value::Bool(!b)));
+                    self.command(Cmd::Set(k.clone(), Value::Bool(!b)));
                 }
                 Some(_) => {
                     self.message(format!("Error: can't toggle `{}`", k), MessageType::Error);
@@ -2706,10 +2705,10 @@ impl Session {
                     );
                 }
             },
-            Command::Noop => {
+            Cmd::Noop => {
                 // Nothing happening!
             }
-            Command::ChangeDir(dir) => {
+            Cmd::ChangeDir(dir) => {
                 let home = self.base_dirs.home_dir().to_path_buf();
                 let path = dir.map(|s| s.into()).unwrap_or(home);
 
@@ -2721,7 +2720,7 @@ impl Session {
                     Err(e) => self.message(format!("Error: {}: {:?}", e, path), MessageType::Error),
                 }
             }
-            Command::Source(Some(ref path)) => {
+            Cmd::Source(Some(ref path)) => {
                 if let Err(ref e) = self.source_path(path) {
                     self.message(
                         format!("Error sourcing `{}`: {}", path, e),
@@ -2729,13 +2728,13 @@ impl Session {
                     );
                 }
             }
-            Command::Source(None) => {
+            Cmd::Source(None) => {
                 self.message(
                     format!("Error: source command requires a path"),
                     MessageType::Error,
                 );
             }
-            Command::Edit(ref paths) => {
+            Cmd::Edit(ref paths) => {
                 if paths.is_empty() {
                     self.unimplemented();
                 }
@@ -2754,7 +2753,7 @@ impl Session {
                     }
                 }
             }
-            Command::EditFrames(ref paths) => {
+            Cmd::EditFrames(ref paths) => {
                 if !paths.is_empty() {
                     if let Err(e) = self.edit_frames(paths) {
                         self.message(
@@ -2764,7 +2763,7 @@ impl Session {
                     }
                 }
             }
-            Command::Export(scale, path) => {
+            Cmd::Export(scale, path) => {
                 let view = self.active_view();
                 let id = view.id;
                 let scale = scale.unwrap_or(view.zoom as u32);
@@ -2773,14 +2772,14 @@ impl Session {
                     self.message(format!("Error: {}", e), MessageType::Error);
                 }
             }
-            Command::Write(None) => match self.save_view(self.views.active_id) {
+            Cmd::Write(None) => match self.save_view(self.views.active_id) {
                 Ok((storage, written)) => self.message(
                     format!("\"{}\" {} pixels written", storage, written),
                     MessageType::Info,
                 ),
                 Err(err) => self.message(format!("Error: {}", err), MessageType::Error),
             },
-            Command::Write(Some(ref path)) => {
+            Cmd::Write(Some(ref path)) => {
                 match self.active_view_mut().save_as(&Path::new(path).into()) {
                     Ok(written) => self.message(
                         format!("\"{}\" {} pixels written", path, written),
@@ -2789,10 +2788,10 @@ impl Session {
                     Err(err) => self.message(format!("Error: {}", err), MessageType::Error),
                 }
             }
-            Command::WriteFrames(None) => {
-                self.command(Command::WriteFrames(Some(".".to_owned())));
+            Cmd::WriteFrames(None) => {
+                self.command(Cmd::WriteFrames(Some(".".to_owned())));
             }
-            Command::WriteFrames(Some(ref dir)) => {
+            Cmd::WriteFrames(Some(ref dir)) => {
                 let path = Path::new(dir);
 
                 std::fs::create_dir_all(path).ok();
@@ -2814,12 +2813,12 @@ impl Session {
                     Err(e) => self.message(format!("Error: {}", e), MessageType::Error),
                 }
             }
-            Command::WriteQuit => {
+            Cmd::WriteQuit => {
                 if self.save_view(self.views.active_id).is_ok() {
                     self.quit_view(self.views.active_id);
                 }
             }
-            Command::Map(map) => {
+            Cmd::Map(map) => {
                 let KeyMapping {
                     modifiers,
                     input,
@@ -2849,35 +2848,35 @@ impl Session {
                     });
                 }
             }
-            Command::MapClear => {
+            Cmd::MapClear => {
                 self.key_bindings = KeyBindings::default();
             }
-            Command::Undo => {
+            Cmd::Undo => {
                 self.undo(self.views.active_id);
             }
-            Command::Redo => {
+            Cmd::Redo => {
                 self.redo(self.views.active_id);
             }
-            Command::Tool(t) => {
+            Cmd::Tool(t) => {
                 self.tool(t);
             }
-            Command::ToolPrev => {
+            Cmd::ToolPrev => {
                 self.prev_tool();
             }
-            Command::Crop(_) => {
+            Cmd::Crop(_) => {
                 self.unimplemented();
             }
-            Command::SelectionMove(x, y) => {
+            Cmd::SelectionMove(x, y) => {
                 if let Some(ref mut s) = self.selection {
                     s.translate(x, y);
                 }
             }
-            Command::SelectionResize(x, y) => {
+            Cmd::SelectionResize(x, y) => {
                 if let Some(ref mut s) = self.selection {
                     s.resize(x, y);
                 }
             }
-            Command::SelectionExpand => {
+            Cmd::SelectionExpand => {
                 let v = self.active_view();
                 let (fw, fh) = (v.fw as i32, v.fh as i32);
                 let (vw, vh) = (v.width() as i32, v.fh as i32);
@@ -2905,7 +2904,7 @@ impl Session {
                     self.selection = Some(Selection::new(0, 0, fw, fh));
                 }
             }
-            Command::SelectionOffset(mut x, mut y) => {
+            Cmd::SelectionOffset(mut x, mut y) => {
                 if let Some(s) = &mut self.selection {
                     let r = s.abs().bounds();
                     if r.width() <= 2 && x < 0 {
@@ -2922,7 +2921,7 @@ impl Session {
                     }
                 }
             }
-            Command::SelectionJump(dir) => {
+            Cmd::SelectionJump(dir) => {
                 // TODO: Test this across layers.
                 let v = self.active_view();
                 let r = v.bounds();
@@ -2936,17 +2935,17 @@ impl Session {
                     }
                 }
             }
-            Command::SelectionPaste => {
+            Cmd::SelectionPaste => {
                 if let (Mode::Visual(VisualState::Pasting), Some(s)) = (self.mode, self.selection) {
                     self.active_view_mut().paste(s.abs().bounds());
                 } else {
                     // TODO: Enter paste mode?
                 }
             }
-            Command::SelectionYank => {
+            Cmd::SelectionYank => {
                 self.yank_selection();
             }
-            Command::SelectionFlip(dir) => {
+            Cmd::SelectionFlip(dir) => {
                 if let (Mode::Visual(VisualState::Selecting { .. }), Some(s)) =
                     (self.mode, self.selection)
                 {
@@ -2966,20 +2965,20 @@ impl Session {
                     }
                     // Note that the effects generated here will be processed *before* the
                     // view operations.
-                    self.command(Command::SelectionErase);
-                    self.command(Command::Mode(Mode::Visual(VisualState::Selecting {
+                    self.command(Cmd::SelectionErase);
+                    self.command(Cmd::Mode(Mode::Visual(VisualState::Selecting {
                         dragging: false,
                     })));
                 }
             }
-            Command::SelectionCut => {
+            Cmd::SelectionCut => {
                 // To mimick the behavior of `vi`, we yank the selection
                 // before deleting it.
                 if self.yank_selection().is_some() {
-                    self.command(Command::SelectionErase);
+                    self.command(Cmd::SelectionErase);
                 }
             }
-            Command::SelectionFill(color) => {
+            Cmd::SelectionFill(color) => {
                 if let Some(s) = self.selection {
                     self.effects
                         .push(Effect::ViewPaintFinal(vec![Shape::Rectangle(
@@ -2992,7 +2991,7 @@ impl Session {
                     self.active_view_mut().touch();
                 }
             }
-            Command::SelectionErase => {
+            Cmd::SelectionErase => {
                 if let Some(s) = self.selection {
                     self.effects.extend_from_slice(&[
                         Effect::ViewBlendingChanged(Blending::Constant),
@@ -3007,25 +3006,25 @@ impl Session {
                     self.active_view_mut().touch();
                 }
             }
-            Command::PaintColor(rgba, x, y) => {
+            Cmd::PaintColor(rgba, x, y) => {
                 self.active_view_mut().paint_color(rgba, x, y);
             }
-            Command::PaintLine(rgba, x1, y1, x2, y2) => {
+            Cmd::PaintLine(rgba, x1, y1, x2, y2) => {
                 let mut stroke = vec![];
                 Brush::line(Point2::new(x1, y1), Point2::new(x2, y2), &mut stroke);
                 for pt in stroke {
                     self.active_view_mut().paint_color(rgba, pt.x, pt.y);
                 }
             }
-            Command::PaintForeground(x, y) => {
+            Cmd::PaintForeground(x, y) => {
                 let fg = self.fg;
                 self.active_view_mut().paint_color(fg, x, y);
             }
-            Command::PaintBackground(x, y) => {
+            Cmd::PaintBackground(x, y) => {
                 let bg = self.bg;
                 self.active_view_mut().paint_color(bg, x, y);
             }
-            Command::PaintPalette(i, x, y) => {
+            Cmd::PaintPalette(i, x, y) => {
                 let c = self.palette.colors.to_vec();
                 let v = self.active_view_mut();
 
@@ -3127,76 +3126,27 @@ impl Session {
         }
     }
 
-    fn evaluate(&mut self, script_stack: &Vec<&Script>, evaluate_this: Evaluate) -> ArgumentResult {
+    fn begin_script_command(&mut self, command: Command) {}
+    fn end_script_command(&mut self, command: Command) {}
+
+    fn script_evaluate(&mut self, script_stack: &Vec<&Script>, evaluate_this: Evaluate) -> ArgumentResult {
         script::evaluate(self, script_stack, evaluate_this)
     }
-}
 
-impl ScriptRunner for Session {
-    fn run(&mut self, script_stack: Vec<&Script>) -> ArgumentResult {
-        if script_stack.len() == 0 {
-            return Ok(Argument::Null);
-        }
-        let script: &Script = &script_stack[script_stack.len() - 1];
-        let command = script.command.clone();
-        match command {
-            script::Command::Root => panic!("root command should not be run"),
-            script::Command::If => {
-                let conditional = self.evaluate(&script_stack, Evaluate::Index(0));
-                if conditional.is_err() {
-                    conditional
-                } else if conditional.unwrap().is_truthy() {
-                    self.evaluate(&script_stack, Evaluate::Index(1))
-                } else {
-                    self.evaluate(&script_stack, Evaluate::Index(2))
-                }
-            }
-            script::Command::Evaluate(name) => {
-                // Need to make a clone here since executing commands could
-                // modify `self`, which could break the reference here.
-                let argument: Argument = self.variables.get(name);
-                self.evaluate(&script_stack, Evaluate::Argument(&argument))
-            }
-            // Note that variables can technically be `Script`s.
-            // E.g., if we do `set "var-name" (echo $0 ; echo $1)`, then we
-            // can call with `var-name 'hello' 'world'`.  This is the way
-            // we create new commands.
-            script::Command::SetVariable => self.variables.set_from_script(&script),
-            script::Command::ConstVariable => self.variables.set_from_script(&script),
-            script::Command::CreateAlias => self.variables.set_from_script(&script),
-            script::Command::ForegroundColor => {
-                let color_arg = self.evaluate(&script_stack, Evaluate::Index(0));
-                script::get_or_set_color(&mut self.fg, &self.palette, color_arg)
-            }
-            script::Command::BackgroundColor => {
-                let color_arg = self.evaluate(&script_stack, Evaluate::Index(0));
-                script::get_or_set_color(&mut self.bg, &self.palette, color_arg)
-            }
-            script::Command::Paint => {
-                let x_result = script::get_coordinate(self.evaluate(&script_stack, Evaluate::Index(0)));
-                if x_result.is_err() { return Err(x_result.unwrap_err()); }
-                let y_result = script::get_coordinate(self.evaluate(&script_stack, Evaluate::Index(1)));
-                if y_result.is_err() { return Err(y_result.unwrap_err()); }
+    pub fn script_paint(&mut self, x: i64, y: i64, color: Rgba8) -> ArgumentResult {
+        self.active_view_mut().paint_color(
+            color,
+            x as i32,
+            y as i32,
+        );
 
-                let mut color = self.fg; // default to foreground color
-                let color_arg = self.evaluate(&script_stack, Evaluate::Index(2));
-                let color_result = script::get_or_set_color(&mut color, &self.palette, color_arg);
-                if color_result.is_err() {
-                    return color_result;
-                }
+        // TODO: there's probably something better to return here, e.g., the pixel
+        // color that was under the cursor.
+        Ok(Argument::Color(color))
+    }
 
-                self.active_view_mut().paint_color(color, x_result.unwrap() as i32, y_result.unwrap() as i32);
-
-                // TODO: there's probably something better to return here.
-                // We could consider returning the "undo" script that would return the pixel
-                // to what it is.
-                Ok(Argument::Color(color))
-            }
-            script::Command::Quit => {
-                self.quit_view_safe(self.views.active_id);
-                Ok(Argument::Null)
-            }
-        }
+    pub fn script_quit(&mut self) {
+        self.quit_view_safe(self.views.active_id);
     }
 }
 
@@ -3213,7 +3163,7 @@ mod test {
         let kb1 = KeyBinding {
             modes: vec![Mode::Normal],
             input: Input::Key(platform::Key::A),
-            command: Command::Noop,
+            command: Cmd::Noop,
             is_toggle: false,
             display: None,
             modifiers,
@@ -3234,7 +3184,7 @@ mod test {
         );
 
         let kb3 = KeyBinding {
-            command: Command::Quit,
+            command: Cmd::Quit,
             ..kb2.clone()
         };
         kbs.add(kb3.clone());
@@ -3252,7 +3202,7 @@ mod test {
         let kb = KeyBinding {
             modes: vec![Mode::Normal],
             input: Input::Key(platform::Key::Control),
-            command: Command::Noop,
+            command: Cmd::Noop,
             is_toggle: false,
             display: None,
             modifiers: Default::default(),

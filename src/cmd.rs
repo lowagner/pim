@@ -53,7 +53,7 @@ pub enum Axis {
 /// the user are modeled as commands that are processed
 /// by the session.
 #[derive(PartialEq, Debug, Clone)]
-pub enum Command {
+pub enum Cmd {
     // Brush
     Brush,
     BrushSet(BrushMode),
@@ -150,7 +150,7 @@ pub enum Command {
     Noop,
 }
 
-impl Command {
+impl Cmd {
     pub fn repeats(&self) -> bool {
         matches!(
             self,
@@ -169,7 +169,7 @@ impl Command {
     }
 }
 
-impl fmt::Display for Command {
+impl fmt::Display for Cmd {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Brush => write!(f, "Reset brush"),
@@ -264,57 +264,57 @@ impl fmt::Display for Command {
     }
 }
 
-impl From<Command> for String {
-    fn from(cmd: Command) -> Self {
+impl From<Cmd> for String {
+    fn from(cmd: Cmd) -> Self {
         match cmd {
-            Command::Brush => format!("brush"),
-            Command::BrushSet(m) => format!("brush/set {}", m),
-            Command::BrushSize(Op::Incr) => format!("brush/size +"),
-            Command::BrushSize(Op::Decr) => format!("brush/size -"),
-            Command::BrushSize(Op::Set(s)) => format!("brush/size {}", s),
-            Command::BrushUnset(m) => format!("brush/unset {}", m),
-            Command::Echo(_) => unimplemented!(),
-            Command::Edit(_) => unimplemented!(),
-            Command::Fill(Some(c)) => format!("v/fill {}", c),
-            Command::Fill(None) => format!("v/fill"),
-            Command::ForceQuit => format!("q!"),
-            Command::ForceQuitAll => format!("qa!"),
-            Command::Map(_) => format!("map <key> <command> {{<command>}}"),
-            Command::Mode(m) => format!("mode {}", m),
-            Command::FrameAdd => format!("f/add"),
-            Command::FrameClone(i) => format!("f/clone {}", i),
-            Command::FrameRemove => format!("f/remove"),
-            Command::FrameCurrent => format!("f/current"),
-            Command::FramePrev => format!("f/prev"),
-            Command::FrameNext => format!("f/next"),
-            Command::Export(None, path) => format!("export {}", path),
-            Command::Export(Some(s), path) => format!("export @{}x {}", s, path),
-            Command::Noop => format!(""),
-            Command::PaletteAdd(c) => format!("p/add {}", c),
-            Command::PaletteClear => format!("p/clear"),
-            Command::PaletteWrite(_) => format!("p/write"),
-            Command::PaletteSample => format!("p/sample"),
-            Command::PaletteGradient(cs, ce, n) => format!("p/gradient {} {} {}", cs, ce, n),
-            Command::Pan(x, y) => format!("pan {} {}", x, y),
-            Command::Quit => format!("q"),
-            Command::Redo => format!("redo"),
-            Command::FrameResize(w, h) => format!("f/resize {} {}", w, h),
-            Command::Set(s, v) => format!("set {} = {}", s, v),
-            Command::Slice(Some(n)) => format!("slice {}", n),
-            Command::Slice(None) => format!("slice"),
-            Command::Source(Some(path)) => format!("source {}", path),
-            Command::SwapColors => format!("swap"),
-            Command::Toggle(s) => format!("toggle {}", s),
-            Command::Undo => format!("undo"),
-            Command::ViewCenter => format!("v/center"),
-            Command::ViewNext => format!("v/next"),
-            Command::ViewPrev => format!("v/prev"),
-            Command::Write(None) => format!("w"),
-            Command::Write(Some(path)) => format!("w {}", path),
-            Command::WriteQuit => format!("wq"),
-            Command::Zoom(Op::Incr) => format!("v/zoom +"),
-            Command::Zoom(Op::Decr) => format!("v/zoom -"),
-            Command::Zoom(Op::Set(z)) => format!("v/zoom {}", z),
+            Cmd::Brush => format!("brush"),
+            Cmd::BrushSet(m) => format!("brush/set {}", m),
+            Cmd::BrushSize(Op::Incr) => format!("brush/size +"),
+            Cmd::BrushSize(Op::Decr) => format!("brush/size -"),
+            Cmd::BrushSize(Op::Set(s)) => format!("brush/size {}", s),
+            Cmd::BrushUnset(m) => format!("brush/unset {}", m),
+            Cmd::Echo(_) => unimplemented!(),
+            Cmd::Edit(_) => unimplemented!(),
+            Cmd::Fill(Some(c)) => format!("v/fill {}", c),
+            Cmd::Fill(None) => format!("v/fill"),
+            Cmd::ForceQuit => format!("q!"),
+            Cmd::ForceQuitAll => format!("qa!"),
+            Cmd::Map(_) => format!("map <key> <command> {{<command>}}"),
+            Cmd::Mode(m) => format!("mode {}", m),
+            Cmd::FrameAdd => format!("f/add"),
+            Cmd::FrameClone(i) => format!("f/clone {}", i),
+            Cmd::FrameRemove => format!("f/remove"),
+            Cmd::FrameCurrent => format!("f/current"),
+            Cmd::FramePrev => format!("f/prev"),
+            Cmd::FrameNext => format!("f/next"),
+            Cmd::Export(None, path) => format!("export {}", path),
+            Cmd::Export(Some(s), path) => format!("export @{}x {}", s, path),
+            Cmd::Noop => format!(""),
+            Cmd::PaletteAdd(c) => format!("p/add {}", c),
+            Cmd::PaletteClear => format!("p/clear"),
+            Cmd::PaletteWrite(_) => format!("p/write"),
+            Cmd::PaletteSample => format!("p/sample"),
+            Cmd::PaletteGradient(cs, ce, n) => format!("p/gradient {} {} {}", cs, ce, n),
+            Cmd::Pan(x, y) => format!("pan {} {}", x, y),
+            Cmd::Quit => format!("q"),
+            Cmd::Redo => format!("redo"),
+            Cmd::FrameResize(w, h) => format!("f/resize {} {}", w, h),
+            Cmd::Set(s, v) => format!("set {} = {}", s, v),
+            Cmd::Slice(Some(n)) => format!("slice {}", n),
+            Cmd::Slice(None) => format!("slice"),
+            Cmd::Source(Some(path)) => format!("source {}", path),
+            Cmd::SwapColors => format!("swap"),
+            Cmd::Toggle(s) => format!("toggle {}", s),
+            Cmd::Undo => format!("undo"),
+            Cmd::ViewCenter => format!("v/center"),
+            Cmd::ViewNext => format!("v/next"),
+            Cmd::ViewPrev => format!("v/prev"),
+            Cmd::Write(None) => format!("w"),
+            Cmd::Write(Some(path)) => format!("w {}", path),
+            Cmd::WriteQuit => format!("wq"),
+            Cmd::Zoom(Op::Incr) => format!("v/zoom +"),
+            Cmd::Zoom(Op::Decr) => format!("v/zoom -"),
+            Cmd::Zoom(Op::Set(z)) => format!("v/zoom {}", z),
             _ => unimplemented!(),
         }
     }
@@ -326,8 +326,8 @@ impl From<Command> for String {
 pub struct KeyMapping {
     pub modifiers: ModifiersState,
     pub input: Input,
-    pub press: Command,
-    pub release: Option<Command>,
+    pub press: Cmd,
+    pub release: Option<Cmd>,
     pub modes: Vec<Mode>,
 }
 
@@ -495,7 +495,7 @@ pub struct CommandLine {
     /// Input cursor position.
     pub cursor: usize,
     /// Parser.
-    pub parser: Parser<Command>,
+    pub parser: Parser<Cmd>,
     /// Commands.
     pub commands: Commands,
     /// The current input string displayed to the user.
@@ -526,7 +526,7 @@ impl CommandLine {
         self.autocomplete = Autocomplete::new(CommandCompleter::new(path, exts.as_slice()));
     }
 
-    pub fn parse(&self, input: &str) -> Result<Command, Error> {
+    pub fn parse(&self, input: &str) -> Result<Cmd, Error> {
         match self.parser.parse(input) {
             Ok((cmd, _)) => Ok(cmd),
             Err((err, _)) => Err(err),
@@ -671,7 +671,7 @@ impl CommandLine {
 }
 
 pub struct Commands {
-    commands: Vec<(&'static str, &'static str, Parser<Command>)>,
+    commands: Vec<(&'static str, &'static str, Parser<Cmd>)>,
     existing_commands: HashSet<&'static str>,
 }
 
@@ -681,16 +681,16 @@ impl Commands {
             commands: vec![(
                 "#",
                 "Add color to palette",
-                color().map(Command::PaletteAdd),
+                color().map(Cmd::PaletteAdd),
             )],
             existing_commands: HashSet::from(["#"]),
         }
     }
 
-    pub fn parser(&self) -> Parser<Command> {
+    pub fn parser(&self) -> Parser<Cmd> {
         use std::iter;
 
-        let noop = expect(|s| s.is_empty(), "<empty>").value(Command::Noop);
+        let noop = expect(|s| s.is_empty(), "<empty>").value(Cmd::Noop);
         let commands = self.commands.iter().map(|(_, _, v)| v.clone());
         let choices = commands.chain(iter::once(noop)).collect();
 
@@ -704,14 +704,14 @@ impl Commands {
             .map(|(_, cmd)| cmd)
     }
 
-    pub fn line_parser(&self) -> Parser<Command> {
+    pub fn line_parser(&self) -> Parser<Cmd> {
         self.parser()
             .skip(optional(whitespace()))
             .skip(optional(comment()))
             .end()
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = &(&'static str, &'static str, Parser<Command>)> {
+    pub fn iter(&self) -> impl Iterator<Item = &(&'static str, &'static str, Parser<Cmd>)> {
         self.commands.iter()
     }
 
@@ -719,7 +719,7 @@ impl Commands {
 
     fn command<F>(&mut self, name: &'static str, help: &'static str, f: F) -> &mut Self
     where
-        F: Fn(Parser<String>) -> Parser<Command>,
+        F: Fn(Parser<String>) -> Parser<Cmd>,
     {
         assert!(
             !self.existing_commands.contains(name),
@@ -740,7 +740,7 @@ impl Commands {
 
     fn commands<F>(&mut self, names: &[&'static str], help: &'static str, f: F) -> &mut Self
     where
-        F: Fn(Parser<String>) -> Parser<Command>,
+        F: Fn(Parser<String>) -> Parser<Cmd>,
     {
         for name in names {
             self.command(name, help, &f);
@@ -753,34 +753,34 @@ impl Default for Commands {
     fn default() -> Self {
         let mut new_self = Self::new();
         new_self
-            .commands(&["quit", "q"], "Quit view", |p| p.value(Command::Quit))
-            .command("qa", "Quit all views", |p| p.value(Command::QuitAll))
-            .command("q!", "Force quit view", |p| p.value(Command::ForceQuit))
+            .commands(&["quit", "q"], "Quit view", |p| p.value(Cmd::Quit))
+            .command("qa", "Quit all views", |p| p.value(Cmd::QuitAll))
+            .command("q!", "Force quit view", |p| p.value(Cmd::ForceQuit))
             .command("qa!", "Force quit all views", |p| {
-                p.value(Command::ForceQuitAll)
+                p.value(Cmd::ForceQuitAll)
             })
             .command("export", "Export view", |p| {
                 p.then(optional(scale().skip(whitespace())).then(path()))
-                    .map(|(_, (scale, path))| Command::Export(scale, path))
+                    .map(|(_, (scale, path))| Cmd::Export(scale, path))
             })
-            .command("wq", "Write & quit view", |p| p.value(Command::WriteQuit))
-            .command("x", "Write & quit view", |p| p.value(Command::WriteQuit))
+            .command("wq", "Write & quit view", |p| p.value(Cmd::WriteQuit))
+            .command("x", "Write & quit view", |p| p.value(Cmd::WriteQuit))
             .command("w", "Write view", |p| {
                 p.then(optional(path()))
-                    .map(|(_, path)| Command::Write(path))
+                    .map(|(_, path)| Cmd::Write(path))
             })
             .command("w/frames", "Write view as individual frames", |p| {
                 p.then(optional(path()))
-                    .map(|(_, dir)| Command::WriteFrames(dir))
+                    .map(|(_, dir)| Cmd::WriteFrames(dir))
             })
             .command("e", "Edit path(s)", |p| {
-                p.then(paths()).map(|(_, paths)| Command::Edit(paths))
+                p.then(paths()).map(|(_, paths)| Cmd::Edit(paths))
             })
             .command("e/frames", "Edit frames as view", |p| {
-                p.then(paths()).map(|(_, paths)| Command::EditFrames(paths))
+                p.then(paths()).map(|(_, paths)| Cmd::EditFrames(paths))
             })
             .command("help", "Display help", |p| {
-                p.value(Command::Mode(Mode::Help))
+                p.value(Cmd::Mode(Mode::Help))
             })
             .command("set", "Set setting to value", |p| {
                 p.then(setting())
@@ -791,43 +791,43 @@ impl Default for Commands {
                             .then(Value::parser())
                             .map(|(_, v)| v),
                     ))
-                    .map(|((_, k), v)| Command::Set(k, v.unwrap_or(Value::Bool(true))))
+                    .map(|((_, k), v)| Cmd::Set(k, v.unwrap_or(Value::Bool(true))))
             })
             .command("unset", "Set setting to `off`", |p| {
                 p.then(setting())
-                    .map(|(_, k)| Command::Set(k, Value::Bool(false)))
+                    .map(|(_, k)| Cmd::Set(k, Value::Bool(false)))
             })
             .command("toggle", "Toggle setting", |p| {
-                p.then(setting()).map(|(_, k)| Command::Toggle(k))
+                p.then(setting()).map(|(_, k)| Cmd::Toggle(k))
             })
             .command("echo", "Echo setting or value", |p| {
-                p.then(Value::parser()).map(|(_, v)| Command::Echo(v))
+                p.then(Value::parser()).map(|(_, v)| Cmd::Echo(v))
             })
             .command("slice", "Slice view into <n> frames", |p| {
                 p.then(optional(natural::<usize>().label("<n>")))
-                    .map(|(_, n)| Command::Slice(n))
+                    .map(|(_, n)| Cmd::Slice(n))
             })
             .command(
                 "source",
                 "Source a pim script (e.g. palette or config)",
-                |p| p.then(optional(path())).map(|(_, p)| Command::Source(p)),
+                |p| p.then(optional(path())).map(|(_, p)| Cmd::Source(p)),
             )
             .command("cd", "Change current directory", |p| {
-                p.then(optional(path())).map(|(_, p)| Command::ChangeDir(p))
+                p.then(optional(path())).map(|(_, p)| Cmd::ChangeDir(p))
             })
             .command("zoom", "Zoom view", |p| {
                 p.then(
                     peek(rational::<f32>().label("<level>"))
                         .try_map(|z| {
                             if z >= 1.0 {
-                                Ok(Command::Zoom(Op::Set(z)))
+                                Ok(Cmd::Zoom(Op::Set(z)))
                             } else {
                                 Err("zoom level must be >= 1.0")
                             }
                         })
                         .or(symbol('+')
-                            .value(Command::Zoom(Op::Incr))
-                            .or(symbol('-').value(Command::Zoom(Op::Decr)))
+                            .value(Cmd::Zoom(Op::Incr))
+                            .or(symbol('-').value(Cmd::Zoom(Op::Decr)))
                             .or(fail("couldn't parse zoom parameter")))
                         .label("+/-"),
                 )
@@ -837,10 +837,10 @@ impl Default for Commands {
                 p.then(
                     natural::<usize>()
                         .label("<size>")
-                        .map(|z| Command::BrushSize(Op::Set(z as f32)))
+                        .map(|z| Cmd::BrushSize(Op::Set(z as f32)))
                         .or(symbol('+')
-                            .value(Command::BrushSize(Op::Incr))
-                            .or(symbol('-').value(Command::BrushSize(Op::Decr)))
+                            .value(Cmd::BrushSize(Op::Incr))
+                            .or(symbol('-').value(Cmd::BrushSize(Op::Decr)))
                             .or(fail("couldn't parse brush size parameter")))
                         .label("+/-"),
                 )
@@ -851,57 +851,57 @@ impl Default for Commands {
                 "Set brush mode, eg. `xsym` for x-symmetry",
                 |p| {
                     p.then(param::<BrushMode>())
-                        .map(|(_, m)| Command::BrushSet(m))
+                        .map(|(_, m)| Cmd::BrushSet(m))
                 },
             )
             .command("brush/unset", "Unset brush mode", |p| {
                 p.then(param::<BrushMode>())
-                    .map(|(_, m)| Command::BrushUnset(m))
+                    .map(|(_, m)| Cmd::BrushUnset(m))
             })
             .command("brush/toggle", "Toggle brush mode", |p| {
                 p.then(param::<BrushMode>())
-                    .map(|(_, m)| Command::BrushToggle(m))
+                    .map(|(_, m)| Cmd::BrushToggle(m))
             })
             .command("brush", "Switch to brush", |p| {
-                p.value(Command::Tool(Tool::Brush))
+                p.value(Cmd::Tool(Tool::Brush))
             })
             .command("flood", "Switch to flood fill tool", |p| {
-                p.value(Command::Tool(Tool::FloodFill))
+                p.value(Cmd::Tool(Tool::FloodFill))
             })
             .command("mode", "Set session mode, eg. `visual` or `normal`", |p| {
-                p.then(param::<Mode>()).map(|(_, m)| Command::Mode(m))
+                p.then(param::<Mode>()).map(|(_, m)| Cmd::Mode(m))
             })
             .command("visual", "Set session mode to visual", |p| {
-                p.map(|_| Command::Mode(Mode::Visual(VisualState::default())))
+                p.map(|_| Cmd::Mode(Mode::Visual(VisualState::default())))
             })
             .command("sampler/off", "Switch the sampler tool off", |p| {
-                p.value(Command::ToolPrev)
+                p.value(Cmd::ToolPrev)
             })
             .command("sampler", "Switch to the sampler tool", |p| {
-                p.value(Command::Tool(Tool::Sampler))
+                p.value(Cmd::Tool(Tool::Sampler))
             })
             .commands(
                 &["view/next", "v/next", "vn", "v+"],
                 "Activate the next view",
-                |p| p.value(Command::ViewNext),
+                |p| p.value(Cmd::ViewNext),
             )
             .commands(
                 &["view/prev", "v/prev", "vp", "v-"],
                 "Activate the previous view",
-                |p| p.value(Command::ViewPrev),
+                |p| p.value(Cmd::ViewPrev),
             )
             .command("v/center", "Center the active view", |p| {
-                p.value(Command::ViewCenter)
+                p.value(Cmd::ViewCenter)
             })
             .command("v/clear", "Clear the active view", |p| {
-                p.value(Command::Fill(Some(Rgba8::TRANSPARENT)))
+                p.value(Cmd::Fill(Some(Rgba8::TRANSPARENT)))
             })
             .command("v/fill", "Fill the active view", |p| {
-                p.then(optional(color())).map(|(_, c)| Command::Fill(c))
+                p.then(optional(color())).map(|(_, c)| Cmd::Fill(c))
             })
             .command("pan", "Switch to the pan tool", |p| {
                 p.then(tuple::<i32>(integer().label("<x>"), integer().label("<y>")))
-                    .map(|(_, (x, y))| Command::Pan(x, y))
+                    .map(|(_, (x, y))| Cmd::Pan(x, y))
             })
             .command("map", "Map keys to a command in all modes", |p| {
                 p.then(KeyMapping::parser(&[
@@ -909,31 +909,31 @@ impl Default for Commands {
                     Mode::Visual(VisualState::selecting()),
                     Mode::Visual(VisualState::Pasting),
                 ]))
-                .map(|(_, km)| Command::Map(Box::new(km)))
+                .map(|(_, km)| Cmd::Map(Box::new(km)))
             })
             .command("map/visual", "Map keys to a command in visual mode", |p| {
                 p.then(KeyMapping::parser(&[
                     Mode::Visual(VisualState::selecting()),
                     Mode::Visual(VisualState::Pasting),
                 ]))
-                .map(|(_, km)| Command::Map(Box::new(km)))
+                .map(|(_, km)| Cmd::Map(Box::new(km)))
             })
             .command("map/normal", "Map keys to a command in normal mode", |p| {
                 p.then(KeyMapping::parser(&[Mode::Normal]))
-                    .map(|(_, km)| Command::Map(Box::new(km)))
+                    .map(|(_, km)| Cmd::Map(Box::new(km)))
             })
             .command("map/help", "Map keys to a command in help mode", |p| {
                 p.then(KeyMapping::parser(&[Mode::Help]))
-                    .map(|(_, km)| Command::Map(Box::new(km)))
+                    .map(|(_, km)| Cmd::Map(Box::new(km)))
             })
             .command("map/clear!", "Clear all key mappings", |p| {
-                p.value(Command::MapClear)
+                p.value(Cmd::MapClear)
             })
             .command("p/add", "Add a color to the palette", |p| {
-                p.then(color()).map(|(_, rgba)| Command::PaletteAdd(rgba))
+                p.then(color()).map(|(_, rgba)| Cmd::PaletteAdd(rgba))
             })
             .command("p/clear", "Clear the color palette", |p| {
-                p.value(Command::PaletteClear)
+                p.value(Cmd::PaletteClear)
             })
             .command("p/gradient", "Add a gradient to the palette", |p| {
                 p.then(tuple::<Rgba8>(
@@ -942,113 +942,113 @@ impl Default for Commands {
                 ))
                 .skip(whitespace())
                 .then(natural::<usize>().label("<count>"))
-                .map(|((_, (cs, ce)), n)| Command::PaletteGradient(cs, ce, n))
+                .map(|((_, (cs, ce)), n)| Cmd::PaletteGradient(cs, ce, n))
             })
             .command(
                 "p/sample",
                 "Sample palette colors from the active view",
-                |p| p.value(Command::PaletteSample),
+                |p| p.value(Cmd::PaletteSample),
             )
             .command("p/sort", "Sort the palette colors", |p| {
-                p.value(Command::PaletteSort)
+                p.value(Cmd::PaletteSort)
             })
             .command("p/write", "Write the color palette to a file", |p| {
-                p.then(path()).map(|(_, path)| Command::PaletteWrite(path))
+                p.then(path()).map(|(_, path)| Cmd::PaletteWrite(path))
             })
-            .command("undo", "Undo the last edit", |p| p.value(Command::Undo))
-            .command("redo", "Redo the last edit", |p| p.value(Command::Redo))
+            .command("undo", "Undo the last edit", |p| p.value(Cmd::Undo))
+            .command("redo", "Redo the last edit", |p| p.value(Cmd::Redo))
             .command("f/add", "Add a blank frame to the active view", |p| {
-                p.value(Command::FrameAdd)
+                p.value(Cmd::FrameAdd)
             })
             .command("f/clone", "Clone a frame and add it to the view", |p| {
                 p.then(optional(integer::<i32>().label("<index>")))
-                    .map(|(_, index)| Command::FrameClone(index.unwrap_or(-1)))
+                    .map(|(_, index)| Cmd::FrameClone(index.unwrap_or(-1)))
             })
             .command(
                 "f/remove",
                 "Remove the last frame from the active view",
-                |p| p.value(Command::FrameRemove),
+                |p| p.value(Cmd::FrameRemove),
             )
             .commands(
                 &["frame/current", "f/current", "fc", "f="],
                 "Returns the current frame",
-                |p| p.value(Command::FrameCurrent),
+                |p| p.value(Cmd::FrameCurrent),
             )
             .commands(
                 &["frame/prev", "f/prev", "fp", "f-"],
                 "Navigate to previous frame",
-                |p| p.value(Command::FramePrev),
+                |p| p.value(Cmd::FramePrev),
             )
             .commands(
                 &["frame/next", "f/next", "fn", "f+"],
                 "Navigate to next frame",
-                |p| p.value(Command::FrameNext),
+                |p| p.value(Cmd::FrameNext),
             )
             .command("f/resize", "Resize the active view frame(s)", |p| {
                 p.then(tuple::<u32>(
                     natural().label("<width>"),
                     natural().label("<height>"),
                 ))
-                .map(|(_, (w, h))| Command::FrameResize(w, h))
+                .map(|(_, (w, h))| Cmd::FrameResize(w, h))
             })
             .command("tool", "Switch tool", |p| {
                 p.then(word().label("pan/brush/sampler/.."))
                     .try_map(|(_, t)| match t.as_str() {
-                        "pan" => Ok(Command::Tool(Tool::Pan(PanState::default()))),
-                        "brush" => Ok(Command::Tool(Tool::Brush)),
-                        "sampler" => Ok(Command::Tool(Tool::Sampler)),
+                        "pan" => Ok(Cmd::Tool(Tool::Pan(PanState::default()))),
+                        "brush" => Ok(Cmd::Tool(Tool::Brush)),
+                        "sampler" => Ok(Cmd::Tool(Tool::Sampler)),
                         _ => Err(format!("unknown tool {:?}", t)),
                     })
             })
             .command("tool/prev", "Switch to previous tool", |p| {
-                p.value(Command::ToolPrev)
+                p.value(Cmd::ToolPrev)
             })
             .command("swap", "Swap foreground and background colors", |p| {
-                p.value(Command::SwapColors)
+                p.value(Cmd::SwapColors)
             })
             .command("reset!", "Reset all settings to defaults", |p| {
-                p.value(Command::Reset)
+                p.value(Cmd::Reset)
             })
             .command("selection/move", "Move selection", |p| {
                 p.then(tuple::<i32>(integer().label("<x>"), integer().label("<y>")))
-                    .map(|(_, (x, y))| Command::SelectionMove(x, y))
+                    .map(|(_, (x, y))| Cmd::SelectionMove(x, y))
             })
             .command("selection/resize", "Resize selection", |p| {
                 p.then(tuple::<i32>(integer().label("<x>"), integer().label("<y>")))
-                    .map(|(_, (x, y))| Command::SelectionResize(x, y))
+                    .map(|(_, (x, y))| Cmd::SelectionResize(x, y))
             })
             .command("selection/yank", "Yank/copy selection content", |p| {
-                p.value(Command::SelectionYank)
+                p.value(Cmd::SelectionYank)
             })
             .command("selection/cut", "Cut selection content", |p| {
-                p.value(Command::SelectionCut)
+                p.value(Cmd::SelectionCut)
             })
             .command("selection/paste", "Paste into selection", |p| {
-                p.value(Command::SelectionPaste)
+                p.value(Cmd::SelectionPaste)
             })
             .command("selection/expand", "Expand selection", |p| {
-                p.value(Command::SelectionExpand)
+                p.value(Cmd::SelectionExpand)
             })
             .command("selection/erase", "Erase selection contents", |p| {
-                p.value(Command::SelectionErase)
+                p.value(Cmd::SelectionErase)
             })
             .command("selection/offset", "Offset selection bounds", |p| {
                 p.then(tuple::<i32>(integer().label("<x>"), integer().label("<y>")))
-                    .map(|(_, (x, y))| Command::SelectionOffset(x, y))
+                    .map(|(_, (x, y))| Cmd::SelectionOffset(x, y))
             })
             .command("selection/jump", "Translate selection by one frame", |p| {
                 p.then(param::<Direction>())
-                    .map(|(_, dir)| Command::SelectionJump(dir))
+                    .map(|(_, dir)| Cmd::SelectionJump(dir))
             })
             .command("selection/fill", "Fill selection with color", |p| {
                 p.then(optional(color()))
-                    .map(|(_, rgba)| Command::SelectionFill(rgba))
+                    .map(|(_, rgba)| Cmd::SelectionFill(rgba))
             })
             .command("selection/flip", "Flip selection", |p| {
                 p.then(word().label("x/y"))
                     .try_map(|(_, t)| match t.as_str() {
-                        "x" => Ok(Command::SelectionFlip(Axis::Horizontal)),
-                        "y" => Ok(Command::SelectionFlip(Axis::Vertical)),
+                        "x" => Ok(Cmd::SelectionFlip(Axis::Horizontal)),
+                        "y" => Ok(Cmd::SelectionFlip(Axis::Vertical)),
                         _ => Err(format!("unknown axis {:?}, must be 'x' or 'y'", t)),
                     })
             })
@@ -1056,7 +1056,7 @@ impl Default for Commands {
                 p.then(color())
                     .skip(whitespace())
                     .then(tuple::<i32>(integer().label("<x>"), integer().label("<y>")))
-                    .map(|((_, rgba), (x, y))| Command::PaintColor(rgba, x, y))
+                    .map(|((_, rgba), (x, y))| Cmd::PaintColor(rgba, x, y))
             })
             .command("paint/line", "Draw a line between two points", |p| {
                 p.then(color())
@@ -1071,22 +1071,22 @@ impl Default for Commands {
                         integer().label("<y2>"),
                     ))
                     .map(|(((_, color), (x1, y1)), (x2, y2))| {
-                        Command::PaintLine(color, x1, y1, x2, y2)
+                        Cmd::PaintLine(color, x1, y1, x2, y2)
                     })
             })
             .command("paint/fg", "Paint foreground color", |p| {
                 p.then(tuple::<i32>(integer().label("<x>"), integer().label("<y>")))
-                    .map(|(_, (x, y))| Command::PaintForeground(x, y))
+                    .map(|(_, (x, y))| Cmd::PaintForeground(x, y))
             })
             .command("paint/bg", "Paint background color", |p| {
                 p.then(tuple::<i32>(integer().label("<x>"), integer().label("<y>")))
-                    .map(|(_, (x, y))| Command::PaintBackground(x, y))
+                    .map(|(_, (x, y))| Cmd::PaintBackground(x, y))
             })
             .command("paint/p", "Paint palette color", |p| {
                 p.then(natural::<usize>())
                     .skip(whitespace())
                     .then(tuple::<i32>(integer().label("<x>"), integer().label("<y>")))
-                    .map(|((_, i), (x, y))| Command::PaintPalette(i, x, y))
+                    .map(|((_, i), (x, y))| Cmd::PaintPalette(i, x, y))
             });
         new_self
     }
@@ -1115,15 +1115,15 @@ impl autocomplete::Completer for CommandCompleter {
 
         match p.parse(input) {
             Ok((cmd, _)) => match cmd {
-                Command::ChangeDir(path) | Command::WriteFrames(path) => self.complete_path(
+                Cmd::ChangeDir(path) | Cmd::WriteFrames(path) => self.complete_path(
                     path.as_ref(),
                     input,
                     FileCompleterOpts { directories: true },
                 ),
-                Command::Source(path) | Command::Write(path) => {
+                Cmd::Source(path) | Cmd::Write(path) => {
                     self.complete_path(path.as_ref(), input, Default::default())
                 }
-                Command::Edit(paths) | Command::EditFrames(paths) => {
+                Cmd::Edit(paths) | Cmd::EditFrames(paths) => {
                     self.complete_path(paths.last(), input, Default::default())
                 }
                 _ => vec![],
@@ -1393,24 +1393,24 @@ mod test {
         assert_eq!(
             p.parse(":set foo = value"),
             Ok((
-                Command::Set("foo".to_owned(), Value::Ident(String::from("value"))),
+                Cmd::Set("foo".to_owned(), Value::Ident(String::from("value"))),
                 ""
             ))
         );
         assert_eq!(
             p.parse(":set scale = 1"),
-            Ok((Command::Set("scale".to_owned(), Value::U32(1)), ""))
+            Ok((Cmd::Set("scale".to_owned(), Value::U32(1)), ""))
         );
         assert_eq!(
             p.parse(":set foo=value"),
             Ok((
-                Command::Set("foo".to_owned(), Value::Ident(String::from("value"))),
+                Cmd::Set("foo".to_owned(), Value::Ident(String::from("value"))),
                 ""
             ))
         );
         assert_eq!(
             p.parse(":set foo"),
-            Ok((Command::Set("foo".to_owned(), Value::Bool(true)), ""))
+            Ok((Cmd::Set("foo".to_owned(), Value::Bool(true)), ""))
         );
 
         assert_eq!(
@@ -1422,7 +1422,7 @@ mod test {
             "unknown key <hello>"
         );
 
-        assert_eq!(p.parse(":").unwrap(), (Command::Noop, ""));
+        assert_eq!(p.parse(":").unwrap(), (Cmd::Noop, ""));
     }
 
     #[test]

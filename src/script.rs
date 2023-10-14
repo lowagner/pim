@@ -126,9 +126,11 @@ pub struct Script {
 }
 
 impl Script {
-    // TODO: i don't think we need to add `root` in.  there's no such thing as external arguments;
-    // they'll be added to the argument list for the compiled Script in question.
-    // i.e., we should be able to avoid passing in `arguments` here.
+    // TODO: add a test for a script that will paint checkerboard
+    //      `box x0 y0 x1 y1 color_or_script`, e.g.
+    //      `box x0 y0 x1 y1 (if (even (+ $0 $1)) color0 color1)`
+    // TODO: $0 and $1 here would actually just refer to even's arguments; we'd need for them to refer to
+    // x-y coordinates passed into the color script; maybe we do need these arguments here.
     fn run(&self, runner: &mut dyn ScriptRunner, arguments: Arguments) -> ArgumentResult {
         let root = Script {
             command: Command::Root,
@@ -223,15 +225,95 @@ impl fmt::Display for Argument {
     }
 }
 
-// We're using this instead of a closure because rust closures are hard to type correctly.
+/// It is recommended to use the macro `script_runner!` to add the relevant
+/// common code for evaluating scripts to your ScriptRunner.
+/// You will be able to customize the required methods (e.g., `paint`).
 pub trait ScriptRunner {
-    /// Executes the script with external arguments in `external_arguments`.
-    // Executes the script on the top of the stack, using lower parts of the stack
-    // to trace `Argument::Use` arguments.  Note that the lowest script in the stack
-    // should *not* have any `Argument::Use` arguments.  We purposely move/copy this
-    // stack because all sorts of redirection is possible, i.e., due to `Argument::Use`
-    // or additional nested scripts being run via `Argument::Script`.
+    /// Executes the script on the top of the stack, using lower parts of the stack
+    /// to trace `Argument::Use` arguments.  Note that the lowest script in the stack
+    /// should *not* have any `Argument::Use` arguments.  We purposely move/copy this
+    /// stack because all sorts of redirection is possible, i.e., due to `Argument::Use`
+    /// or additional nested scripts being run via `Argument::Script`.
     fn run(&mut self, script_stack: Vec<&Script>) -> ArgumentResult;
+}
+
+#[macro_export] // meta programming
+macro_rules! script_runner {
+    ( $name:ident ) => {
+        impl $name {
+            // TODO: could add common methods (if we wanted).
+        }
+
+        impl ScriptRunner for $name {
+            fn run(&mut self, script_stack: Vec<&Script>) -> ArgumentResult {
+                if script_stack.len() == 0 {
+                    return Ok(Argument::Null);
+                }
+                let script: &Script = &script_stack[script_stack.len() - 1];
+                let command = script.command.clone();
+                self.begin_script_command(command.clone());
+                let result = match command.clone() {
+                    Command::Root => Err("root command should not be run".to_string()),
+                    Command::If => {
+                        let conditional = self.script_evaluate(&script_stack, Evaluate::Index(0));
+                        if conditional.is_err() {
+                            conditional
+                        } else if conditional.unwrap().is_truthy() {
+                            self.script_evaluate(&script_stack, Evaluate::Index(1))
+                        } else {
+                            self.script_evaluate(&script_stack, Evaluate::Index(2))
+                        }
+                    }
+                    Command::Evaluate(name) => {
+                        // Need to make a clone here since executing commands could
+                        // modify `self`, which could break the reference here.
+                        let argument: Argument = self.variables.get(name);
+
+                        // TODO: revisit if this isn't useful for non-test ScriptRunners.
+                        // Not using `self.script_evaluate` mostly for avoiding the extra WhatRan in tests:
+                        evaluate(self, &script_stack, Evaluate::Argument(&argument))
+                    }
+                    // Note that variables can technically be `Script`s.
+                    // E.g., if we do `set "var-name" (echo $0 ; echo $1)`, then we
+                    // can call with `var-name 'hello' 'world'`.  This is the way
+                    // we create new commands.
+                    Command::SetVariable => self.variables.set_from_script(&script),
+                    Command::ConstVariable => self.variables.set_from_script(&script),
+                    Command::CreateAlias => self.variables.set_from_script(&script),
+                    Command::ForegroundColor => {
+                        let color_arg = self.script_evaluate(&script_stack, Evaluate::Index(0));
+                        get_or_set_color(&mut self.fg, &self.palette, color_arg)
+                    }
+                    Command::BackgroundColor => {
+                        let color_arg = self.script_evaluate(&script_stack, Evaluate::Index(0));
+                        get_or_set_color(&mut self.bg, &self.palette, color_arg)
+                    }
+                    Command::Paint => {
+                        let x_result = get_coordinate(self.script_evaluate(&script_stack, Evaluate::Index(0)));
+                        if x_result.is_err() {
+                            return Err(x_result.unwrap_err());
+                        }
+                        let y_result = get_coordinate(self.script_evaluate(&script_stack, Evaluate::Index(1)));
+                        if y_result.is_err() {
+                            return Err(y_result.unwrap_err());
+                        }
+
+                        let mut color = self.fg; // default to foreground color
+                        let color_arg = self.script_evaluate(&script_stack, Evaluate::Index(2));
+                        let color_result = get_or_set_color(&mut color, &self.palette, color_arg);
+
+                        self.script_paint(x_result.unwrap(), y_result.unwrap(), color)
+                    }
+                    Command::Quit => {
+                        self.script_quit();
+                        Ok(Argument::Null)
+                    }
+                };
+                self.end_script_command(command);
+                result
+            }
+        }
+    };
 }
 
 pub type CoordinateResult = Result<i64, String>;
@@ -313,8 +395,6 @@ pub enum Evaluate<'a> {
 //    let root = Script { command: Root, arguments: [/*external-arguments*/] };
 //    let script_stack = [root, dot5, paint5];
 //
-// TODO: i don't think we need to add `root` in.  there's no such thing as external arguments;
-// they'll be added to the argument list for the Script in question.
 pub fn evaluate(
     runner: &mut dyn ScriptRunner,
     script_stack: &Vec<&Script>,
@@ -519,80 +599,65 @@ mod test {
         test_painted: Vec<Painted>,
     }
 
-    impl ScriptRunner for TestRunner {
-        fn run(&mut self, script_stack: Vec<&Script>) -> ArgumentResult {
-            if script_stack.len() == 0 {
-                return Ok(Argument::Null);
-            }
-            let script: &Script = &script_stack[script_stack.len() - 1];
-            let command = script.command.clone();
-            self.test_what_ran.push(WhatRan::Command(command.clone()));
-            match command {
-                Command::Root => panic!("root command should not be run"),
-                Command::If => {
-                    let conditional = self.evaluate(&script_stack, Evaluate::Index(0));
-                    if conditional.is_err() {
-                        conditional
-                    } else if conditional.unwrap().is_truthy() {
-                        self.evaluate(&script_stack, Evaluate::Index(1))
-                    } else {
-                        self.evaluate(&script_stack, Evaluate::Index(2))
-                    }
-                }
-                Command::Evaluate(name) => {
-                    // Need to make a clone here since executing commands could
-                    // modify `self`, which could break the reference here.
-                    let argument: Argument = self.variables.get(name);
-
-                    // No need to double up on WhatRan, just run directly:
-                    evaluate(self, &script_stack, Evaluate::Argument(&argument))
-                }
-                // Note that variables can technically be `Script`s.
-                // E.g., if we do `set "var-name" (echo $0 ; echo $1)`, then we
-                // can call with `var-name 'hello' 'world'`.  This is the way
-                // we create new commands.
-                Command::SetVariable => self.variables.set_from_script(&script),
-                Command::ConstVariable => self.variables.set_from_script(&script),
-                Command::CreateAlias => self.variables.set_from_script(&script),
-                Command::ForegroundColor => {
-                    let color_arg = self.evaluate(&script_stack, Evaluate::Index(0));
-                    get_or_set_color(&mut self.fg, &self.palette, color_arg)
-                }
-                Command::BackgroundColor => {
-                    let color_arg = self.evaluate(&script_stack, Evaluate::Index(0));
-                    get_or_set_color(&mut self.bg, &self.palette, color_arg)
-                },
-                Command::Paint => {
-                    let x_result = get_coordinate(self.evaluate(&script_stack, Evaluate::Index(0)));
-                    if x_result.is_err() { return Err(x_result.unwrap_err()); }
-                    let y_result = get_coordinate(self.evaluate(&script_stack, Evaluate::Index(1)));
-                    if y_result.is_err() { return Err(y_result.unwrap_err()); }
-
-                    let mut color = self.fg; // default to foreground color
-                    let color_arg = self.evaluate(&script_stack, Evaluate::Index(2));
-                    let color_result = get_or_set_color(&mut color, &self.palette, color_arg);
-
-                    self.test_painted.push(Painted { x: x_result.unwrap(), y: y_result.unwrap(), color });
-                    Ok(Argument::Color(color))
-                },
-                Command::Quit => Ok(Argument::Null),
-            }
-        }
-    }
-
+    script_runner!{TestRunner}
     impl TestRunner {
         fn new() -> Self {
             let mut palette = Palette::new(12.0, 50);
             palette.add(Rgba8::BLACK);
-            palette.add(Rgba8{r: 11, g: 15, b: 19, a: 0xff});
-            palette.add(Rgba8{r: 22, g: 25, b: 28, a: 0xff});
-            palette.add(Rgba8{r: 33, g: 35, b: 37, a: 0xff});
-            palette.add(Rgba8{r: 44, g: 45, b: 46, a: 0xff});
-            palette.add(Rgba8{r: 55, g: 55, b: 55, a: 0xff});
-            palette.add(Rgba8{r: 66, g: 65, b: 64, a: 0xff});
-            palette.add(Rgba8{r: 77, g: 75, b: 73, a: 0xff});
-            palette.add(Rgba8{r: 88, g: 85, b: 82, a: 0xff});
-            palette.add(Rgba8{r: 99, g: 95, b: 91, a: 0xff});
+            palette.add(Rgba8 {
+                r: 11,
+                g: 15,
+                b: 19,
+                a: 0xff,
+            });
+            palette.add(Rgba8 {
+                r: 22,
+                g: 25,
+                b: 28,
+                a: 0xff,
+            });
+            palette.add(Rgba8 {
+                r: 33,
+                g: 35,
+                b: 37,
+                a: 0xff,
+            });
+            palette.add(Rgba8 {
+                r: 44,
+                g: 45,
+                b: 46,
+                a: 0xff,
+            });
+            palette.add(Rgba8 {
+                r: 55,
+                g: 55,
+                b: 55,
+                a: 0xff,
+            });
+            palette.add(Rgba8 {
+                r: 66,
+                g: 65,
+                b: 64,
+                a: 0xff,
+            });
+            palette.add(Rgba8 {
+                r: 77,
+                g: 75,
+                b: 73,
+                a: 0xff,
+            });
+            palette.add(Rgba8 {
+                r: 88,
+                g: 85,
+                b: 82,
+                a: 0xff,
+            });
+            palette.add(Rgba8 {
+                r: 99,
+                g: 95,
+                b: 91,
+                a: 0xff,
+            });
             palette.add(Rgba8::WHITE);
             Self {
                 palette,
@@ -604,9 +669,16 @@ mod test {
             }
         }
 
-        // You probably don't need to wrap the `evaluate` function.
-        // We do it for tests to get `WhatRan`.
-        fn evaluate(
+        fn begin_script_command(&mut self, command: Command) {
+            self.test_what_ran.push(WhatRan::Command(command));
+        }
+
+        fn end_script_command(&mut self, command: Command) {
+            // TODO: we could consider splitting begin/end command into two WhatRans
+        }
+
+        // We wrap evaluate for tests to get `WhatRan`.
+        fn script_evaluate(
             &mut self,
             script_stack: &Vec<&Script>,
             evaluate_this: Evaluate,
@@ -614,6 +686,21 @@ mod test {
             let result = evaluate(self, script_stack, evaluate_this);
             self.test_what_ran.push(WhatRan::Argument(result.clone()));
             result
+        }
+
+        fn script_paint(&mut self, x: i64, y: i64, color: Rgba8) -> ArgumentResult {
+            self.test_painted.push(Painted {
+                x,
+                y,
+                color
+            });
+            // NOTE! It is not required to return this color, you could do
+            // something fancier (e.g., return the color that was under the cursor).
+            Ok(Argument::Color(color))
+        }
+
+        fn script_quit(&mut self) {
+            // Actually quit
         }
     }
 
@@ -961,21 +1048,20 @@ mod test {
         let function1 = "dot5".to_string();
         let function2 = "paint5".to_string();
         let mut test_runner = TestRunner::new();
-        test_runner.variables.set(function1.clone(), Variable::Const(Argument::Script(Script {
-            command: Command::Evaluate(function2.to_string()),
-            arguments: vec![
-                Argument::Use(2),
-                Argument::Use(0),
-            ],
-        })));
-        test_runner.variables.set(function2.clone(), Variable::Const(Argument::Script(Script {
-            command: Command::Paint,
-            arguments: vec![
-                Argument::Use(0),
-                Argument::Use(1),
-                Argument::I64(5),
-            ],
-        })));
+        test_runner.variables.set(
+            function1.clone(),
+            Variable::Const(Argument::Script(Script {
+                command: Command::Evaluate(function2.to_string()),
+                arguments: vec![Argument::Use(2), Argument::Use(0)],
+            })),
+        );
+        test_runner.variables.set(
+            function2.clone(),
+            Variable::Const(Argument::Script(Script {
+                command: Command::Paint,
+                arguments: vec![Argument::Use(0), Argument::Use(1), Argument::I64(5)],
+            })),
+        );
         let script = Script {
             command: Command::Evaluate(function1.clone()),
             arguments: vec![
@@ -987,7 +1073,10 @@ mod test {
 
         let mut result = script.run(&mut test_runner, vec![]);
         assert!(result.is_ok());
-        assert_eq!(result.ok(), Some(Argument::Color(test_runner.palette.colors[5])));
+        assert_eq!(
+            result.ok(),
+            Some(Argument::Color(test_runner.palette.colors[5]))
+        );
 
         assert_eq!(
             test_runner.test_what_ran,
@@ -1000,12 +1089,16 @@ mod test {
                 WhatRan::Command(Command::Paint),
                 WhatRan::Argument(Ok(Argument::I64(37))), // x coordinate
                 WhatRan::Argument(Ok(Argument::I64(10))), // y coordinate
-                WhatRan::Argument(Ok(Argument::I64(5))), // color palette
+                WhatRan::Argument(Ok(Argument::I64(5))),  // color palette
             ]
         );
         assert_eq!(
             test_runner.test_painted,
-            vec![Painted {x: 37, y: 10, color: test_runner.palette.colors[5]}],
+            vec![Painted {
+                x: 37,
+                y: 10,
+                color: test_runner.palette.colors[5]
+            }],
         );
     }
 
