@@ -674,8 +674,9 @@ mod test {
 
     #[derive(PartialEq, Debug, Clone)]
     enum WhatRan {
-        Command(Command),
-        Argument(ArgumentResult),
+        Begin(Command),
+        End(Command),
+        Evaluated(ArgumentResult),
     }
 
     #[derive(PartialEq, Debug, Clone, Copy)]
@@ -765,11 +766,11 @@ mod test {
         }
 
         fn begin_script_command(&mut self, command: Command) {
-            self.test_what_ran.push(WhatRan::Command(command));
+            self.test_what_ran.push(WhatRan::Begin(command));
         }
 
         fn end_script_command(&mut self, command: Command) {
-            // TODO: we could consider splitting begin/end command into two WhatRans
+            self.test_what_ran.push(WhatRan::End(command));
         }
 
         // We wrap evaluate for tests to get `WhatRan`.
@@ -779,7 +780,7 @@ mod test {
             evaluate_this: Evaluate,
         ) -> ArgumentResult {
             let result = evaluate(self, script_stack, evaluate_this);
-            self.test_what_ran.push(WhatRan::Argument(result.clone()));
+            self.test_what_ran.push(WhatRan::Evaluated(result.clone()));
             result
         }
 
@@ -808,7 +809,10 @@ mod test {
 
         assert_eq!(
             test_runner.test_what_ran,
-            Vec::from([WhatRan::Command(Command::Quit)])
+            Vec::from([
+            WhatRan::Begin(Command::Quit),
+            WhatRan::End(Command::Quit),
+            ])
         );
         assert!(result.is_ok());
     }
@@ -827,8 +831,9 @@ mod test {
         assert_eq!(
             test_runner.test_what_ran,
             Vec::from([
-                WhatRan::Command(Command::ForegroundColor),
-                WhatRan::Argument(Ok(Argument::Null)),
+                WhatRan::Begin(Command::ForegroundColor),
+                WhatRan::Evaluated(Ok(Argument::Null)),
+                WhatRan::End(Command::ForegroundColor),
             ])
         );
         assert!(result.is_ok());
@@ -854,13 +859,15 @@ mod test {
         assert_eq!(
             test_runner.test_what_ran,
             Vec::from([
-                WhatRan::Command(Command::If),
-                WhatRan::Argument(Ok(Argument::I64(1))),
-                WhatRan::Command(Command::ForegroundColor),
-                WhatRan::Argument(Ok(Argument::Color(Rgba8::RED))),
+                WhatRan::Begin(Command::If),
+                WhatRan::Evaluated(Ok(Argument::I64(1))),
+                WhatRan::Begin(Command::ForegroundColor),
+                WhatRan::Evaluated(Ok(Argument::Color(Rgba8::RED))),
+                WhatRan::End(Command::ForegroundColor),
                 // This second one comes as a result of returning this from the foreground;
                 // this is what it was previously:
-                WhatRan::Argument(Ok(Argument::Color(Rgba8::WHITE))),
+                WhatRan::Evaluated(Ok(Argument::Color(Rgba8::WHITE))),
+                WhatRan::End(Command::If),
             ])
         );
         assert!(result.is_ok());
@@ -883,9 +890,10 @@ mod test {
         assert_eq!(
             test_runner.test_what_ran,
             Vec::from([
-                WhatRan::Command(Command::If),
-                WhatRan::Argument(Ok(Argument::I64(0))),
-                WhatRan::Argument(Ok(Argument::Null)),
+                WhatRan::Begin(Command::If),
+                WhatRan::Evaluated(Ok(Argument::I64(0))),
+                WhatRan::Evaluated(Ok(Argument::Null)),
+                WhatRan::End(Command::If),
             ])
         );
         assert!(result.is_ok());
@@ -909,9 +917,10 @@ mod test {
         assert_eq!(
             test_runner.test_what_ran,
             Vec::from([
-                WhatRan::Command(Command::If),
-                WhatRan::Argument(Ok(Argument::I64(0))),
-                WhatRan::Argument(Ok(Argument::Null)),
+                WhatRan::Begin(Command::If),
+                WhatRan::Evaluated(Ok(Argument::I64(0))),
+                WhatRan::Evaluated(Ok(Argument::Null)),
+                WhatRan::End(Command::If),
             ])
         );
         assert!(result.is_ok());
@@ -936,9 +945,10 @@ mod test {
         assert_eq!(
             test_runner.test_what_ran,
             Vec::from([
-                WhatRan::Command(Command::If),
-                WhatRan::Argument(Ok(Argument::I64(0))),
-                WhatRan::Argument(Ok(Argument::Color(Rgba8::BLUE))),
+                WhatRan::Begin(Command::If),
+                WhatRan::Evaluated(Ok(Argument::I64(0))),
+                WhatRan::Evaluated(Ok(Argument::Color(Rgba8::BLUE))),
+                WhatRan::End(Command::If),
             ])
         );
         assert!(result.is_ok());
@@ -978,12 +988,14 @@ mod test {
         assert_eq!(
             test_runner.test_what_ran,
             vec![
-                WhatRan::Command(Command::If),
-                WhatRan::Argument(Ok(Argument::I64(0))),
-                WhatRan::Command(Command::BackgroundColor),
-                WhatRan::Argument(Ok(Argument::Color(Rgba8::RED))),
+                WhatRan::Begin(Command::If),
+                WhatRan::Evaluated(Ok(Argument::I64(0))),
+                WhatRan::Begin(Command::BackgroundColor),
+                WhatRan::Evaluated(Ok(Argument::Color(Rgba8::RED))),
+                WhatRan::End(Command::BackgroundColor),
                 // The original BG color before we changed it to red:
-                WhatRan::Argument(Ok(Argument::Color(Rgba8::BLACK)))
+                WhatRan::Evaluated(Ok(Argument::Color(Rgba8::BLACK))),
+                WhatRan::End(Command::If),
             ]
         );
         assert!(result.is_ok());
@@ -1035,19 +1047,24 @@ mod test {
         assert_eq!(
             test_runner.test_what_ran,
             vec![
-                WhatRan::Command(Command::Evaluate(checkerboard.clone())),
-                WhatRan::Command(Command::If),
-                WhatRan::Command(Command::Even),
-                WhatRan::Command(Command::Sum),
-                WhatRan::Argument(Ok(Argument::I64(3))),
-                WhatRan::Argument(Ok(Argument::Null)),
-                WhatRan::Argument(Ok(Argument::I64(0))),
-                WhatRan::Argument(Ok(Argument::I64(5))),
+                WhatRan::Begin(Command::Evaluate(checkerboard.clone())),
+                WhatRan::Begin(Command::If),
+                WhatRan::Begin(Command::Even),
+                WhatRan::Begin(Command::Sum),
+                WhatRan::Evaluated(Ok(Argument::I64(3))),
+                WhatRan::Evaluated(Ok(Argument::Null)),
+                WhatRan::Evaluated(Ok(Argument::I64(0))),
+                WhatRan::Evaluated(Ok(Argument::I64(5))),
                 // result of the sum:
-                WhatRan::Argument(Ok(Argument::I64(8))),
+                WhatRan::End(Command::Sum),
+                WhatRan::Evaluated(Ok(Argument::I64(8))),
                 // result of even
-                WhatRan::Argument(Ok(Argument::I64(1))),
-                WhatRan::Argument(Ok(Argument::Color(Rgba8::BLUE)))
+                WhatRan::End(Command::Even),
+                WhatRan::Evaluated(Ok(Argument::I64(1))),
+                // final result
+                WhatRan::Evaluated(Ok(Argument::Color(Rgba8::BLUE))),
+                WhatRan::End(Command::If),
+                WhatRan::End(Command::Evaluate(checkerboard.clone())),
             ]
         );
         assert!(result.is_ok());
@@ -1108,19 +1125,25 @@ mod test {
             test_runner.test_what_ran,
             vec![
                 // First run:
-                WhatRan::Command(Command::If),
-                WhatRan::Command(Command::Evaluate(variable_name.clone())),
-                WhatRan::Argument(Ok(Argument::I64(1))),
-                WhatRan::Command(Command::ForegroundColor),
-                WhatRan::Argument(Ok(Argument::Color(Rgba8::BLACK))),
-                WhatRan::Argument(Ok(Argument::Color(Rgba8::WHITE))), // previous FG color
+                WhatRan::Begin(Command::If),
+                WhatRan::Begin(Command::Evaluate(variable_name.clone())),
+                WhatRan::End(Command::Evaluate(variable_name.clone())),
+                WhatRan::Evaluated(Ok(Argument::I64(1))),
+                WhatRan::Begin(Command::ForegroundColor),
+                WhatRan::Evaluated(Ok(Argument::Color(Rgba8::BLACK))),
+                WhatRan::End(Command::ForegroundColor),
+                WhatRan::Evaluated(Ok(Argument::Color(Rgba8::WHITE))), // previous FG color
+                WhatRan::End(Command::If),
                 // Second run:
-                WhatRan::Command(Command::If),
-                WhatRan::Command(Command::Evaluate(variable_name.clone())),
-                WhatRan::Argument(Ok(Argument::I64(0))),
-                WhatRan::Command(Command::BackgroundColor),
-                WhatRan::Argument(Ok(Argument::Color(Rgba8::RED))),
-                WhatRan::Argument(Ok(Argument::Color(Rgba8::BLACK))), // previous BG color
+                WhatRan::Begin(Command::If),
+                WhatRan::Begin(Command::Evaluate(variable_name.clone())),
+                WhatRan::End(Command::Evaluate(variable_name.clone())),
+                WhatRan::Evaluated(Ok(Argument::I64(0))),
+                WhatRan::Begin(Command::BackgroundColor),
+                WhatRan::Evaluated(Ok(Argument::Color(Rgba8::RED))),
+                WhatRan::End(Command::BackgroundColor),
+                WhatRan::Evaluated(Ok(Argument::Color(Rgba8::BLACK))), // previous BG color
+                WhatRan::End(Command::If),
             ]
         );
     }
@@ -1164,11 +1187,14 @@ mod test {
             test_runner.test_what_ran,
             vec![
                 // First run:
-                WhatRan::Command(Command::SetVariable),
+                WhatRan::Begin(Command::SetVariable),
+                WhatRan::End(Command::SetVariable),
                 // Second run:
-                WhatRan::Command(Command::Evaluate(variable_name.clone())),
-                WhatRan::Command(Command::ForegroundColor),
-                WhatRan::Argument(Ok(Argument::Color(Rgba8::BLUE))),
+                WhatRan::Begin(Command::Evaluate(variable_name.clone())),
+                WhatRan::Begin(Command::ForegroundColor),
+                WhatRan::Evaluated(Ok(Argument::Color(Rgba8::BLUE))),
+                WhatRan::End(Command::ForegroundColor),
+                WhatRan::End(Command::Evaluate(variable_name.clone())),
             ]
         );
     }
@@ -1211,11 +1237,14 @@ mod test {
             test_runner.test_what_ran,
             vec![
                 // First run:
-                WhatRan::Command(Command::ConstVariable),
+                WhatRan::Begin(Command::ConstVariable),
+                WhatRan::End(Command::ConstVariable),
                 // Second run:
-                WhatRan::Command(Command::Evaluate(variable_name.clone())),
-                WhatRan::Command(Command::BackgroundColor),
-                WhatRan::Argument(Ok(Argument::Color(Rgba8::BLACK))),
+                WhatRan::Begin(Command::Evaluate(variable_name.clone())),
+                WhatRan::Begin(Command::BackgroundColor),
+                WhatRan::Evaluated(Ok(Argument::Color(Rgba8::BLACK))),
+                WhatRan::End(Command::BackgroundColor),
+                WhatRan::End(Command::Evaluate(variable_name.clone())),
             ]
         );
     }
@@ -1279,15 +1308,18 @@ mod test {
         assert_eq!(
             test_runner.test_what_ran,
             vec![
-                // First run:
-                WhatRan::Command(Command::Evaluate(function1.clone())),
-                // Second run:
-                WhatRan::Command(Command::Evaluate(function2.clone())),
-                // Actual call:
-                WhatRan::Command(Command::Paint),
-                WhatRan::Argument(Ok(Argument::I64(37))), // x coordinate
-                WhatRan::Argument(Ok(Argument::I64(10))), // y coordinate
-                WhatRan::Argument(Ok(Argument::I64(5))),  // color palette
+                // First function/lambda:
+                WhatRan::Begin(Command::Evaluate(function1.clone())),
+                // Second function/lambda:
+                WhatRan::Begin(Command::Evaluate(function2.clone())),
+                // Actual built-in function:
+                WhatRan::Begin(Command::Paint),
+                WhatRan::Evaluated(Ok(Argument::I64(37))), // x coordinate
+                WhatRan::Evaluated(Ok(Argument::I64(10))), // y coordinate
+                WhatRan::Evaluated(Ok(Argument::I64(5))),  // color palette
+                WhatRan::End(Command::Paint),
+                WhatRan::End(Command::Evaluate(function2.clone())),
+                WhatRan::End(Command::Evaluate(function1.clone())),
             ]
         );
         assert_eq!(
