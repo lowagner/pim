@@ -11,7 +11,10 @@ use crate::flood::FloodFiller;
 use crate::hashmap;
 use crate::palette::*;
 use crate::platform::{self, InputState, Key, KeyboardInput, LogicalSize, ModifiersState};
-use crate::script::{self, Argument, ArgumentResult, Evaluate, Script, ScriptRunner, Variables, Command, get_or_set_color, get_coordinate, evaluate};
+use crate::script::{
+    self, evaluate, get_coordinate, get_or_set_color, Argument, ArgumentResult, Command, Evaluate,
+    Script, ScriptRunner, Variables,
+};
 use crate::script_runner;
 use crate::util;
 
@@ -653,7 +656,7 @@ pub struct Session {
     variables: Variables,
 }
 
-script_runner!{Session}
+script_runner! {Session}
 impl Session {
     /// Maximum number of views in a session.
     pub const MAX_VIEWS: usize = 64;
@@ -1155,6 +1158,7 @@ impl Session {
                 // from the window coordinates. Currently, cursor position
                 // is stored only in `SessionCoords`, which would have
                 // to change.
+                // TODO: we could use U64 / 100 as a per-cent for scaling.
                 self.rescale(old.to_u64() as f64, new.to_u64() as f64);
             }
             _ => {}
@@ -3129,16 +3133,17 @@ impl Session {
     fn begin_script_command(&mut self, command: Command) {}
     fn end_script_command(&mut self, command: Command) {}
 
-    fn script_evaluate(&mut self, script_stack: &Vec<&Script>, evaluate_this: Evaluate) -> ArgumentResult {
+    fn script_evaluate(
+        &mut self,
+        script_stack: &Vec<&Script>,
+        evaluate_this: Evaluate,
+    ) -> ArgumentResult {
         script::evaluate(self, script_stack, evaluate_this)
     }
 
     pub fn script_paint(&mut self, x: i64, y: i64, color: Rgba8) -> ArgumentResult {
-        self.active_view_mut().paint_color(
-            color,
-            x as i32,
-            y as i32,
-        );
+        self.active_view_mut()
+            .paint_color(color, x as i32, y as i32);
 
         // TODO: there's probably something better to return here, e.g., the pixel
         // color that was under the cursor.

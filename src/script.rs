@@ -126,11 +126,7 @@ pub struct Script {
 }
 
 impl Script {
-    // TODO: add a test for a script that will paint checkerboard
-    //      `box x0 y0 x1 y1 color_or_script`, e.g.
-    //      `box x0 y0 x1 y1 (if (even (+ $0 $1)) color0 color1)`
-    // TODO: $0 and $1 here would actually just refer to even's arguments; we'd need for them to refer to
-    // x-y coordinates passed into the color script; maybe we do need these arguments here.
+    // TODO: i don't think we need to pass in Arguments here.
     fn run(&self, runner: &mut dyn ScriptRunner, arguments: Arguments) -> ArgumentResult {
         let root = Script {
             command: Command::Root,
@@ -181,7 +177,23 @@ pub enum Argument {
     //          Script { Command::Lookup("the_cmd"), Argument::[Use(0), I64(123)] }
     // NOTE: if you ask for an argument beyond the length of the argument list,
     // it will return Argument::Null.
-    Use(usize),
+    // TODO: add a test for a script that will paint checkerboard
+    //      `box x0 y0 x1 y1 color_or_script`, e.g.
+    //      `box x0 y0 x1 y1 (if (even (+ $0 $1)) color0 color1)`
+    // TODO: $0 and $1 here would actually just refer to even's arguments; we'd need for them to refer to
+    // x-y coordinates passed into the color script.  we'll make `Use {lookback, index}` and keep track of
+    // how many parentheses we encounter before seeing $0 etc; that will count as lookback.
+    Use(Use),
+}
+
+#[derive(PartialEq, Debug, Clone, Copy)]
+pub struct Use {
+    /// Index of argument on the script that we'll use to evaluate this argument.
+    pub index: u32,
+    /// Number of stacks to look back for the script to use.  Should be < 0.
+    /// -1 implies looking back one script.
+    // Note we're using a negative number to more easily distinguish from index.
+    pub lookback: i32,
 }
 
 impl Argument {
@@ -220,7 +232,7 @@ impl fmt::Display for Argument {
                 }
                 write!(f, "]}}")
             }
-            Self::Use(value) => write!(f, "${}", *value),
+            Self::Use(use_argument) => write!(f, "${}", use_argument.index),
         }
     }
 }
@@ -289,11 +301,13 @@ macro_rules! script_runner {
                         get_or_set_color(&mut self.bg, &self.palette, color_arg)
                     }
                     Command::Paint => {
-                        let x_result = get_coordinate(self.script_evaluate(&script_stack, Evaluate::Index(0)));
+                        let x_result =
+                            get_coordinate(self.script_evaluate(&script_stack, Evaluate::Index(0)));
                         if x_result.is_err() {
                             return Err(x_result.unwrap_err());
                         }
-                        let y_result = get_coordinate(self.script_evaluate(&script_stack, Evaluate::Index(1)));
+                        let y_result =
+                            get_coordinate(self.script_evaluate(&script_stack, Evaluate::Index(1)));
                         if y_result.is_err() {
                             return Err(y_result.unwrap_err());
                         }
@@ -372,7 +386,7 @@ pub enum Evaluate<'a> {
     Argument(&'a Argument),
     /// Pass an index into the most recent script's argument list
     /// to evaluate that argument.
-    Index(usize),
+    Index(u32),
 }
 
 /// Executes a script argument, following trails like `Argument::Use`
@@ -388,8 +402,8 @@ pub enum Evaluate<'a> {
 //
 // `dot5` needs to map external argument 2 to paint's argument 0,
 // and external argument 0 to paint's argument 1.
-//    let paint5 = Script { command: Paint, arguments: [Use(0), Use(1), I64(5)] };
-//    let dot5 = Script { command: Evaluate("paint5"), arguments: [Use(2), Use(0)] };
+//    let paint5 = Script { command: Paint, arguments: [Use(0, -1), Use(1, -1), I64(5, -1)] };
+//    let dot5 = Script { command: Evaluate("paint5"), arguments: [Use(2, -1), Use(0, -1)] };
 //
 // The "easy" fix is to just push to a script stack:
 //    let root = Script { command: Root, arguments: [/*external-arguments*/] };
@@ -404,10 +418,9 @@ pub fn evaluate(
     if script_stack.len() > 1000 {
         return Err("script call stack overflow".to_string());
     }
-    let mut script_index: usize = script_stack.len();
+    let mut script_index: usize = script_stack.len() - 1;
     let mut iteration = 0;
-    while script_index > 0 {
-        script_index -= 1;
+    loop {
         iteration += 1;
         if iteration > 1000 {
             return Err("script took too many iterations".to_string());
@@ -416,10 +429,10 @@ pub fn evaluate(
             Evaluate::Argument(evaluate_this_argument) => evaluate_this_argument,
             Evaluate::Index(evaluate_this_index) => {
                 let script: &Script = &script_stack[script_index];
-                if evaluate_this_index >= script.arguments.len() {
+                if evaluate_this_index as usize >= script.arguments.len() {
                     return Ok(Argument::Null);
                 }
-                &script.arguments[evaluate_this_index]
+                &script.arguments[evaluate_this_index as usize]
             }
         };
         if argument.is_value() {
@@ -434,14 +447,25 @@ pub fn evaluate(
                 new_stack.push(&nested_script);
                 return runner.run(new_stack);
             }
-            Argument::Use(previous_stack_argument_index) => {
-                evaluate_this = Evaluate::Index(*previous_stack_argument_index);
+            Argument::Use(use_argument) => {
+                assert!(use_argument.lookback < 0);
+                let subtract: usize = -use_argument.lookback as usize;
+                script_index -= subtract;
+                // Check for underflow:
+                if script_index > script_stack.len() {
+                    // For debugging, reset script_index:
+                    script_index += subtract;
+                    return Err(format!(
+                        "lookback went too far ({}) but we're on script {}",
+                        use_argument.lookback, script_index
+                    ));
+                }
+                evaluate_this = Evaluate::Index(use_argument.index);
             }
             // is_value() and this matcher should be disjoint.
             _ => panic!("Invalid argument, not evaluatable: {}", *argument),
         }
     }
-    Err("arguments to root script should not include $0, $1, etc.".to_string())
 }
 
 #[derive(PartialEq, Debug, Clone)]
@@ -574,7 +598,14 @@ mod test {
             .is_value(),
             false
         );
-        assert_eq!(Argument::Use(3).is_value(), false);
+        assert_eq!(
+            Argument::Use(Use {
+                index: 3,
+                lookback: -1
+            })
+            .is_value(),
+            false
+        );
     }
 
     #[derive(PartialEq, Debug, Clone)]
@@ -599,7 +630,7 @@ mod test {
         test_painted: Vec<Painted>,
     }
 
-    script_runner!{TestRunner}
+    script_runner! {TestRunner}
     impl TestRunner {
         fn new() -> Self {
             let mut palette = Palette::new(12.0, 50);
@@ -689,11 +720,7 @@ mod test {
         }
 
         fn script_paint(&mut self, x: i64, y: i64, color: Rgba8) -> ArgumentResult {
-            self.test_painted.push(Painted {
-                x,
-                y,
-                color
-            });
+            self.test_painted.push(Painted { x, y, color });
             // NOTE! It is not required to return this color, you could do
             // something fancier (e.g., return the color that was under the cursor).
             Ok(Argument::Color(color))
@@ -858,7 +885,17 @@ mod test {
     fn test_script_allows_external_arguments() {
         let script = Script {
             command: Command::If,
-            arguments: Vec::from([Argument::I64(0), Argument::Use(0), Argument::Use(1)]),
+            arguments: Vec::from([
+                Argument::I64(0),
+                Argument::Use(Use {
+                    index: 0,
+                    lookback: -1,
+                }),
+                Argument::Use(Use {
+                    index: 1,
+                    lookback: -1,
+                }),
+            ]),
         };
 
         let mut test_runner = TestRunner::new();
@@ -899,8 +936,14 @@ mod test {
                     command: Command::Evaluate(variable_name.clone()),
                     arguments: vec![],
                 }),
-                Argument::Use(0),
-                Argument::Use(1),
+                Argument::Use(Use {
+                    index: 0,
+                    lookback: -1,
+                }),
+                Argument::Use(Use {
+                    index: 1,
+                    lookback: -1,
+                }),
             ]),
         };
         let mut test_runner = TestRunner::new();
@@ -961,7 +1004,10 @@ mod test {
                 Argument::String(variable_name.clone()),
                 Argument::Script(Script {
                     command: Command::ForegroundColor,
-                    arguments: vec![Argument::Use(1)],
+                    arguments: vec![Argument::Use(Use {
+                        index: 1,
+                        lookback: -1,
+                    })],
                 }),
             ]),
         };
@@ -1006,7 +1052,10 @@ mod test {
                 Argument::String(variable_name.clone()),
                 Argument::Script(Script {
                     command: Command::BackgroundColor,
-                    arguments: vec![Argument::Use(2)],
+                    arguments: vec![Argument::Use(Use {
+                        index: 2,
+                        lookback: -1,
+                    })],
                 }),
             ]),
         };
@@ -1052,14 +1101,33 @@ mod test {
             function1.clone(),
             Variable::Const(Argument::Script(Script {
                 command: Command::Evaluate(function2.to_string()),
-                arguments: vec![Argument::Use(2), Argument::Use(0)],
+                arguments: vec![
+                    Argument::Use(Use {
+                        index: 2,
+                        lookback: -1,
+                    }),
+                    Argument::Use(Use {
+                        index: 0,
+                        lookback: -1,
+                    }),
+                ],
             })),
         );
         test_runner.variables.set(
             function2.clone(),
             Variable::Const(Argument::Script(Script {
                 command: Command::Paint,
-                arguments: vec![Argument::Use(0), Argument::Use(1), Argument::I64(5)],
+                arguments: vec![
+                    Argument::Use(Use {
+                        index: 0,
+                        lookback: -1,
+                    }),
+                    Argument::Use(Use {
+                        index: 1,
+                        lookback: -1,
+                    }),
+                    Argument::I64(5),
+                ],
             })),
         );
         let script = Script {
@@ -1446,7 +1514,14 @@ mod test {
 
         // Use doesn't work:
         assert_eq!(
-            get_or_set_color(&mut color, &palette, Ok(Argument::Use(1234))),
+            get_or_set_color(
+                &mut color,
+                &palette,
+                Ok(Argument::Use(Use {
+                    index: 1234,
+                    lookback: -1
+                }))
+            ),
             Err("invalid argument to get_or_set_color: $1234".to_string())
         );
         assert_eq!(color, initial_color);

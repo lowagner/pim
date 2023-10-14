@@ -678,11 +678,7 @@ pub struct Commands {
 impl Commands {
     pub fn new() -> Self {
         Self {
-            commands: vec![(
-                "#",
-                "Add color to palette",
-                color().map(Cmd::PaletteAdd),
-            )],
+            commands: vec![("#", "Add color to palette", color().map(Cmd::PaletteAdd))],
             existing_commands: HashSet::from(["#"]),
         }
     }
@@ -766,8 +762,7 @@ impl Default for Commands {
             .command("wq", "Write & quit view", |p| p.value(Cmd::WriteQuit))
             .command("x", "Write & quit view", |p| p.value(Cmd::WriteQuit))
             .command("w", "Write view", |p| {
-                p.then(optional(path()))
-                    .map(|(_, path)| Cmd::Write(path))
+                p.then(optional(path())).map(|(_, path)| Cmd::Write(path))
             })
             .command("w/frames", "Write view as individual frames", |p| {
                 p.then(optional(path()))
@@ -779,9 +774,7 @@ impl Default for Commands {
             .command("e/frames", "Edit frames as view", |p| {
                 p.then(paths()).map(|(_, paths)| Cmd::EditFrames(paths))
             })
-            .command("help", "Display help", |p| {
-                p.value(Cmd::Mode(Mode::Help))
-            })
+            .command("help", "Display help", |p| p.value(Cmd::Mode(Mode::Help)))
             .command("set", "Set setting to value", |p| {
                 p.then(setting())
                     .skip(optional(whitespace()))
@@ -849,10 +842,7 @@ impl Default for Commands {
             .command(
                 "brush/set",
                 "Set brush mode, eg. `xsym` for x-symmetry",
-                |p| {
-                    p.then(param::<BrushMode>())
-                        .map(|(_, m)| Cmd::BrushSet(m))
-                },
+                |p| p.then(param::<BrushMode>()).map(|(_, m)| Cmd::BrushSet(m)),
             )
             .command("brush/unset", "Unset brush mode", |p| {
                 p.then(param::<BrushMode>())
@@ -1070,9 +1060,7 @@ impl Default for Commands {
                         integer().label("<x2>"),
                         integer().label("<y2>"),
                     ))
-                    .map(|(((_, color), (x1, y1)), (x2, y2))| {
-                        Cmd::PaintLine(color, x1, y1, x2, y2)
-                    })
+                    .map(|(((_, color), (x1, y1)), (x2, y2))| Cmd::PaintLine(color, x1, y1, x2, y2))
             })
             .command("paint/fg", "Paint foreground color", |p| {
                 p.then(tuple::<i32>(integer().label("<x>"), integer().label("<y>")))
