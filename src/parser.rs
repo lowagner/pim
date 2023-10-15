@@ -21,35 +21,65 @@ impl Parse for Script {
 }
 
 fn get_script_parser(lookback: i32) -> Parser<Script> {
-    assert!(
-        lookback < 0,
-        "lookback should start at -1 and go more negative"
+    let command = token().map(
+        // It's safe to unwrap this token here since token is non-whitespace
+        // and the only command parse error is if the string is just whitespace.
+        |s| Command::from_str(&s).unwrap(),
     );
-    // It's safe to unwrap this token here since token is non-whitespace
-    // and the only command parse error is if the string is just whitespace.
-    let command = token().map(|s| Command::from_str(&s).unwrap());
 
     command
-        .skip(whitespace())
-        .then(any::<Argument, Vec<Argument>>(get_argument_parser(
-            lookback,
-        )))
+        .skip(optional(whitespace()))
+        .then(any::<Argument, Vec<Argument>>(
+            get_argument_parser(lookback).skip(optional(whitespace()).skip(optional(comment()))),
+        ))
         .map(|(command, arguments)| Script { command, arguments })
         .label("<script>")
 }
 
+// NOTE: There's not a huge point to exposing this as an Argument::parser()
+// due to the fact that `Use` depends on lookback.
 fn get_argument_parser(lookback: i32) -> Parser<Argument> {
-    // TODO: this will explode the stack since each of these parsers call the other.
-    //      we need a way to call lazily.  or implement Script::parser directly.
-    // let script_arg = between('(', ')', get_script_parser(lookback - 1)).map(Argument::Script).label("<nested-script>");
-    let string_arg = quoted().map(Argument::String).label("<string>");
-    let color_arg = color().map(Argument::Color).label("<color>");
-    let i64_arg = integer::<i64>().map(Argument::I64).label("<i64>");
-    // TODO: evaluate any random string as a no-arg Script, besides comments
+    Parser::new(
+        move |input| {
+            // Prevent stack overflow (script within argument recursion).
+            // Only spin up another script parser if we're within a new `()` block.
+            eprint!("starting new argument parser with input `{}`\n", input);
+            if input.starts_with('(') {
+                let nested_script_parser = get_script_parser(lookback - 1);
+                return match nested_script_parser.parse(&input[1..]) {
+                    Ok((nested_script, rest)) if rest.starts_with(')') => {
+                        Ok((Argument::Script(nested_script), &rest[1..]))
+                    }
+                    Ok((nested_script, rest)) if rest.is_empty() => {
+                        eprint!(
+                            "argument with nested script didn't terminate: `{}` -> `{}`\n",
+                            input, rest
+                        );
+                        Ok((Argument::Script(nested_script), rest))
+                    }
+                    Ok((_, rest)) => {
+                        eprint!(
+                            "unexpected end of nested script: `{}` -> `{}`\n",
+                            input, rest
+                        );
+                        Err(("unexpected end of nested script".into(), input))
+                    }
+                    Err(err) => Err(err),
+                };
+            }
 
-    peek(string_arg.or(color_arg).or(i64_arg))
-        .skip(optional(whitespace()).skip(optional(comment())))
-        .label("<argument>")
+            let string_arg = quoted().map(Argument::String).label("<string>");
+            let color_arg = color().map(Argument::Color).label("<color>");
+            let i64_arg = integer::<i64>().map(Argument::I64).label("<i64>");
+            // TODO: `use_arg`
+            // TODO: evaluate any random string as a no-arg Script, besides comments
+
+            peek(string_arg.or(color_arg).or(i64_arg))
+                .label("<argument>")
+                .parse(input)
+        },
+        "<argument>",
+    )
 }
 
 pub fn identifier() -> Parser<String> {
@@ -65,7 +95,10 @@ pub fn word() -> Parser<String> {
 }
 
 pub fn token() -> Parser<String> {
-    many::<_, String>(satisfy(|c| !c.is_whitespace(), "!<whitespace>"))
+    many::<_, String>(satisfy(
+        |c| !c.is_whitespace() && c != '(' && c != ')',
+        "!<whitespace>",
+    ))
 }
 
 pub fn comment() -> Parser<String> {
@@ -403,7 +436,110 @@ mod test {
         );
     }
 
-    // TODO: test script with comments
+    #[test]
+    fn test_script_no_args() {
+        let p = Script::parser();
+
+        let (result, rest) = p.parse("bg").unwrap();
+        assert_eq!(rest, "");
+        assert_eq!(
+            result,
+            Script {
+                command: Command::BackgroundColor,
+                arguments: vec![],
+            }
+        );
+    }
+
+    #[test]
+    fn test_script_with_nested_scripts() {
+        let p = Script::parser();
+
+        let (result, rest) = p
+            .parse("if 123 (hello 'world' (hi 42 \"earth\")) (hey 'moon' -7)")
+            .unwrap();
+        assert_eq!(rest, "");
+        assert_eq!(
+            result,
+            Script {
+                command: Command::If,
+                arguments: vec![
+                    Argument::I64(123),
+                    Argument::Script(Script {
+                        command: Command::Evaluate("hello".to_string()),
+                        arguments: vec![
+                            Argument::String("world".to_string()),
+                            Argument::Script(Script {
+                                command: Command::Evaluate("hi".to_string()),
+                                arguments: vec![
+                                    Argument::I64(42),
+                                    Argument::String("earth".to_string()),
+                                ],
+                            }),
+                        ],
+                    }),
+                    Argument::Script(Script {
+                        command: Command::Evaluate("hey".to_string()),
+                        arguments: vec![Argument::String("moon".to_string()), Argument::I64(-7),],
+                    }),
+                ],
+            }
+        );
+    }
+
+    #[test]
+    fn test_script_with_short_nested_script_and_comment() {
+        let p = Script::parser();
+
+        let (result, rest) = p.parse("fg (bg) -- 123 'do stuff'").unwrap();
+        //assert_eq!(rest, "");
+        assert_eq!(
+            result,
+            Script {
+                command: Command::ForegroundColor,
+                arguments: vec![Argument::Script(Script {
+                    command: Command::BackgroundColor,
+                    arguments: vec![]
+                }),],
+            }
+        );
+    }
+
+    #[test]
+    fn test_script_with_unfinished_nested_script() {
+        let p = Script::parser();
+
+        let (result, rest) = p.parse("fg (hello 'world' 123").unwrap();
+        assert_eq!(rest, "");
+        assert_eq!(
+            result,
+            Script {
+                command: Command::ForegroundColor,
+                arguments: vec![Argument::Script(Script {
+                    command: Command::Evaluate("hello".to_string()),
+                    arguments: vec![Argument::String("world".to_string()), Argument::I64(123),],
+                }),],
+            }
+        );
+    }
+
+    #[test]
+    fn test_script_with_unfinished_nested_script_with_comment() {
+        let p = Script::parser();
+
+        let (result, rest) = p.parse("fg (hello 'world' -123 -- comment").unwrap();
+        assert_eq!(rest, "");
+        assert_eq!(
+            result,
+            Script {
+                command: Command::ForegroundColor,
+                arguments: vec![Argument::Script(Script {
+                    command: Command::Evaluate("hello".to_string()),
+                    arguments: vec![Argument::String("world".to_string()), Argument::I64(-123),],
+                }),],
+            }
+        );
+    }
 
     #[test]
     fn test_modifiers_parser_success() {
