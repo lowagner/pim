@@ -21,14 +21,7 @@ impl Parse for Script {
 }
 
 fn get_script_parser(lookback: i32) -> Parser<Script> {
-    // TODO: maybe switch to `identifier()`.
-    let command = token().map(
-        // It's safe to unwrap this token here since token is non-whitespace
-        // and the only command parse error is if the string is just whitespace.
-        |s| Command::from_str(&s).unwrap(),
-    );
-
-    command
+    command()
         .skip(optional(whitespace()))
         .then(any::<Argument, Vec<Argument>>(
             get_argument_parser(lookback).skip(optional(whitespace()).skip(optional(comment()))),
@@ -68,19 +61,41 @@ fn get_argument_parser(lookback: i32) -> Parser<Argument> {
                 };
             }
 
-            let string_arg = quoted().map(Argument::String).label("<string>");
-            let color_arg = color().map(Argument::Color).label("<color>");
             let i64_arg = integer::<i64>().map(Argument::I64).label("<i64>");
+            let color_arg = color().map(Argument::Color).label("<color>");
+            let string_arg = quoted().map(Argument::String).label("<string>");
             let use_arg = symbol('$')
                 .then(natural::<u32>())
                 .map(move |(_symbol, index)| Argument::Use(Use { index, lookback }));
-            // TODO: evaluate any random string as a no-arg Script, besides comments
+            // Evaluate any random token as a command in a no-arg Script.
+            // This allows things like `bg fg` to switch the background
+            // to the foreground color.  E.g., zero-arg functions are
+            // typically getters.
+            let zero_arg_script = command().map(|command| Argument::Script(Script {
+                command,
+                arguments: vec![],
+            }));
 
-            peek(string_arg.or(color_arg).or(i64_arg).or(use_arg))
-                .label("<argument>")
-                .parse(input)
+            peek(
+                i64_arg
+                    .or(color_arg)
+                    .or(string_arg)
+                    .or(use_arg)
+                    .or(zero_arg_script),
+            )
+            .label("<argument>")
+            .parse(input)
         },
         "<argument>",
+    )
+}
+
+pub fn command() -> Parser<Command> {
+    // TODO: maybe switch to `identifier()`.
+    token().map(
+        // It's safe to unwrap this token here since token is non-whitespace
+        // and the only command parse error is if the string is just whitespace.
+        |s| Command::from_str(&s).unwrap(),
     )
 }
 
@@ -517,6 +532,37 @@ mod test {
                     command: Command::BackgroundColor,
                     arguments: vec![]
                 }),],
+            }
+        );
+    }
+
+    #[test]
+    fn test_script_converts_unknown_tokens_to_zero_arg_scripts() {
+        let p = Script::parser();
+
+        let (result, rest) = p.parse("paint x1 y2 (fg swap3)").unwrap();
+        assert_eq!(rest, "");
+        assert_eq!(
+            result,
+            Script {
+                command: Command::Paint,
+                arguments: vec![
+                    Argument::Script(Script {
+                        command: Command::Evaluate("x1".to_string()),
+                        arguments: vec![]
+                    }),
+                    Argument::Script(Script {
+                        command: Command::Evaluate("y2".to_string()),
+                        arguments: vec![]
+                    }),
+                    Argument::Script(Script {
+                        command: Command::ForegroundColor,
+                        arguments: vec![Argument::Script(Script {
+                            command: Command::Evaluate("swap3".to_string()),
+                            arguments: vec![]
+                        }),],
+                    }),
+                ],
             }
         );
     }

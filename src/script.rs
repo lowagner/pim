@@ -206,12 +206,12 @@ pub enum Argument {
     // Value-based arguments.
     Null,
 
-    // TODO: convert "true"/"false" to 1/0 in an I64.
-    I64(i64),
     // TODO: for Scale, use an I64 with the number of pixels desired in the X/Y direction.
     // E.g., we can have PixelsX/PixelsY or width/height
-    String(String),
+    // TODO: convert "true"/"false" to 1/0 in an I64.
+    I64(i64),
     Color(Rgba8),
+    String(String),
     // TODO: for keys (e.g. a-z, <tab>, <backspace>, <ctrl>, etc.)
     //      and also mods (<ctrl>a, <alt>c, etc.)
     // Note that commands that take Input should also take a String that is a single
@@ -265,8 +265,8 @@ impl Argument {
         match self {
             Self::Null => false,
             Self::I64(value) => *value != 0,
-            Self::String(value) => *value != "",
             Self::Color(value) => *value != Rgba8::TRANSPARENT,
+            Self::String(value) => *value != "",
             _ => panic!("unimplemented"),
         }
     }
@@ -297,8 +297,8 @@ impl fmt::Display for Argument {
         match self {
             Self::Null => write!(f, "null"),
             Self::I64(value) => write!(f, "{}", *value),
-            Self::String(value) => write!(f, "'{}'", *value),
             Self::Color(value) => write!(f, "{}", *value),
+            Self::String(value) => write!(f, "'{}'", *value),
             Self::Script(script) => {
                 let mut check = write!(f, "{{command: `{}`, arguments: [", script.command);
                 if check.is_err() {
@@ -564,7 +564,7 @@ pub enum Variable {
     Const(Argument),
     // To look up a variable and remap it:
     Alias(String),
-    // Built-in function, e.g., `if` or `paint`:
+    // Built-in function, e.g., `if`, `true`, `false` or `paint`:
     // TODO: figure out how we want to do this.  we could put
     // in a script, or we could put in a lambda function here, e.g., `BuiltIn(String, Function)`
     // BuiltIn(String),
