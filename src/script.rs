@@ -66,6 +66,7 @@ pub enum Command {
     /// Sums all arguments, using $0 as the type to return.
     /// E.g., if $0 is an integer, then $1, $2, etc. will be cast to integers.
     Sum,
+
     // Evaluates each Argument in turn, returning early if any is an Err,
     // returning Ok with last result otherwise.
     // TODO: Sequential,
@@ -564,10 +565,8 @@ pub enum Variable {
     Const(Argument),
     // To look up a variable and remap it:
     Alias(String),
-    // Built-in function, e.g., `if`, `true`, `false` or `paint`:
-    // TODO: figure out how we want to do this.  we could put
-    // in a script, or we could put in a lambda function here, e.g., `BuiltIn(String, Function)`
-    // BuiltIn(String),
+    // Built-in function, e.g., `if`, `fg`, `paint`, etc.:
+    BuiltIn,
 }
 
 impl Variable {
@@ -588,19 +587,47 @@ impl Variables {
         }
     }
 
+    pub fn with_builtins() -> Self {
+        let mut variables = Variables::new();
+        variables.set("if".to_string(), Variable::BuiltIn);
+        variables.set("even".to_string(), Variable::BuiltIn);
+        variables.set("odd".to_string(), Variable::BuiltIn);
+        variables.set("sum".to_string(), Variable::BuiltIn);
+        variables.set("set".to_string(), Variable::BuiltIn);
+        variables.set("const".to_string(), Variable::BuiltIn);
+        variables.set("alias".to_string(), Variable::BuiltIn);
+        variables.set("fg".to_string(), Variable::BuiltIn);
+        variables.set("bg".to_string(), Variable::BuiltIn);
+        variables.set("paint".to_string(), Variable::BuiltIn);
+        variables.set("quit".to_string(), Variable::BuiltIn);
+        variables.set("?".to_string(), Variable::BuiltIn);
+        variables.set("run".to_string(), Variable::BuiltIn);
+
+        variables.set("q".to_string(), Variable::Alias("quit".to_string()));
+        variables
+    }
+
     /// Returns the Argument represented by this name, returning Null if not present in the map.
     // Notice that we resolve aliases here so that you'll definitely get an argument.
     pub fn get(&self, mut name: String) -> Argument {
         for _iteration in 1..24 {
             match &self.map.get(&name) {
                 None => return Argument::Null,
-                Some(variable) => match variable {
-                    Variable::Const(arg) => return arg.clone(),
-                    Variable::Mutable(arg) => return arg.clone(),
-                    Variable::Alias(alias) => {
-                        name = alias.clone();
+                Some(variable) => {
+                    match variable {
+                        Variable::Const(arg) => return arg.clone(),
+                        Variable::Mutable(arg) => return arg.clone(),
+                        Variable::Alias(alias) => {
+                            name = alias.clone();
+                        }
+                        Variable::BuiltIn => {
+                            // TODO: figure out how we want to do this; if we eventually
+                            // support calling functions like this:
+                            // `prepare 'if'; evaluate $0 $1 $2` to run `if` dynamically.
+                            panic!("not sure how you got here!  built-ins should be handled elsewhere.");
+                        }
                     }
-                },
+                }
             }
         }
         eprint!("don't nest aliases this much!\n");
@@ -632,7 +659,9 @@ impl Variables {
                         );
                     }
                 }
-                _ => return Err(format!("variable `{}` is not reassignable", name)),
+                Variable::Alias(_) => return Err(format!("alias `{}` is not reassignable", name)),
+                Variable::Const(_) => return Err(format!("variable `{}` is not reassignable", name)),
+                Variable::BuiltIn => return Err(format!("built-in `{}` is not reassignable", name)),
             },
         }
         // TODO: optimization for aliases of aliases, we could drill down since aliases
@@ -797,7 +826,7 @@ mod test {
             Self {
                 palette,
                 test_what_ran: Vec::new(),
-                variables: Variables::new(),
+                variables: Variables::with_builtins(),
                 fg: Rgba8::WHITE,
                 bg: Rgba8::BLACK,
                 test_painted: vec![],
@@ -1560,7 +1589,7 @@ mod test {
         assert_eq!(
             variables.set_from_script(&script),
             Err(format!(
-                "variable `{}` is not reassignable",
+                "alias `{}` is not reassignable",
                 alias_name.clone()
             ))
         );
@@ -1579,6 +1608,39 @@ mod test {
             Ok(Argument::String("hello".to_string()))
         );
         assert_eq!(variables.get(alias_name), aliased_value);
+    }
+
+    #[test]
+    fn test_variables_set_cannot_overwrite_builtins() {
+        let mut variables = Variables::with_builtins();
+        assert_eq!(
+            variables.set(
+                "if".to_string(),
+                Variable::Mutable(Argument::I64(123)),
+            ),
+            Err("built-in `if` is not reassignable".to_string())
+        );
+        assert_eq!(
+            variables.set(
+                "fg".to_string(),
+                Variable::Const(Argument::I64(123)),
+            ),
+            Err("built-in `fg` is not reassignable".to_string())
+        );
+        assert_eq!(
+            variables.set(
+                "paint".to_string(),
+                Variable::Alias("super-paint".to_string()),
+            ),
+            Err("built-in `paint` is not reassignable".to_string())
+        );
+        assert_eq!(
+            variables.set(
+                "const".to_string(),
+                Variable::BuiltIn,
+            ),
+            Err("built-in `const` is not reassignable".to_string())
+        );
     }
 
     #[test]

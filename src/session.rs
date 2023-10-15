@@ -746,7 +746,7 @@ impl Session {
             avg_time: time::Duration::from_secs(0),
             frame_number: 0,
             queue: Vec::new(),
-            variables: Variables::new(),
+            variables: Variables::with_builtins(),
         }
     }
 
