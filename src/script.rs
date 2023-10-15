@@ -46,13 +46,6 @@ TODO: make push have an automatic pop at the end of a script runner.
 // Note these are designed to be quickly cloned, so don't put large amounts of data in them.
 #[derive(PartialEq, Debug, Clone)]
 pub enum Command {
-    // A sort of throw-away command to make going through arguments
-    // from a script stack more easy.  Do not use outside of this file.
-    // See `Script::run` and `evaluate(...)` for more info.
-    // The associated arguments for this command are the arguments that
-    // the user passes in to run the script.
-    Root,
-
     /// Runs $0, checks if it's truthy, then evaluates $1 if so, otherwise $2.
     /// Note that $1 and $2 are optional.
     // TODO: if $2 is missing, return I64(0); if $1 is missing, return I64(1)
@@ -133,7 +126,6 @@ pub enum Command {
 impl fmt::Display for Command {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Command::Root => write!(f, ":"),
             Command::If => write!(f, "if"),
             Command::Even => write!(f, "even"),
             Command::Odd => write!(f, "odd"),
@@ -187,13 +179,8 @@ pub struct Script {
 }
 
 impl Script {
-    // TODO: i don't think we need to pass in Arguments here.
-    fn run(&self, runner: &mut dyn ScriptRunner, arguments: Arguments) -> ArgumentResult {
-        let root = Script {
-            command: Command::Root,
-            arguments,
-        };
-        runner.run(vec![&root, self])
+    fn run(&self, runner: &mut dyn ScriptRunner) -> ArgumentResult {
+        runner.run(vec![self])
     }
 
     // TODO: add method to print Script back as a command sequence
@@ -220,8 +207,6 @@ pub enum Argument {
     // Input(Input),
 
     // Non-value-based (AKA evaluatable) arguments follow.
-    // TODO: we probably can have a zero-arg Variable here,
-    //      e.g., Variable(String) which will be executed without any arguments.
     // TODO: we should be able to pause execution, e.g., for an alert box to confirm an action
 
     // An argument that is itself the output of another Script.
@@ -238,12 +223,6 @@ pub enum Argument {
     //          Script { Command::Lookup("the_cmd"), Argument::[Use(0), I64(123)] }
     // NOTE: if you ask for an argument beyond the length of the argument list,
     // it will return Argument::Null.
-    // TODO: add a test for a script that will paint checkerboard
-    //      `box x0 y0 x1 y1 color_or_script`, e.g.
-    //      `box x0 y0 x1 y1 (if (even (+ $0 $1)) color0 color1)`
-    // TODO: $0 and $1 here would actually just refer to even's arguments; we'd need for them to refer to
-    // x-y coordinates passed into the color script.  we'll make `Use {lookback, index}` and keep track of
-    // how many parentheses we encounter before seeing $0 etc; that will count as lookback.
     Use(Use),
 }
 
@@ -346,7 +325,6 @@ macro_rules! script_runner {
                 let command = script.command.clone();
                 self.begin_script_command(command.clone());
                 let result = match command.clone() {
-                    Command::Root => Err("root command should not be run".to_string()),
                     Command::If => {
                         let conditional =
                             self.script_evaluate(&script_stack, Evaluate::Index(0))?;
@@ -581,13 +559,13 @@ pub struct Variables {
 
 impl Variables {
     pub fn new() -> Self {
-        // TODO: should probably add a few const variables like `null`, etc.
         Self {
             map: HashMap::new(),
         }
     }
 
-    pub fn with_builtins() -> Self {
+    pub fn with_built_ins() -> Self {
+        // TODO: should probably add a few const variables like `null`, etc.
         let mut variables = Variables::new();
         variables.set("if".to_string(), Variable::BuiltIn);
         variables.set("even".to_string(), Variable::BuiltIn);
@@ -826,7 +804,7 @@ mod test {
             Self {
                 palette,
                 test_what_ran: Vec::new(),
-                variables: Variables::with_builtins(),
+                variables: Variables::with_built_ins(),
                 fg: Rgba8::WHITE,
                 bg: Rgba8::BLACK,
                 test_painted: vec![],
@@ -872,8 +850,7 @@ mod test {
         };
 
         let mut test_runner = TestRunner::new();
-        let arguments = vec![];
-        let result = script.run(&mut test_runner, arguments);
+        let result = script.run(&mut test_runner);
 
         assert_eq!(
             test_runner.test_what_ran,
@@ -890,8 +867,7 @@ mod test {
         };
 
         let mut test_runner = TestRunner::new();
-        let arguments = vec![];
-        let result = script.run(&mut test_runner, arguments);
+        let result = script.run(&mut test_runner);
 
         assert_eq!(
             test_runner.test_what_ran,
@@ -918,8 +894,7 @@ mod test {
         };
 
         let mut test_runner = TestRunner::new();
-        let arguments = vec![];
-        let result = script.run(&mut test_runner, arguments);
+        let result = script.run(&mut test_runner);
 
         assert_eq!(
             test_runner.test_what_ran,
@@ -949,8 +924,7 @@ mod test {
         };
 
         let mut test_runner = TestRunner::new();
-        let arguments = vec![];
-        let result = script.run(&mut test_runner, arguments);
+        let result = script.run(&mut test_runner);
 
         assert_eq!(
             test_runner.test_what_ran,
@@ -976,8 +950,7 @@ mod test {
         };
 
         let mut test_runner = TestRunner::new();
-        let arguments = vec![];
-        let result = script.run(&mut test_runner, arguments);
+        let result = script.run(&mut test_runner);
 
         assert_eq!(
             test_runner.test_what_ran,
@@ -1004,8 +977,7 @@ mod test {
         };
 
         let mut test_runner = TestRunner::new();
-        let arguments = vec![];
-        let result = script.run(&mut test_runner, arguments);
+        let result = script.run(&mut test_runner);
 
         assert_eq!(
             test_runner.test_what_ran,
@@ -1018,53 +990,6 @@ mod test {
         );
         assert!(result.is_ok());
         assert_eq!(result.ok(), Some(Argument::Color(Rgba8::BLUE)));
-    }
-
-    #[test]
-    fn test_script_allows_external_arguments() {
-        let script = Script {
-            command: Command::If,
-            arguments: Vec::from([
-                Argument::I64(0),
-                Argument::Use(Use {
-                    index: 0,
-                    lookback: -1,
-                }),
-                Argument::Use(Use {
-                    index: 1,
-                    lookback: -1,
-                }),
-            ]),
-        };
-
-        let mut test_runner = TestRunner::new();
-        let arguments = vec![
-            Argument::Script(Script {
-                command: Command::ForegroundColor,
-                arguments: vec![Argument::Color(Rgba8::BLACK)],
-            }),
-            Argument::Script(Script {
-                command: Command::BackgroundColor,
-                arguments: vec![Argument::Color(Rgba8::RED)],
-            }),
-        ];
-        let result = script.run(&mut test_runner, arguments);
-
-        assert_eq!(
-            test_runner.test_what_ran,
-            vec![
-                WhatRan::Begin(Command::If),
-                WhatRan::Evaluated(Ok(Argument::I64(0))),
-                WhatRan::Begin(Command::BackgroundColor),
-                WhatRan::Evaluated(Ok(Argument::Color(Rgba8::RED))),
-                WhatRan::End(Command::BackgroundColor),
-                // The original BG color before we changed it to red:
-                WhatRan::Evaluated(Ok(Argument::Color(Rgba8::BLACK))),
-                WhatRan::End(Command::If),
-            ]
-        );
-        assert!(result.is_ok());
-        assert_eq!(result.ok(), Some(Argument::Color(Rgba8::BLACK)));
     }
 
     #[test]
@@ -1107,7 +1032,7 @@ mod test {
             command: Command::Evaluate(checkerboard.clone()),
             arguments: vec![Argument::I64(3), Argument::I64(5)], // (x, y) coordinates
         };
-        let result = script.run(&mut test_runner, vec![]);
+        let result = script.run(&mut test_runner);
 
         assert_eq!(
             test_runner.test_what_ran,
@@ -1143,45 +1068,35 @@ mod test {
         let variable_name = "cabbage".to_string();
         let script = Script {
             command: Command::If,
-            arguments: Vec::from([
+            arguments: vec![
                 Argument::Script(Script {
                     command: Command::Evaluate(variable_name.clone()),
                     arguments: vec![],
                 }),
-                Argument::Use(Use {
-                    index: 0,
-                    lookback: -1,
+                Argument::Script(Script {
+                    command: Command::ForegroundColor,
+                    arguments: vec![Argument::Color(Rgba8::BLACK)],
                 }),
-                Argument::Use(Use {
-                    index: 1,
-                    lookback: -1,
+                Argument::Script(Script {
+                    command: Command::BackgroundColor,
+                    arguments: vec![Argument::Color(Rgba8::RED)],
                 }),
-            ]),
+            ],
         };
         let mut test_runner = TestRunner::new();
-        let arguments = vec![
-            Argument::Script(Script {
-                command: Command::ForegroundColor,
-                arguments: vec![Argument::Color(Rgba8::BLACK)],
-            }),
-            Argument::Script(Script {
-                command: Command::BackgroundColor,
-                arguments: vec![Argument::Color(Rgba8::RED)],
-            }),
-        ];
 
-        _ = test_runner
+        assert!(test_runner
             .variables
-            .set(variable_name.clone(), Variable::Mutable(Argument::I64(1)));
-        let mut result = script.run(&mut test_runner, arguments.clone());
+            .set(variable_name.clone(), Variable::Mutable(Argument::I64(1))).is_ok());
+        let mut result = script.run(&mut test_runner);
         assert!(result.is_ok());
         assert_eq!(result.ok(), Some(Argument::Color(Rgba8::WHITE))); // previous FG color
         assert_eq!(test_runner.fg, Rgba8::BLACK);
 
-        _ = test_runner
+        assert!(test_runner
             .variables
-            .set(variable_name.clone(), Variable::Mutable(Argument::I64(0)));
-        result = script.run(&mut test_runner, arguments);
+            .set(variable_name.clone(), Variable::Mutable(Argument::I64(0))).is_ok());
+        result = script.run(&mut test_runner);
         assert!(result.is_ok());
         assert_eq!(result.ok(), Some(Argument::Color(Rgba8::BLACK))); // previous BG color
         assert_eq!(test_runner.bg, Rgba8::RED);
@@ -1231,7 +1146,7 @@ mod test {
         };
         let mut test_runner = TestRunner::new();
 
-        let mut result = script.run(&mut test_runner, vec![]);
+        let mut result = script.run(&mut test_runner);
         assert!(result.is_ok());
         assert_eq!(result.ok(), Some(Argument::Null)); // variable wasn't anything previously
 
@@ -1243,7 +1158,7 @@ mod test {
                 Argument::Color(Rgba8::BLACK),
             ],
         };
-        result = script.run(&mut test_runner, vec![]);
+        result = script.run(&mut test_runner);
         assert!(result.is_ok());
         assert_eq!(result.ok(), Some(Argument::Color(Rgba8::WHITE))); // previous value of FG
         assert_eq!(test_runner.fg, Rgba8::BLUE);
@@ -1282,7 +1197,7 @@ mod test {
         };
         let mut test_runner = TestRunner::new();
 
-        let mut result = script.run(&mut test_runner, vec![]);
+        let mut result = script.run(&mut test_runner);
         assert!(result.is_ok());
         assert_eq!(result.ok(), Some(Argument::Null)); // variable wasn't anything previously
 
@@ -1294,7 +1209,7 @@ mod test {
                 Argument::Color(Rgba8::BLACK),
             ],
         };
-        result = script.run(&mut test_runner, vec![]);
+        result = script.run(&mut test_runner);
         assert!(result.is_ok());
         assert_eq!(result.ok(), Some(Argument::Color(Rgba8::BLACK)));
 
@@ -1369,7 +1284,7 @@ mod test {
             ],
         };
 
-        let mut result = script.run(&mut test_runner, vec![]);
+        let mut result = script.run(&mut test_runner);
         assert!(result.is_ok());
         assert_eq!(
             result.ok(),
@@ -1611,8 +1526,8 @@ mod test {
     }
 
     #[test]
-    fn test_variables_set_cannot_overwrite_builtins() {
-        let mut variables = Variables::with_builtins();
+    fn test_variables_set_cannot_overwrite_built_ins() {
+        let mut variables = Variables::with_built_ins();
         assert_eq!(
             variables.set(
                 "if".to_string(),
@@ -1788,11 +1703,11 @@ mod test {
                 &mut color,
                 &palette,
                 Argument::Script(Script {
-                    command: Command::Root,
+                    command: Command::ForegroundColor,
                     arguments: vec![]
                 })
             ),
-            Err("invalid argument to get_or_set_color: {command: `:`, arguments: []}".to_string())
+            Err("invalid argument to get_or_set_color: {command: `fg`, arguments: []}".to_string())
         );
         assert_eq!(color, initial_color);
 
