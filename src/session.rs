@@ -3130,8 +3130,8 @@ impl Session {
         }
     }
 
-    fn begin_script_command(&mut self, command: Command) {}
-    fn end_script_command(&mut self, command: Command) {}
+    fn begin_script_command(&mut self, _command: Command) {}
+    fn end_script_command(&mut self, _command: Command) {}
 
     fn script_evaluate(
         &mut self,

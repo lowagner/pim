@@ -419,7 +419,7 @@ macro_rules! script_runner {
 
                         let mut color = self.fg; // default to foreground color
                         let color_arg = self.script_evaluate(&script_stack, Evaluate::Index(2))?;
-                        let color_result = get_or_set_color(&mut color, &self.palette, color_arg);
+                        _ = get_or_set_color(&mut color, &self.palette, color_arg)?;
 
                         self.script_paint(x, y, color)
                     }
@@ -1069,7 +1069,7 @@ mod test {
             ],
         };
         let checkerboard = "checkerboard".to_string();
-        test_runner.variables.set(
+        _ = test_runner.variables.set(
             checkerboard.clone(),
             Variable::Const(Argument::Script(function)),
         );
@@ -1141,7 +1141,7 @@ mod test {
             }),
         ];
 
-        test_runner
+        _ = test_runner
             .variables
             .set(variable_name.clone(), Variable::Mutable(Argument::I64(1)));
         let mut result = script.run(&mut test_runner, arguments.clone());
@@ -1149,7 +1149,7 @@ mod test {
         assert_eq!(result.ok(), Some(Argument::Color(Rgba8::WHITE))); // previous FG color
         assert_eq!(test_runner.fg, Rgba8::BLACK);
 
-        test_runner
+        _ = test_runner
             .variables
             .set(variable_name.clone(), Variable::Mutable(Argument::I64(0)));
         result = script.run(&mut test_runner, arguments);
@@ -1292,38 +1292,44 @@ mod test {
         let function1 = "dot5".to_string();
         let function2 = "paint5".to_string();
         let mut test_runner = TestRunner::new();
-        test_runner.variables.set(
-            function1.clone(),
-            Variable::Const(Argument::Script(Script {
-                command: Command::Evaluate(function2.to_string()),
-                arguments: vec![
-                    Argument::Use(Use {
-                        index: 2,
-                        lookback: -1,
-                    }),
-                    Argument::Use(Use {
-                        index: 0,
-                        lookback: -1,
-                    }),
-                ],
-            })),
+        assert_eq!(
+            test_runner.variables.set(
+                function1.clone(),
+                Variable::Const(Argument::Script(Script {
+                    command: Command::Evaluate(function2.to_string()),
+                    arguments: vec![
+                        Argument::Use(Use {
+                            index: 2,
+                            lookback: -1,
+                        }),
+                        Argument::Use(Use {
+                            index: 0,
+                            lookback: -1,
+                        }),
+                    ],
+                })),
+            ),
+            Ok(Argument::Null)
         );
-        test_runner.variables.set(
-            function2.clone(),
-            Variable::Const(Argument::Script(Script {
-                command: Command::Paint,
-                arguments: vec![
-                    Argument::Use(Use {
-                        index: 0,
-                        lookback: -1,
-                    }),
-                    Argument::Use(Use {
-                        index: 1,
-                        lookback: -1,
-                    }),
-                    Argument::I64(5),
-                ],
-            })),
+        assert_eq!(
+            test_runner.variables.set(
+                function2.clone(),
+                Variable::Const(Argument::Script(Script {
+                    command: Command::Paint,
+                    arguments: vec![
+                        Argument::Use(Use {
+                            index: 0,
+                            lookback: -1,
+                        }),
+                        Argument::Use(Use {
+                            index: 1,
+                            lookback: -1,
+                        }),
+                        Argument::I64(5),
+                    ],
+                })),
+            ),
+            Ok(Argument::Null)
         );
         let script = Script {
             command: Command::Evaluate(function1.clone()),
@@ -1540,9 +1546,12 @@ mod test {
             Variable::Alias(alias_value.clone())
         );
         let mut aliased_value = Argument::String("hello".to_string());
-        variables.set(
-            alias_value.clone(),
-            Variable::Mutable(aliased_value.clone()),
+        assert_eq!(
+            variables.set(
+                alias_value.clone(),
+                Variable::Mutable(aliased_value.clone()),
+            ),
+            Ok(Argument::Null)
         );
         assert_eq!(variables.get(alias_name.clone()), aliased_value.clone());
 
@@ -1562,9 +1571,12 @@ mod test {
         assert_eq!(variables.get(alias_name.clone()), aliased_value.clone());
         // But we can modify the underlying value:
         aliased_value = Argument::I64(8675309);
-        variables.set(
-            alias_value.clone(),
-            Variable::Mutable(aliased_value.clone()),
+        assert_eq!(
+            variables.set(
+                alias_value.clone(),
+                Variable::Mutable(aliased_value.clone()),
+            ),
+            Ok(Argument::String("hello".to_string()))
         );
         assert_eq!(variables.get(alias_name), aliased_value);
     }
@@ -1750,7 +1762,10 @@ mod test {
         assert_eq!(Command::from_str("bg"), Ok(Command::BackgroundColor));
         assert_eq!(Command::from_str("paint"), Ok(Command::Paint));
         assert_eq!(Command::from_str("quit"), Ok(Command::Quit));
-        assert_eq!(Command::from_str("gnarly345"), Ok(Command::Evaluate("gnarly345".to_string())));
+        assert_eq!(
+            Command::from_str("gnarly345"),
+            Ok(Command::Evaluate("gnarly345".to_string()))
+        );
         assert_eq!(Command::from_str(""), Err(EmptyCommandParseError));
     }
 }
