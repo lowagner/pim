@@ -75,7 +75,6 @@ pub mod cursors {
             (Mode::Help, Tool::Pan(_)) => {}
             (Mode::Help, Tool::Brush) => {}
             (Mode::Help, _) => return None,
-            (Mode::Present, _) => return None,
             _ => {}
         }
         let cursor = match t {

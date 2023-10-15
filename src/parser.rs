@@ -356,7 +356,6 @@ impl Parse for Mode {
                     "command" => Ok((Mode::Command, p)),
                     "normal" => Ok((Mode::Normal, p)),
                     "visual" => Ok((Mode::Visual(VisualState::default()), p)),
-                    "present" => Ok((Mode::Present, p)),
                     mode => Err((
                         memoir::result::Error::new(format!("unknown mode: {}", mode)),
                         input,

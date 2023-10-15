@@ -12,8 +12,8 @@ use crate::hashmap;
 use crate::palette::*;
 use crate::platform::{self, InputState, Key, KeyboardInput, LogicalSize, ModifiersState};
 use crate::script::{
-    self, evaluate, get_coordinate, get_or_set_color, Argument, ArgumentResult, Command, Evaluate,
-    Script, ScriptRunner, Variables,
+    self, evaluate, get_or_set_color, Argument, ArgumentResult, Command, Evaluate, Script,
+    ScriptRunner, StringResult, Variables,
 };
 use crate::script_runner;
 use crate::util;
@@ -43,6 +43,7 @@ use std::io::Write;
 
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 use std::time;
 
 /// Settings help string.
@@ -78,13 +79,11 @@ pub enum Mode {
     /// Allows the user to paint pixels.
     #[default]
     Normal,
+    // TODO: rename to "Selection" mode
     /// Allows pixels to be selected, copied and manipulated visually.
     Visual(VisualState),
     /// Allows commands to be run.
     Command,
-    /// Used to present work.
-    #[allow(dead_code)]
-    Present,
     /// Activated with the `:help` command.
     Help,
 }
@@ -97,8 +96,24 @@ impl fmt::Display for Mode {
             Self::Visual(VisualState::Selecting { .. }) => "visual".fmt(f),
             Self::Visual(VisualState::Pasting) => "visual (pasting)".fmt(f),
             Self::Command => "command".fmt(f),
-            Self::Present => "present".fmt(f),
             Self::Help => "help".fmt(f),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct ModeParseError;
+
+impl FromStr for Mode {
+    type Err = ModeParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.trim() {
+            "normal" => Ok(Mode::Normal),
+            "visual" => Ok(Mode::Visual(VisualState::default())),
+            "command" => Ok(Mode::Command),
+            "help" => Ok(Mode::Help),
+            name => Err(ModeParseError),
         }
     }
 }
@@ -1927,7 +1942,7 @@ impl Session {
                                 self.center_selection(self.cursor);
                                 self.command(Cmd::SelectionPaste);
                             }
-                            Mode::Present | Mode::Help => {}
+                            Mode::Help => {}
                         }
                     } else {
                         self.activate(id);
@@ -3148,6 +3163,17 @@ impl Session {
         // TODO: there's probably something better to return here, e.g., the pixel
         // color that was under the cursor.
         Ok(Argument::Color(color))
+    }
+
+    fn get_or_set_mode(&mut self, mode_string: String) -> StringResult {
+        let old_mode = self.mode.to_string();
+        if mode_string.is_empty() {
+            return Ok(old_mode);
+        }
+        let mode =
+            Mode::from_str(&mode_string).map_err(|_| format!("invalid mode: `{}`", mode_string))?;
+        self.switch_mode(mode);
+        Ok(old_mode)
     }
 
     pub fn script_quit(&mut self) {

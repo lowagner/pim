@@ -119,7 +119,8 @@ pub enum Command {
     Paint,
 
     // TODO: Shift: moves the animation over one to start one frame down
-    // TODO: maybe a `Lookup` command.
+    /// Returns the current mode, changing it to what's in $0 if present and valid.
+    Mode,
     Quit,
 }
 
@@ -137,6 +138,7 @@ impl fmt::Display for Command {
             Command::ForegroundColor => write!(f, "fg"),
             Command::BackgroundColor => write!(f, "bg"),
             Command::Paint => write!(f, "paint"),
+            Command::Mode => write!(f, "mode"),
             Command::Quit => write!(f, "quit"),
         }
     }
@@ -160,6 +162,7 @@ impl FromStr for Command {
             "fg" => Ok(Command::ForegroundColor),
             "bg" => Ok(Command::BackgroundColor),
             "paint" => Ok(Command::Paint),
+            "mode" => Ok(Command::Mode),
             "quit" => Ok(Command::Quit),
             name => {
                 if name.len() > 0 {
@@ -256,21 +259,22 @@ impl Argument {
         match self {
             Argument::Null => Ok(0),
             Argument::I64(value) => return Ok(*value),
-            result => return Err(format!("invalid {}: {}", what_for, result)),
+            result => return Err(format!("invalid i64 {}: {}", what_for, result)),
+        }
+    }
+
+    pub fn get_string(&self, what_for: &str) -> StringResult {
+        // TODO: add parsing for other things.
+        match self {
+            Argument::Null => Ok("".to_string()),
+            Argument::String(value) => return Ok(value.clone()),
+            result => return Err(format!("invalid string {}: {}", what_for, result)),
         }
     }
 }
 
 pub type I64Result = Result<i64, String>;
-
-/// Gets a coordinate (e.g., x or y, but not both) from an argument.
-/// Only I64 types are valid currently.
-pub fn get_coordinate(coordinate_result: ArgumentResult) -> I64Result {
-    if coordinate_result.is_err() {
-        return Err(coordinate_result.unwrap_err());
-    }
-    return coordinate_result.unwrap().get_i64("coordinate");
-}
+pub type StringResult = Result<String, String>;
 
 impl fmt::Display for Argument {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -337,13 +341,13 @@ macro_rules! script_runner {
                     Command::Even => {
                         let value = self
                             .script_evaluate(&script_stack, Evaluate::Index(0))?
-                            .get_i64("i64 for even")?;
+                            .get_i64("for even")?;
                         Ok(Argument::I64(if value % 2 == 0 { 1 } else { 0 }))
                     }
                     Command::Odd => {
                         let value = self
                             .script_evaluate(&script_stack, Evaluate::Index(0))?
-                            .get_i64("i64 for odd")?;
+                            .get_i64("for odd")?;
                         Ok(Argument::I64(if value % 2 == 1 { 1 } else { 0 }))
                     }
                     Command::Sum => {
@@ -356,7 +360,7 @@ macro_rules! script_runner {
                                 for index in 1..argument_count {
                                     sum += self
                                         .script_evaluate(&script_stack, Evaluate::Index(index))?
-                                        .get_i64("i64 for sum")?;
+                                        .get_i64("for sum")?;
                                 }
                                 Ok(Argument::I64(sum))
                             }
@@ -389,18 +393,24 @@ macro_rules! script_runner {
                         get_or_set_color(&mut self.bg, &self.palette, color_arg)
                     }
                     Command::Paint => {
-                        let x = get_coordinate(
-                            self.script_evaluate(&script_stack, Evaluate::Index(0)),
-                        )?;
-                        let y = get_coordinate(
-                            self.script_evaluate(&script_stack, Evaluate::Index(1)),
-                        )?;
+                        let x = self
+                            .script_evaluate(&script_stack, Evaluate::Index(0))?
+                            .get_i64("for coordinate")?;
+                        let y = self
+                            .script_evaluate(&script_stack, Evaluate::Index(1))?
+                            .get_i64("for coordinate")?;
 
                         let mut color = self.fg; // default to foreground color
                         let color_arg = self.script_evaluate(&script_stack, Evaluate::Index(2))?;
                         _ = get_or_set_color(&mut color, &self.palette, color_arg)?;
 
                         self.script_paint(x, y, color)
+                    }
+                    Command::Mode => {
+                        let mode = self
+                            .script_evaluate(&script_stack, Evaluate::Index(0))?
+                            .get_string("for mode")?;
+                        Ok(Argument::String(self.get_or_set_mode(mode)?))
                     }
                     Command::Quit => {
                         self.script_quit();
@@ -577,6 +587,7 @@ impl Variables {
         variables.set("fg".to_string(), Variable::BuiltIn);
         variables.set("bg".to_string(), Variable::BuiltIn);
         variables.set("paint".to_string(), Variable::BuiltIn);
+        variables.set("mode".to_string(), Variable::BuiltIn);
         variables.set("quit".to_string(), Variable::BuiltIn);
         variables.set("?".to_string(), Variable::BuiltIn);
         variables.set("run".to_string(), Variable::BuiltIn);
@@ -638,8 +649,12 @@ impl Variables {
                     }
                 }
                 Variable::Alias(_) => return Err(format!("alias `{}` is not reassignable", name)),
-                Variable::Const(_) => return Err(format!("variable `{}` is not reassignable", name)),
-                Variable::BuiltIn => return Err(format!("built-in `{}` is not reassignable", name)),
+                Variable::Const(_) => {
+                    return Err(format!("variable `{}` is not reassignable", name))
+                }
+                Variable::BuiltIn => {
+                    return Err(format!("built-in `{}` is not reassignable", name))
+                }
             },
         }
         // TODO: optimization for aliases of aliases, we could drill down since aliases
@@ -835,6 +850,11 @@ mod test {
             // NOTE! It is not required to return this color, you could do
             // something fancier (e.g., return the color that was under the cursor).
             Ok(Argument::Color(color))
+        }
+
+        fn get_or_set_mode(&mut self, mode: String) -> StringResult {
+            // Actually switch modes
+            Ok(mode)
         }
 
         fn script_quit(&mut self) {
@@ -1087,7 +1107,8 @@ mod test {
 
         assert!(test_runner
             .variables
-            .set(variable_name.clone(), Variable::Mutable(Argument::I64(1))).is_ok());
+            .set(variable_name.clone(), Variable::Mutable(Argument::I64(1)))
+            .is_ok());
         let mut result = script.run(&mut test_runner);
         assert!(result.is_ok());
         assert_eq!(result.ok(), Some(Argument::Color(Rgba8::WHITE))); // previous FG color
@@ -1095,7 +1116,8 @@ mod test {
 
         assert!(test_runner
             .variables
-            .set(variable_name.clone(), Variable::Mutable(Argument::I64(0))).is_ok());
+            .set(variable_name.clone(), Variable::Mutable(Argument::I64(0)))
+            .is_ok());
         result = script.run(&mut test_runner);
         assert!(result.is_ok());
         assert_eq!(result.ok(), Some(Argument::Color(Rgba8::BLACK))); // previous BG color
@@ -1529,17 +1551,11 @@ mod test {
     fn test_variables_set_cannot_overwrite_built_ins() {
         let mut variables = Variables::with_built_ins();
         assert_eq!(
-            variables.set(
-                "if".to_string(),
-                Variable::Mutable(Argument::I64(123)),
-            ),
+            variables.set("if".to_string(), Variable::Mutable(Argument::I64(123)),),
             Err("built-in `if` is not reassignable".to_string())
         );
         assert_eq!(
-            variables.set(
-                "fg".to_string(),
-                Variable::Const(Argument::I64(123)),
-            ),
+            variables.set("fg".to_string(), Variable::Const(Argument::I64(123)),),
             Err("built-in `fg` is not reassignable".to_string())
         );
         assert_eq!(
@@ -1550,10 +1566,7 @@ mod test {
             Err("built-in `paint` is not reassignable".to_string())
         );
         assert_eq!(
-            variables.set(
-                "const".to_string(),
-                Variable::BuiltIn,
-            ),
+            variables.set("const".to_string(), Variable::BuiltIn,),
             Err("built-in `const` is not reassignable".to_string())
         );
     }
