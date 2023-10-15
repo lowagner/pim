@@ -12,7 +12,7 @@ use crate::hashmap;
 use crate::palette::*;
 use crate::platform::{self, InputState, Key, KeyboardInput, LogicalSize, ModifiersState};
 use crate::script::{
-    self, evaluate, get_or_set_color, Argument, ArgumentResult, Command, Evaluate, Script,
+    self, evaluate, get_or_set_color, Argument, ArgumentResult, Command, Evaluate, Quit, Script,
     ScriptRunner, StringResult, Variables,
 };
 use crate::script_runner;
@@ -3176,8 +3176,18 @@ impl Session {
         Ok(old_mode)
     }
 
-    pub fn script_quit(&mut self) {
-        self.quit_view_safe(self.views.active_id);
+    pub fn script_quit(&mut self, quit: Quit) {
+        match quit {
+            Quit::Safe => self.quit_view_safe(self.views.active_id),
+            Quit::AllSafe => {
+                let ids: Vec<ViewId> = self.views.ids().collect();
+                for id in ids {
+                    self.quit_view_safe(id);
+                }
+            }
+            Quit::Forced => self.quit_view(self.views.active_id),
+            Quit::AllForced => self.quit(ExitReason::Normal),
+        }
     }
 }
 

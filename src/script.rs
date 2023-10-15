@@ -121,7 +121,21 @@ pub enum Command {
     // TODO: Shift: moves the animation over one to start one frame down
     /// Returns the current mode, changing it to what's in $0 if present and valid.
     Mode,
-    Quit,
+
+    /// Versions of quit, see enum `Quit`.
+    Quit(Quit),
+}
+
+#[derive(PartialEq, Debug, Clone, Copy)]
+pub enum Quit {
+    /// The default, Quit::Safe, via `quit` or `q`, quits this view if saved.
+    Safe,
+    /// Quit all views, via `qa`, if safe to do so (work is saved).
+    AllSafe,
+    /// Force quit this view, via `q!`.
+    Forced,
+    /// Force quit all views, via `qa!`.
+    AllForced,
 }
 
 impl fmt::Display for Command {
@@ -139,7 +153,10 @@ impl fmt::Display for Command {
             Command::BackgroundColor => write!(f, "bg"),
             Command::Paint => write!(f, "paint"),
             Command::Mode => write!(f, "mode"),
-            Command::Quit => write!(f, "quit"),
+            Command::Quit(Quit::Safe) => write!(f, "q"),
+            Command::Quit(Quit::AllSafe) => write!(f, "qa"),
+            Command::Quit(Quit::Forced) => write!(f, "q!"),
+            Command::Quit(Quit::AllForced) => write!(f, "qa!"),
         }
     }
 }
@@ -163,7 +180,10 @@ impl FromStr for Command {
             "bg" => Ok(Command::BackgroundColor),
             "paint" => Ok(Command::Paint),
             "mode" => Ok(Command::Mode),
-            "quit" => Ok(Command::Quit),
+            "q" => Ok(Command::Quit(Quit::Safe)),
+            "qa" => Ok(Command::Quit(Quit::AllSafe)),
+            "q!" => Ok(Command::Quit(Quit::Forced)),
+            "qa!" => Ok(Command::Quit(Quit::AllForced)),
             name => {
                 if name.len() > 0 {
                     Ok(Command::Evaluate(name.to_string()))
@@ -412,8 +432,8 @@ macro_rules! script_runner {
                             .get_string("for mode")?;
                         Ok(Argument::String(self.get_or_set_mode(mode)?))
                     }
-                    Command::Quit => {
-                        self.script_quit();
+                    Command::Quit(q) => {
+                        self.script_quit(q);
                         Ok(Argument::Null)
                     }
                 };
@@ -592,7 +612,7 @@ impl Variables {
         variables.set("?".to_string(), Variable::BuiltIn);
         variables.set("run".to_string(), Variable::BuiltIn);
 
-        variables.set("q".to_string(), Variable::Alias("quit".to_string()));
+        variables.set("quit".to_string(), Variable::Alias("q".to_string()));
         variables
     }
 
@@ -717,7 +737,7 @@ mod test {
         // non-value arguments; these need further evaluation to be used:
         assert_eq!(
             Argument::Script(Script {
-                command: Command::Quit,
+                command: Command::Quit(Quit::Forced),
                 arguments: vec![]
             })
             .is_value(),
@@ -857,7 +877,7 @@ mod test {
             Ok(mode)
         }
 
-        fn script_quit(&mut self) {
+        fn script_quit(&mut self, _quit: Quit) {
             // Actually quit
         }
     }
@@ -865,7 +885,7 @@ mod test {
     #[test]
     fn test_script_run_ok() {
         let script = Script {
-            command: Command::Quit,
+            command: Command::Quit(Quit::Safe),
             arguments: Vec::new(),
         };
 
@@ -874,7 +894,10 @@ mod test {
 
         assert_eq!(
             test_runner.test_what_ran,
-            Vec::from([WhatRan::Begin(Command::Quit), WhatRan::End(Command::Quit),])
+            Vec::from([
+                WhatRan::Begin(Command::Quit(Quit::Safe)),
+                WhatRan::End(Command::Quit(Quit::Safe)),
+            ])
         );
         assert!(result.is_ok());
     }
@@ -1751,7 +1774,10 @@ mod test {
         assert_eq!(Command::from_str("fg"), Ok(Command::ForegroundColor));
         assert_eq!(Command::from_str("bg"), Ok(Command::BackgroundColor));
         assert_eq!(Command::from_str("paint"), Ok(Command::Paint));
-        assert_eq!(Command::from_str("quit"), Ok(Command::Quit));
+        assert_eq!(Command::from_str("q"), Ok(Command::Quit(Quit::Safe)));
+        assert_eq!(Command::from_str("qa"), Ok(Command::Quit(Quit::AllSafe)));
+        assert_eq!(Command::from_str("q!"), Ok(Command::Quit(Quit::Forced)));
+        assert_eq!(Command::from_str("qa!"), Ok(Command::Quit(Quit::AllForced)));
         assert_eq!(
             Command::from_str("gnarly345"),
             Ok(Command::Evaluate("gnarly345".to_string()))
