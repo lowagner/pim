@@ -202,11 +202,24 @@ pub struct Script {
 }
 
 impl Script {
-    fn run(&self, runner: &mut dyn ScriptRunner) -> ArgumentResult {
-        runner.run(vec![self])
+    pub fn zero_arg(command: Command) -> Self {
+        Script {
+            command,
+            arguments: vec![],
+        }
     }
 
-    // TODO: add method to print Script back as a command sequence
+    pub fn run(&self, runner: &mut dyn ScriptRunner) -> ArgumentResult {
+        runner.run(vec![self])
+    }
+}
+
+fn serialize_script(script: &Script, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    write!(f, "{}", script.command)?;
+    for a in &script.arguments {
+        write!(f, " {}", Serialize::Argument(&a))?;
+    }
+    fmt::Result::Ok(())
 }
 
 pub type Arguments = Vec<Argument>;
@@ -278,8 +291,8 @@ impl Argument {
         // TODO: add parsing for strings, etc.
         match self {
             Argument::Null => Ok(0),
-            Argument::I64(value) => return Ok(*value),
-            result => return Err(format!("invalid i64 {}: {}", what_for, result)),
+            Argument::I64(value) => Ok(*value),
+            result => Err(format!("invalid i64 {}: {}", what_for, result)),
         }
     }
 
@@ -287,23 +300,33 @@ impl Argument {
         // TODO: add parsing for other things.
         match self {
             Argument::Null => Ok("".to_string()),
-            Argument::String(value) => return Ok(value.clone()),
-            result => return Err(format!("invalid string {}: {}", what_for, result)),
+            Argument::String(value) => Ok(value.clone()),
+            result => Err(format!("invalid string {}: {}", what_for, result)),
+        }
+    }
+
+    pub fn get_script(&self, what_for: &str) -> ScriptResult {
+        // TODO: theoretically we can create everyone as a script if
+        // we have an identity command (e.g., `identity $0` resolves to $0).
+        match self {
+            Argument::Script(value) => Ok(value.clone()),
+            result => Err(format!("invalid script {}: {}", what_for, result)),
         }
     }
 }
 
 pub type I64Result = Result<i64, String>;
 pub type StringResult = Result<String, String>;
+pub type ScriptResult = Result<Script, String>;
 
 impl fmt::Display for Argument {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Null => write!(f, "null"),
-            Self::I64(value) => write!(f, "{}", *value),
-            Self::Color(value) => write!(f, "{}", *value),
-            Self::String(value) => write!(f, "'{}'", *value),
-            Self::Script(script) => {
+            Argument::Null => write!(f, "null"),
+            Argument::I64(value) => write!(f, "{}", *value),
+            Argument::Color(value) => write!(f, "{}", *value),
+            Argument::String(value) => write!(f, "'{}'", *value),
+            Argument::Script(script) => {
                 let mut check = write!(f, "{{command: `{}`, arguments: [", script.command);
                 if check.is_err() {
                     return check;
@@ -316,7 +339,41 @@ impl fmt::Display for Argument {
                 }
                 write!(f, "]}}")
             }
-            Self::Use(use_argument) => write!(f, "${}", use_argument.index),
+            Argument::Use(use_argument) => write!(f, "${}", use_argument.index),
+        }
+    }
+}
+
+fn serialize_argument(argument: &Argument, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    match argument {
+        Argument::Null => write!(f, "null"),
+        Argument::I64(value) => write!(f, "{}", *value),
+        Argument::Color(value) => write!(f, "{}", *value),
+        Argument::String(value) => write!(f, "'{}'", *value),
+        Argument::Script(script) if script.arguments.len() == 0 => {
+            write!(f, "{}", script.command)
+        }
+        Argument::Script(script) => {
+            write!(f, "({})", Serialize::Script(&script))
+        }
+        // TODO: consider adding lookback here (${}{}), since lookback is negative.
+        //      i think we'll be ok because we implement the parser ourselves and
+        //      we always decrement lookback when going into a new script.
+        //      there shouldn't be any ambiguity if we copy paste the resulting script.
+        Argument::Use(use_argument) => write!(f, "${}", use_argument.index),
+    }
+}
+
+pub enum Serialize<'a> {
+    Argument(&'a Argument),
+    Script(&'a Script),
+}
+
+impl<'a> fmt::Display for Serialize<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Serialize::Argument(argument) => serialize_argument(argument, f),
+            Serialize::Script(script) => serialize_script(script, f),
         }
     }
 }
@@ -574,6 +631,11 @@ pub enum Variable {
     // To look up a variable and remap it:
     Alias(String),
     // Built-in function, e.g., `if`, `fg`, `paint`, etc.:
+    // TODO: add a string that we use for `help` or `?`.  e.g., `help 'if'`
+    //      e.g., `help if` should be ok.
+    //      we probably can parse the future script and see if it has arguments, etc.
+    //      we can access help for them through the variable BuiltIns so that we remember
+    //      to add the built-ins to the variable table.
     BuiltIn,
 }
 
@@ -611,6 +673,18 @@ impl Variables {
         variables.set("quit".to_string(), Variable::BuiltIn);
         variables.set("?".to_string(), Variable::BuiltIn);
         variables.set("run".to_string(), Variable::BuiltIn);
+
+        variables.set("null".to_string(), Variable::Const(Argument::Null));
+        variables.set(
+            "swap".to_string(),
+            Variable::Const(Argument::Script(Script {
+                command: Command::ForegroundColor,
+                arguments: vec![Argument::Script(Script {
+                    command: Command::BackgroundColor,
+                    arguments: vec![Argument::Script(Script::zero_arg(Command::ForegroundColor))],
+                })],
+            })),
+        );
 
         variables.set("quit".to_string(), Variable::Alias("q".to_string()));
         variables
@@ -1783,5 +1857,65 @@ mod test {
             Ok(Command::Evaluate("gnarly345".to_string()))
         );
         assert_eq!(Command::from_str(""), Err(EmptyCommandParseError));
+    }
+
+    #[test]
+    fn test_variables_can_serialize_built_ins() {
+        let variables = Variables::with_built_ins();
+        let swap = variables
+            .get("swap".to_string())
+            .get_script("for test")
+            .unwrap();
+
+        assert_eq!(
+            format!("{}", Serialize::Script(&swap)),
+            "fg (bg fg)".to_string()
+        );
+    }
+
+    #[test]
+    fn test_can_serialize_complicated_function() {
+        let script = Script {
+            command: Command::If,
+            arguments: vec![
+                Argument::Use(Use {
+                    index: 0,
+                    lookback: -1,
+                }),
+                Argument::Script(Script {
+                    command: Command::Paint,
+                    arguments: vec![
+                        Argument::Script(Script::zero_arg(Command::Evaluate("x1".to_string()))),
+                        Argument::Script(Script::zero_arg(Command::Evaluate("y2".to_string()))),
+                        Argument::Use(Use {
+                            index: 1,
+                            lookback: -2,
+                        }),
+                    ],
+                }),
+                Argument::Script(Script {
+                    command: Command::Evaluate("jangles".to_string()),
+                    arguments: vec![
+                        Argument::Script(Script {
+                            command: Command::ForegroundColor,
+                            arguments: vec![Argument::Use(Use {
+                                index: 2,
+                                lookback: -3,
+                            })],
+                        }),
+                        Argument::Script(Script::zero_arg(Command::Quit(Quit::Safe))),
+                        Argument::Use(Use {
+                            index: 3,
+                            lookback: -2,
+                        }),
+                    ],
+                }),
+            ],
+        };
+
+        assert_eq!(
+            format!("{}", Serialize::Script(&script)),
+            "if $0 (paint x1 y2 $1) (jangles (fg $2) q $3)".to_string()
+        );
     }
 }

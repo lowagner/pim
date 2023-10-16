@@ -71,12 +71,7 @@ fn get_argument_parser(lookback: i32) -> Parser<Argument> {
             // This allows things like `bg fg` to switch the background
             // to the foreground color.  E.g., zero-arg functions are
             // typically getters.
-            let zero_arg_script = command().map(|command| {
-                Argument::Script(Script {
-                    command,
-                    arguments: vec![],
-                })
-            });
+            let zero_arg_script = command().map(|c| Argument::Script(Script::zero_arg(c)));
 
             peek(
                 i64_arg
