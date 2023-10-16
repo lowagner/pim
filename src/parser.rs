@@ -389,6 +389,7 @@ pub fn tuple<O>(x: Parser<O>, y: Parser<O>) -> Parser<(O, O)> {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::script::Serialize;
 
     #[test]
     fn test_paths() {
@@ -429,6 +430,7 @@ mod test {
         let p = Script::parser();
 
         let (result, rest) = p.parse("if -3024 'hello' #123456 \"world\"").unwrap();
+
         assert_eq!(rest, "");
         assert_eq!(
             result,
@@ -454,6 +456,7 @@ mod test {
         let p = Script::parser();
 
         let (result, rest) = p.parse("bg").unwrap();
+
         assert_eq!(rest, "");
         assert_eq!(
             result,
@@ -471,6 +474,7 @@ mod test {
         let (result, rest) = p
             .parse("if $10 (hello 'world' (hi 42 \"earth\" $5)) (hey 'moon' -7 $93)")
             .unwrap();
+
         assert_eq!(rest, "");
         assert_eq!(
             result,
@@ -519,6 +523,7 @@ mod test {
         let p = Script::parser();
 
         let (result, rest) = p.parse("fg (bg) -- 123 'do stuff'").unwrap();
+
         assert_eq!(rest, "");
         assert_eq!(
             result,
@@ -537,6 +542,7 @@ mod test {
         let p = Script::parser();
 
         let (result, rest) = p.parse("paint x1 y2 (fg swap3)").unwrap();
+
         assert_eq!(rest, "");
         assert_eq!(
             result,
@@ -568,6 +574,7 @@ mod test {
         let p = Script::parser();
 
         let (result, rest) = p.parse("fg (hello 'world' 123").unwrap();
+
         assert_eq!(rest, "");
         assert_eq!(
             result,
@@ -586,6 +593,7 @@ mod test {
         let p = Script::parser();
 
         let (result, rest) = p.parse("fg (hello 'world' -123 -- comment").unwrap();
+
         assert_eq!(rest, "");
         assert_eq!(
             result,
@@ -597,6 +605,17 @@ mod test {
                 }),],
             }
         );
+    }
+
+    #[test]
+    fn test_script_can_reserialize() {
+        let start = "paint $0 (y2 $1) (if condition (fg $2) (chill (bg $2)))".to_string();
+        let p = Script::parser();
+
+        let (result, rest) = p.parse(&start).unwrap();
+
+        assert_eq!(rest, "");
+        assert_eq!(format!("{}", Serialize::Script(&result)), start);
     }
 
     #[test]
