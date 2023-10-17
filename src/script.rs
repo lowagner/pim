@@ -47,6 +47,9 @@ TODO: make push have an automatic pop at the end of a script runner.
 // Note these are designed to be quickly cloned, so don't put large amounts of data in them.
 #[derive(PartialEq, Debug, Clone)]
 pub enum Command {
+    /// *Does not evaluate* $0, returns info about the script/command instead.
+    Help,
+
     /// Runs $0, returns 0 if truthy, 1 if falsy.
     Not,
     /// Runs $0, checks if it's truthy, then evaluates $1 if so, otherwise $2.
@@ -136,6 +139,51 @@ pub enum Command {
     Quit(Quit),
 }
 
+impl Command {
+    pub fn is_built_in(&self) -> bool {
+        !matches!(self, Self::Evaluate(_))
+    }
+
+    pub fn dynamic(&self) -> Option<String> {
+        match self {
+            Command::Evaluate(string) => Some(string.clone()),
+            _ => None,
+        }
+    }
+}
+
+impl fmt::Display for Command {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Command::Help => write!(f, "?"),
+            Command::Not => write!(f, "not"),
+            Command::If => write!(f, "if"),
+            Command::Even => write!(f, "even"),
+            Command::Odd => write!(f, "odd"),
+            Command::Sum => write!(f, "sum"),
+            Command::Evaluate(value) => write!(f, "{}", value),
+            Command::SetVariable => write!(f, "set"),
+            Command::ConstVariable => write!(f, "const"),
+            Command::CreateAlias => write!(f, "alias"),
+            Command::ForegroundColor => write!(f, "fg"),
+            Command::BackgroundColor => write!(f, "bg"),
+            Command::Paint => write!(f, "paint"),
+            Command::BrushMode(BrushMode::Erase) => write!(f, "b/erase"),
+            Command::BrushMode(BrushMode::Multi) => write!(f, "b/multi"),
+            Command::BrushMode(BrushMode::Perfect) => write!(f, "b/perfect"),
+            Command::BrushMode(BrushMode::XSym) => write!(f, "b/xsym"),
+            Command::BrushMode(BrushMode::YSym) => write!(f, "b/ysym"),
+            Command::BrushMode(BrushMode::XRay) => write!(f, "b/xray"),
+            Command::BrushMode(BrushMode::Line) => write!(f, "b/line"),
+            Command::Mode => write!(f, "mode"),
+            Command::Quit(Quit::Safe) => write!(f, "q"),
+            Command::Quit(Quit::AllSafe) => write!(f, "qa"),
+            Command::Quit(Quit::Forced) => write!(f, "q!"),
+            Command::Quit(Quit::AllForced) => write!(f, "qa!"),
+        }
+    }
+}
+
 // TODO: rename BrushMode to BrushOption
 /// Brush mode. Any number of these modes can be active at once.
 // TODO: update `brush.rs` to these values once `script.rs` takes over `cmd.rs`;\
@@ -170,37 +218,6 @@ pub enum Quit {
     AllForced,
 }
 
-impl fmt::Display for Command {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Command::Not => write!(f, "not"),
-            Command::If => write!(f, "if"),
-            Command::Even => write!(f, "even"),
-            Command::Odd => write!(f, "odd"),
-            Command::Sum => write!(f, "sum"),
-            Command::Evaluate(value) => write!(f, "{}", value),
-            Command::SetVariable => write!(f, "set"),
-            Command::ConstVariable => write!(f, "const"),
-            Command::CreateAlias => write!(f, "alias"),
-            Command::ForegroundColor => write!(f, "fg"),
-            Command::BackgroundColor => write!(f, "bg"),
-            Command::Paint => write!(f, "paint"),
-            Command::BrushMode(BrushMode::Erase) => write!(f, "b/erase"),
-            Command::BrushMode(BrushMode::Multi) => write!(f, "b/multi"),
-            Command::BrushMode(BrushMode::Perfect) => write!(f, "b/perfect"),
-            Command::BrushMode(BrushMode::XSym) => write!(f, "b/xsym"),
-            Command::BrushMode(BrushMode::YSym) => write!(f, "b/ysym"),
-            Command::BrushMode(BrushMode::XRay) => write!(f, "b/xray"),
-            Command::BrushMode(BrushMode::Line) => write!(f, "b/line"),
-            Command::Mode => write!(f, "mode"),
-            Command::Quit(Quit::Safe) => write!(f, "q"),
-            Command::Quit(Quit::AllSafe) => write!(f, "qa"),
-            Command::Quit(Quit::Forced) => write!(f, "q!"),
-            Command::Quit(Quit::AllForced) => write!(f, "qa!"),
-        }
-    }
-}
-
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct EmptyCommandParseError;
 
@@ -209,6 +226,7 @@ impl FromStr for Command {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.trim() {
+            "?" => Ok(Command::Help),
             "not" => Ok(Command::Not),
             "if" => Ok(Command::If),
             "even" => Ok(Command::Even),
@@ -280,7 +298,6 @@ pub enum Argument {
 
     // TODO: for Scale, use an I64 with the number of pixels desired in the X/Y direction.
     // E.g., we can have PixelsX/PixelsY or width/height
-    // TODO: convert "true"/"false" to 1/0 in an I64.
     I64(i64),
     Color(Rgba8),
     String(String),
@@ -474,6 +491,44 @@ macro_rules! script_runner {
                 let command = script.command.clone();
                 self.begin_script_command(command.clone());
                 let result = match command.clone() {
+                    Command::Help => {
+                        if script.arguments.len() != 1 {
+                            self.message(self.variables.describe(Command::Help), MessageType::Info);
+                        } else {
+                            match &script.arguments[0] {
+                                Argument::Script(nested_script) => {
+                                    if nested_script.arguments.len() == 0 {
+                                        self.message(
+                                            self.variables.describe(nested_script.command.clone()),
+                                            MessageType::Info,
+                                        );
+                                    } else {
+                                        self.message(
+                                            format!(
+                                                "({}) -- a script",
+                                                Serialize::Script(nested_script)
+                                            ),
+                                            MessageType::Info,
+                                        );
+                                    }
+                                }
+                                Argument::Use(use_arg) => self.message(
+                                    format!(
+                                        "-- a way to evaluate an argument at position {}; \
+                                        e.g., `const 'ten' (sum $0 10)` will add 10 to argument 0, \
+                                        and can be called via `ten 123` which will return `133`",
+                                        use_arg.index
+                                    ),
+                                    MessageType::Info,
+                                ),
+                                a => self.message(
+                                    format!("{} -- an argument", Serialize::Argument(a)),
+                                    MessageType::Info,
+                                ),
+                            }
+                        }
+                        Ok(Argument::Null)
+                    }
                     Command::Not => {
                         let value = self.script_evaluate(&script_stack, Evaluate::Index(0))?;
                         Ok(Argument::I64(if value.is_truthy() { 0 } else { 1 }))
@@ -676,6 +731,8 @@ pub fn evaluate(
                 return runner.run(new_stack);
             }
             Argument::Use(use_argument) => {
+                // TODO: if lookback >= 0 return an Err.
+                // this can happen if we parse a script that's self referential `do stuff $0 $1`
                 assert!(use_argument.lookback < 0);
                 let subtract: usize = -use_argument.lookback as usize;
                 script_index -= subtract;
@@ -737,6 +794,17 @@ impl Variables {
         );
     }
 
+    pub fn describe(&self, command: Command) -> String {
+        let name = format!("{}", command);
+        match &self.map.get(&name) {
+            None => format!("{} is unknown", name),
+            Some(Variable::BuiltIn(description)) => format!("-- {}", description),
+            Some(Variable::Mutable(a)) => format!("{} -- mutable", Serialize::Argument(a)),
+            Some(Variable::Const(a)) => format!("{} -- const", Serialize::Argument(a)),
+            Some(Variable::Alias(a)) => format!("-- alias of {}", a),
+        }
+    }
+
     pub fn with_built_ins() -> Self {
         let mut variables = Variables::new();
 
@@ -767,13 +835,13 @@ impl Variables {
         );
         variables.add_built_in(
             Command::SetVariable,
-            "creates/updates a mutable variable with name $0 to value $1, \
-            e.g., `set 'paint5' (paint $0 $1 5)`",
+            "creates/updates a mutable variable with name $0 to the value of $1, unevaluated, \
+            e.g., `set 'paint5' (paint $0 $1 5)` to create a lambda",
         );
         variables.add_built_in(
             Command::ConstVariable,
-            "creates an immutable variable with name $0 and value $1, \
-            e.g., `const 'greet' (echo 'hello, world')`",
+            "creates an immutable variable with name $0 and value $1, unevaluated, \
+            e.g., `const 'greet' (echo 'hello, world')` to create a lambda",
         );
         variables.add_built_in(
             Command::CreateAlias,
@@ -851,7 +919,11 @@ impl Variables {
             Command::Quit(Quit::AllForced),
             "quits all views even if they haven't been saved",
         );
-        variables.set("?".to_string(), Variable::BuiltIn("TODO".to_string()));
+        variables.add_built_in(
+            Command::Help,
+            "explains what $0 does without evaluating it, \
+            e.g., `? paint` to explain what the `paint` command does",
+        );
         variables.set("run".to_string(), Variable::BuiltIn("TODO".to_string()));
 
         variables.set("null".to_string(), Variable::Const(Argument::Null));
@@ -1675,6 +1747,152 @@ mod test {
     }
 
     #[test]
+    fn test_script_help_is_great() {
+        let mut test_runner = TestRunner::new();
+
+        let result = Script {
+            command: Command::Help,
+            arguments: vec![],
+        }
+        .run(&mut test_runner);
+        assert_eq!(
+            test_runner.message,
+            Message {
+                string: "-- explains what $0 does without evaluating it, \
+                        e.g., `? paint` to explain what the `paint` command does"
+                    .to_string(),
+                message_type: MessageType::Info,
+            }
+        );
+        assert_eq!(result, Ok(Argument::Null));
+
+        let result = Script {
+            command: Command::Help,
+            arguments: vec![Argument::Script(Script::zero_arg(Command::If))],
+        }
+        .run(&mut test_runner);
+        assert_eq!(
+            test_runner.message,
+            Message {
+                string: "-- if $0 evaluates to truthy, evaluates $1, otherwise $2, \
+                        e.g., `if 'hi' 'world' 3` returns 'world'"
+                    .to_string(),
+                message_type: MessageType::Info,
+            }
+        );
+        assert_eq!(result, Ok(Argument::Null));
+
+        let result = Script {
+            command: Command::Help,
+            arguments: vec![Argument::Use(Use {
+                index: 3,
+                lookback: 0,
+            })],
+        }
+        .run(&mut test_runner);
+        assert_eq!(
+            test_runner.message,
+            Message {
+                string: "-- a way to evaluate an argument at position 3; \
+                        e.g., `const 'ten' (sum $0 10)` will add 10 to argument 0, \
+                        and can be called via `ten 123` which will return `133`"
+                    .to_string(),
+                message_type: MessageType::Info,
+            }
+        );
+        assert_eq!(result, Ok(Argument::Null));
+
+        let result = Script {
+            command: Command::Help,
+            arguments: vec![Argument::String("blah".to_string())],
+        }
+        .run(&mut test_runner);
+        assert_eq!(
+            test_runner.message,
+            Message {
+                string: "'blah' -- an argument".to_string(),
+                message_type: MessageType::Info,
+            }
+        );
+        assert_eq!(result, Ok(Argument::Null));
+
+        let result = Script {
+            command: Command::Help,
+            arguments: vec![Argument::Script(Script {
+                command: Command::If,
+                arguments: vec![Argument::I64(2)],
+            })],
+        }
+        .run(&mut test_runner);
+        assert_eq!(
+            test_runner.message,
+            Message {
+                string: "(if 2) -- a script".to_string(),
+                message_type: MessageType::Info,
+            }
+        );
+        assert_eq!(result, Ok(Argument::Null));
+    }
+
+    #[test]
+    fn test_variables_set_cannot_overwrite_built_ins() {
+        let mut variables = Variables::with_built_ins();
+        assert_eq!(
+            variables.set("if".to_string(), Variable::Mutable(Argument::I64(123)),),
+            Err("built-in `if` is not reassignable".to_string())
+        );
+        assert_eq!(
+            variables.set("fg".to_string(), Variable::Const(Argument::I64(123)),),
+            Err("built-in `fg` is not reassignable".to_string())
+        );
+        assert_eq!(
+            variables.set(
+                "paint".to_string(),
+                Variable::Alias("super-paint".to_string()),
+            ),
+            Err("built-in `paint` is not reassignable".to_string())
+        );
+        assert_eq!(
+            variables.set(
+                "const".to_string(),
+                Variable::BuiltIn("try to override".to_string())
+            ),
+            Err("built-in `const` is not reassignable".to_string())
+        );
+    }
+
+    #[test]
+    fn test_variables_has_some_const_defaults() {
+        let mut variables = Variables::with_built_ins();
+        let mut check_variable = |name: &str, value: Argument| {
+            assert_eq!(variables.get(name.to_string()), value);
+            assert_eq!(
+                variables.set(name.to_string(), Variable::Mutable(Argument::I64(123))),
+                Err(format!("variable `{}` is not reassignable", name))
+            );
+        };
+        check_variable("null", Argument::Null);
+        check_variable("on", Argument::I64(1));
+        check_variable("off", Argument::I64(0));
+        check_variable("true", Argument::I64(1));
+        check_variable("false", Argument::I64(0));
+    }
+
+    #[test]
+    fn test_variables_can_serialize_built_ins() {
+        let variables = Variables::with_built_ins();
+        let swap = variables
+            .get("swap".to_string())
+            .get_script("for test")
+            .unwrap();
+
+        assert_eq!(
+            format!("{}", Serialize::Script(&swap)),
+            "fg (bg fg)".to_string()
+        );
+    }
+
+    #[test]
     fn test_variables_can_add_const_variables() {
         let mut variables = Variables::new();
 
@@ -1879,64 +2097,6 @@ mod test {
             Ok(Argument::String("hello".to_string()))
         );
         assert_eq!(variables.get(alias_name), aliased_value);
-    }
-
-    #[test]
-    fn test_variables_set_cannot_overwrite_built_ins() {
-        let mut variables = Variables::with_built_ins();
-        assert_eq!(
-            variables.set("if".to_string(), Variable::Mutable(Argument::I64(123)),),
-            Err("built-in `if` is not reassignable".to_string())
-        );
-        assert_eq!(
-            variables.set("fg".to_string(), Variable::Const(Argument::I64(123)),),
-            Err("built-in `fg` is not reassignable".to_string())
-        );
-        assert_eq!(
-            variables.set(
-                "paint".to_string(),
-                Variable::Alias("super-paint".to_string()),
-            ),
-            Err("built-in `paint` is not reassignable".to_string())
-        );
-        assert_eq!(
-            variables.set(
-                "const".to_string(),
-                Variable::BuiltIn("try to override".to_string())
-            ),
-            Err("built-in `const` is not reassignable".to_string())
-        );
-    }
-
-    #[test]
-    fn test_variables_has_some_const_defaults() {
-        let mut variables = Variables::with_built_ins();
-        let mut check_variable = |name: &str, value: Argument| {
-            assert_eq!(variables.get(name.to_string()), value);
-            assert_eq!(
-                variables.set(name.to_string(), Variable::Mutable(Argument::I64(123))),
-                Err(format!("variable `{}` is not reassignable", name))
-            );
-        };
-        check_variable("null", Argument::Null);
-        check_variable("on", Argument::I64(1));
-        check_variable("off", Argument::I64(0));
-        check_variable("true", Argument::I64(1));
-        check_variable("false", Argument::I64(0));
-    }
-
-    #[test]
-    fn test_variables_can_serialize_built_ins() {
-        let variables = Variables::with_built_ins();
-        let swap = variables
-            .get("swap".to_string())
-            .get_script("for test")
-            .unwrap();
-
-        assert_eq!(
-            format!("{}", Serialize::Script(&swap)),
-            "fg (bg fg)".to_string()
-        );
     }
 
     #[test]

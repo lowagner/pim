@@ -14,7 +14,7 @@ use crate::palette::*;
 use crate::platform::{self, InputState, Key, KeyboardInput, LogicalSize, ModifiersState};
 use crate::script::{
     self, evaluate, get_or_set_color, Argument, ArgumentResult, Command, Evaluate, Quit, Script,
-    ScriptRunner, StringResult, Variables,
+    ScriptRunner, Serialize, StringResult, Variables,
 };
 use crate::script_runner;
 use crate::util;

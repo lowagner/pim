@@ -4,11 +4,12 @@ use crate::gfx::Rgba8;
 use std::fmt;
 
 /// A message to the user, displayed in the session.
+#[derive(PartialEq, Debug, Clone)]
 pub struct Message {
     /// The message string.
-    string: String,
+    pub string: String,
     /// The message type.
-    message_type: MessageType,
+    pub message_type: MessageType,
 }
 
 impl Message {

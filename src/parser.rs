@@ -471,6 +471,9 @@ mod test {
     fn test_script_with_nested_scripts() {
         let p = Script::parser();
 
+        // TODO: i think this lookback might be incorrect.
+        // we need lookback to start at 0 probably, since we define lambdas like this:
+        // `const lambda (if $10 (hello 'world' ...))`
         let (result, rest) = p
             .parse("if $10 (hello 'world' (hi 42 \"earth\" $5)) (hey 'moon' -7 $93)")
             .unwrap();
