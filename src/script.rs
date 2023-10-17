@@ -112,17 +112,19 @@ pub enum Command {
     ///     `bg #012345`    sets the background color to #012345
     ///     `bg`            just returns the background color without changing it
     BackgroundColor,
-
-    // TODO: think of the getter/swapper way to do brushes.
-    //      `b/erase` to get the erase state (or set it)
-    //      `b/multi` to get the multi state (or set it)
-    //      `b/reset`, etc.
-    //      with aliases `brush/abc`
     /// Uses $0 for x, $1 for y, and $2 as an optional color (defaults to foreground color).
     /// E.g., `paint 5 10` to paint the pixel at (5, 10) with the foreground color,
     /// and `paint 11 12 #123456` to paint the pixel at (11, 12) with #123456.
     /// Note that an integer for the color also works as an index to the palette.
     Paint,
+
+    /// Getter/swapper for BrushMode.  E.g., without an argument, will return the current value;
+    /// with an argument, will set/unset the BrushMode if $0 is truthy/falsey.  In the latter case,
+    /// the command will return the old value.  For specific values, `b/erase` to get/swap erase
+    /// mode, `b/multi` to get/swap multi-frame drawing, etc.  Note that `b/line` can take an integer
+    /// argument for the angle (in degrees) to snap to when drawing a line; 0 for no snapping.
+    BrushMode(BrushMode),
+    // TODO: BrushReset,
 
     // TODO: Shift: moves the animation over one to start one frame down
     /// Returns the current mode, changing it to what's in $0 if present and valid.
@@ -130,6 +132,27 @@ pub enum Command {
 
     /// Versions of quit, see enum `Quit`.
     Quit(Quit),
+}
+
+/// Brush mode. Any number of these modes can be active at once.
+// TODO: update `brush.rs` to these values once `script.rs` takes over `cmd.rs`;\
+// move the argument on `brush::BrushMode::Line` into the Brush class instance itself.
+#[derive(PartialEq, Eq, PartialOrd, Ord, Copy, Clone, Debug)]
+pub enum BrushMode {
+    /// Erase pixels.
+    Erase,
+    /// Draw on all frames at once.
+    Multi,
+    /// Pixel-perfect mode.
+    Perfect,
+    /// X-Symmetry mode.
+    XSym,
+    /// Y-Symmetry mode.
+    YSym,
+    /// X-Ray mode.
+    XRay,
+    /// Confine line angles to multiples of this value.
+    Line,
 }
 
 #[derive(PartialEq, Debug, Clone, Copy)]
@@ -158,6 +181,13 @@ impl fmt::Display for Command {
             Command::ForegroundColor => write!(f, "fg"),
             Command::BackgroundColor => write!(f, "bg"),
             Command::Paint => write!(f, "paint"),
+            Command::BrushMode(BrushMode::Erase) => write!(f, "b/erase"),
+            Command::BrushMode(BrushMode::Multi) => write!(f, "b/multi"),
+            Command::BrushMode(BrushMode::Perfect) => write!(f, "b/perfect"),
+            Command::BrushMode(BrushMode::XSym) => write!(f, "b/xsym"),
+            Command::BrushMode(BrushMode::YSym) => write!(f, "b/ysym"),
+            Command::BrushMode(BrushMode::XRay) => write!(f, "b/xray"),
+            Command::BrushMode(BrushMode::Line) => write!(f, "b/line"),
             Command::Mode => write!(f, "mode"),
             Command::Quit(Quit::Safe) => write!(f, "q"),
             Command::Quit(Quit::AllSafe) => write!(f, "qa"),
@@ -185,6 +215,13 @@ impl FromStr for Command {
             "fg" => Ok(Command::ForegroundColor),
             "bg" => Ok(Command::BackgroundColor),
             "paint" => Ok(Command::Paint),
+            "b/erase" => Ok(Command::BrushMode(BrushMode::Erase)),
+            "b/multi" => Ok(Command::BrushMode(BrushMode::Multi)),
+            "b/perfect" => Ok(Command::BrushMode(BrushMode::Perfect)),
+            "b/xsym" => Ok(Command::BrushMode(BrushMode::XSym)),
+            "b/ysym" => Ok(Command::BrushMode(BrushMode::YSym)),
+            "b/xray" => Ok(Command::BrushMode(BrushMode::XRay)),
+            "b/line" => Ok(Command::BrushMode(BrushMode::Line)),
             "mode" => Ok(Command::Mode),
             "q" => Ok(Command::Quit(Quit::Safe)),
             "qa" => Ok(Command::Quit(Quit::AllSafe)),
@@ -302,6 +339,15 @@ impl Argument {
         }
     }
 
+    pub fn get_optional_i64(&self, what_for: &str) -> OptionalI64Result {
+        // TODO: add parsing for strings, etc.
+        match self {
+            Argument::Null => Ok(None),
+            Argument::I64(value) => Ok(Some(*value)),
+            result => Err(format!("invalid i64 {}: {}", what_for, result)),
+        }
+    }
+
     pub fn get_string(&self, what_for: &str) -> StringResult {
         // TODO: add parsing for other things.
         match self {
@@ -321,6 +367,7 @@ impl Argument {
     }
 }
 
+pub type OptionalI64Result = Result<Option<i64>, String>;
 pub type I64Result = Result<i64, String>;
 pub type StringResult = Result<String, String>;
 pub type ScriptResult = Result<Script, String>;
@@ -499,6 +546,12 @@ macro_rules! script_runner {
 
                         self.script_paint(x, y, color)
                     }
+                    Command::BrushMode(mode) => {
+                        let optional = self
+                            .script_evaluate(&script_stack, Evaluate::Index(0))?
+                            .get_optional_i64("for brush mode")?;
+                        self.script_brush_mode(mode, optional)
+                    }
                     Command::Mode => {
                         let mode = self
                             .script_evaluate(&script_stack, Evaluate::Index(0))?
@@ -517,8 +570,8 @@ macro_rules! script_runner {
     };
 }
 
-/// Essentially a getter/setter for color, with a Null argument making
-/// this behave as a getter and a non-Null argument as a setter, though
+/// Essentially a getter/swapper for color, with a Null argument making
+/// this behave as a getter and a non-Null argument as a swapper, i.e.,
 /// we return the old value as we swap in the new value.
 /// We will use the palette in case an integer argument is passed in.
 pub fn get_or_set_color(
@@ -967,6 +1020,12 @@ mod test {
             // NOTE! It is not required to return this color, you could do
             // something fancier (e.g., return the color that was under the cursor).
             Ok(Argument::Color(color))
+        }
+
+        fn script_brush_mode(&mut self, mode: BrushMode, argument: Option<i64>) -> ArgumentResult {
+            // Real implementation should set the brush mode (if argument is something)
+            // and return what it was.
+            Ok(Argument::I64(0))
         }
 
         fn get_or_set_mode(&mut self, mode: String) -> StringResult {

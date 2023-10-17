@@ -3058,6 +3058,42 @@ impl Session {
         Ok(Argument::Color(color))
     }
 
+    pub fn script_brush_mode(
+        &mut self,
+        mode: script::BrushMode,
+        argument: Option<i64>,
+    ) -> ArgumentResult {
+        // TODO: clean up when script::BrushMode folds into BrushMode
+        let mut maybe_result = None;
+        let brush_mode = match mode {
+            script::BrushMode::Erase => BrushMode::Erase,
+            script::BrushMode::Multi => BrushMode::Multi,
+            script::BrushMode::Perfect => BrushMode::Perfect,
+            script::BrushMode::XSym => BrushMode::XSym,
+            script::BrushMode::YSym => BrushMode::YSym,
+            script::BrushMode::XRay => BrushMode::XRay,
+            script::BrushMode::Line => {
+                maybe_result = Some(
+                    if let Some(BrushMode::Line(snap)) = self.brush.line_mode() {
+                        snap.unwrap_or(0) as i64
+                    } else {
+                        0
+                    },
+                );
+                BrushMode::Line(Some(argument.unwrap_or(0) as u32))
+            }
+        };
+        let result = maybe_result.unwrap_or(self.brush.is_set(brush_mode) as i64);
+        if let Some(value) = argument {
+            if value == 0 {
+                self.brush.unset(brush_mode);
+            } else {
+                self.brush.set(brush_mode);
+            }
+        }
+        Ok(Argument::I64((result)))
+    }
+
     fn get_or_set_mode(&mut self, mode_string: String) -> StringResult {
         let old_mode = self.mode.to_string();
         if mode_string.is_empty() {

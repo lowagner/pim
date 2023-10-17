@@ -162,7 +162,7 @@ impl Brush {
     }
 
     /// If a line mode is active, return it
-    fn line_mode(&self) -> Option<BrushMode> {
+    pub fn line_mode(&self) -> Option<BrushMode> {
         self.modes
             .iter()
             .filter(|mode| matches!(mode, BrushMode::Line(_)))
@@ -184,8 +184,8 @@ impl Brush {
             self.stroke.clear();
 
             let end = match snap {
-                None => self.curr,
                 Some(snap) => {
+                    // TODO: improve when cursor is out of bounds
                     let snap_rad = snap as f32 * PI / 180.0;
                     let curr: Vector2<f32> = self.curr.map(|x| x as f32).into();
                     let start: Vector2<f32> = start.map(|x| x as f32).into();
@@ -195,6 +195,10 @@ impl Brush {
                     let end = start + Vector2::new(round_angle.cos(), round_angle.sin()) * dist;
                     Point2::new(end.x.round() as i32, end.y.round() as i32)
                 }
+                // TODO: we can just remove this logic, i don't think it does anything.
+                // line can just be a u32, with zero being no constraints on the angle
+                // and non-zero being the angle snap.
+                None => self.curr,
             };
 
             Brush::line(start, end, &mut self.stroke);
