@@ -1694,11 +1694,18 @@ mod test {
     #[test]
     fn test_variables_has_some_const_defaults() {
         let mut variables = Variables::with_built_ins();
-        assert_eq!(variables.get("null".to_string()), Argument::Null);
-        assert_eq!(variables.get("on".to_string()), Argument::I64(1));
-        assert_eq!(variables.get("off".to_string()), Argument::I64(0));
-        assert_eq!(variables.get("true".to_string()), Argument::I64(1));
-        assert_eq!(variables.get("false".to_string()), Argument::I64(0));
+        let mut check_variable = |name: &str, value: Argument| {
+            assert_eq!(variables.get(name.to_string()), value);
+            assert_eq!(
+                variables.set(name.to_string(), Variable::Mutable(Argument::I64(123))),
+                Err(format!("variable `{}` is not reassignable", name))
+            );
+        };
+        check_variable("null", Argument::Null);
+        check_variable("on", Argument::I64(1));
+        check_variable("off", Argument::I64(0));
+        check_variable("true", Argument::I64(1));
+        check_variable("false", Argument::I64(0));
     }
 
     #[test]
