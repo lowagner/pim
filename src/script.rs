@@ -47,6 +47,8 @@ TODO: make push have an automatic pop at the end of a script runner.
 // Note these are designed to be quickly cloned, so don't put large amounts of data in them.
 #[derive(PartialEq, Debug, Clone)]
 pub enum Command {
+    /// Runs $0, returns 0 if truthy, 1 if falsy.
+    Not,
     /// Runs $0, checks if it's truthy, then evaluates $1 if so, otherwise $2.
     /// Note that $1 and $2 are optional.
     // TODO: if $2 is missing, return I64(0); if $1 is missing, return I64(1)
@@ -170,6 +172,7 @@ pub enum Quit {
 impl fmt::Display for Command {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Command::Not => write!(f, "not"),
             Command::If => write!(f, "if"),
             Command::Even => write!(f, "even"),
             Command::Odd => write!(f, "odd"),
@@ -205,6 +208,7 @@ impl FromStr for Command {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.trim() {
+            "not" => Ok(Command::Not),
             "if" => Ok(Command::If),
             "even" => Ok(Command::Even),
             "odd" => Ok(Command::Odd),
@@ -469,6 +473,10 @@ macro_rules! script_runner {
                 let command = script.command.clone();
                 self.begin_script_command(command.clone());
                 let result = match command.clone() {
+                    Command::Not => {
+                        let value = self.script_evaluate(&script_stack, Evaluate::Index(0))?;
+                        Ok(Argument::I64(if value.is_truthy() { 0 } else { 1 }))
+                    }
                     Command::If => {
                         let conditional =
                             self.script_evaluate(&script_stack, Evaluate::Index(0))?;
@@ -728,6 +736,8 @@ impl Variables {
     pub fn with_built_ins() -> Self {
         // TODO: should probably add a few const variables like `null`, etc.
         let mut variables = Variables::new();
+        // TODO: add helper method `add_built_in(&mut Variables, Command, String)`
+        variables.set("not".to_string(), Variable::BuiltIn);
         variables.set("if".to_string(), Variable::BuiltIn);
         variables.set("even".to_string(), Variable::BuiltIn);
         variables.set("odd".to_string(), Variable::BuiltIn);
@@ -1088,6 +1098,46 @@ mod test {
             ])
         );
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_script_not_can_execute_truthy_correctly() {
+        let mut test_runner = TestRunner::new();
+        let result = Script {
+            command: Command::Not,
+            arguments: Vec::from([Argument::I64(123)]),
+        }
+        .run(&mut test_runner);
+
+        assert_eq!(
+            test_runner.test_what_ran,
+            Vec::from([
+                WhatRan::Begin(Command::Not),
+                WhatRan::Evaluated(Ok(Argument::I64(123))),
+                WhatRan::End(Command::Not),
+            ])
+        );
+        assert_eq!(result, Ok(Argument::I64(0)));
+    }
+
+    #[test]
+    fn test_script_not_can_execute_falsey_correctly() {
+        let mut test_runner = TestRunner::new();
+        let result = Script {
+            command: Command::Not,
+            arguments: Vec::from([Argument::String("".to_string())]),
+        }
+        .run(&mut test_runner);
+
+        assert_eq!(
+            test_runner.test_what_ran,
+            Vec::from([
+                WhatRan::Begin(Command::Not),
+                WhatRan::Evaluated(Ok(Argument::String("".to_string()))),
+                WhatRan::End(Command::Not),
+            ])
+        );
+        assert_eq!(result, Ok(Argument::I64(1)));
     }
 
     #[test]

@@ -2323,6 +2323,8 @@ impl Session {
             Cmd::BrushUnset(mode) => {
                 self.brush.unset(mode);
             }
+            // NOTE: not implemented in script.rs;
+            // if you want to toggle, do `brush/abc (not brush/abc)`
             Cmd::BrushToggle(mode) => {
                 self.brush.toggle(mode);
             }
