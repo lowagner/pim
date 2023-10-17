@@ -136,6 +136,7 @@ pub enum Command {
     Quit(Quit),
 }
 
+// TODO: rename BrushMode to BrushOption
 /// Brush mode. Any number of these modes can be active at once.
 // TODO: update `brush.rs` to these values once `script.rs` takes over `cmd.rs`;\
 // move the argument on `brush::BrushMode::Line` into the Brush class instance itself.
@@ -708,12 +709,8 @@ pub enum Variable {
     // To look up a variable and remap it:
     Alias(String),
     // Built-in function, e.g., `if`, `fg`, `paint`, etc.:
-    // TODO: add a string that we use for `help` or `?`.  e.g., `help 'if'`
-    //      e.g., `help if` should be ok.
-    //      we probably can parse the future script and see if it has arguments, etc.
-    //      we can access help for them through the variable BuiltIns so that we remember
-    //      to add the built-ins to the variable table.
-    BuiltIn,
+    // The string is for the `help` function to explain what the command does.
+    BuiltIn(String),
 }
 
 impl Variable {
@@ -733,32 +730,129 @@ impl Variables {
         }
     }
 
+    fn add_built_in(&mut self, command: Command, description: &str) {
+        self.set(
+            format!("{}", command),
+            Variable::BuiltIn(description.to_string()),
+        );
+    }
+
     pub fn with_built_ins() -> Self {
-        // TODO: should probably add a few const variables like `null`, etc.
         let mut variables = Variables::new();
-        // TODO: add helper method `add_built_in(&mut Variables, Command, String)`
-        variables.set("not".to_string(), Variable::BuiltIn);
-        variables.set("if".to_string(), Variable::BuiltIn);
-        variables.set("even".to_string(), Variable::BuiltIn);
-        variables.set("odd".to_string(), Variable::BuiltIn);
-        variables.set("sum".to_string(), Variable::BuiltIn);
-        variables.set("set".to_string(), Variable::BuiltIn);
-        variables.set("const".to_string(), Variable::BuiltIn);
-        variables.set("alias".to_string(), Variable::BuiltIn);
-        variables.set("fg".to_string(), Variable::BuiltIn);
-        variables.set("bg".to_string(), Variable::BuiltIn);
-        variables.set("paint".to_string(), Variable::BuiltIn);
-        variables.set("b/erase".to_string(), Variable::BuiltIn);
-        variables.set("b/multi".to_string(), Variable::BuiltIn);
-        variables.set("b/perfect".to_string(), Variable::BuiltIn);
-        variables.set("b/xsym".to_string(), Variable::BuiltIn);
-        variables.set("b/ysym".to_string(), Variable::BuiltIn);
-        variables.set("b/xray".to_string(), Variable::BuiltIn);
-        variables.set("b/line".to_string(), Variable::BuiltIn);
-        variables.set("mode".to_string(), Variable::BuiltIn);
-        variables.set("quit".to_string(), Variable::BuiltIn);
-        variables.set("?".to_string(), Variable::BuiltIn);
-        variables.set("run".to_string(), Variable::BuiltIn);
+
+        variables.add_built_in(
+            Command::Not,
+            "if $0 evaluates to truthy, returns 0, otherwise 1, \
+            e.g., `not 3` returns 0 and `not 0` returns 1",
+        );
+        variables.add_built_in(
+            Command::If,
+            "if $0 evaluates to truthy, evaluates $1, otherwise $2, \
+            e.g., `if 'hi' 'world' 3` returns 'world'",
+        );
+        variables.add_built_in(
+            Command::Even,
+            "if $0 evaluates to even, returns 1, otherwise 0, \
+            e.g., `even 23` returns 0",
+        );
+        variables.add_built_in(
+            Command::Odd,
+            "if $0 evaluates to odd, returns 1, otherwise 0, \
+            e.g., `odd 23` returns 1",
+        );
+        variables.add_built_in(
+            Command::Sum,
+            "adds all evaluated arguments together into the type of $0, \
+            e.g., `sum 1 2 3` to return 6",
+        );
+        variables.add_built_in(
+            Command::SetVariable,
+            "creates/updates a mutable variable with name $0 to value $1, \
+            e.g., `set 'paint5' (paint $0 $1 5)`",
+        );
+        variables.add_built_in(
+            Command::ConstVariable,
+            "creates an immutable variable with name $0 and value $1, \
+            e.g., `const 'greet' (echo 'hello, world')`",
+        );
+        variables.add_built_in(
+            Command::CreateAlias,
+            "creates an alias with name $0 that evaluates name $1 when called, \
+            e.g., `alias 'fgc' 'fg'` to add `fgc` as an alias for `fg`",
+        );
+        variables.add_built_in(
+            Command::ForegroundColor,
+            "getter/swapper for foreground color if $0 is null/present, \
+            e.g., `fg 3` to set foreground color to palette 3",
+        );
+        variables.add_built_in(
+            Command::BackgroundColor,
+            "getter/swapper for background color if $0 is null/present, \
+            e.g., `bg #123456` to set background color to #123456",
+        );
+        variables.add_built_in(
+            Command::Paint,
+            "paints coordinates ($0, $1) with color $2, defaulting to foreground, \
+            e.g., `paint 3 4 #765432`",
+        );
+        variables.add_built_in(
+            Command::BrushMode(BrushMode::Erase),
+            "getter/swapper for erase brush option if $0 is null/present, \
+            e.g., `b/erase on` to turn on",
+        );
+        variables.add_built_in(
+            Command::BrushMode(BrushMode::Multi),
+            "getter/swapper for multi-frame brush option if $0 is null/present, \
+            e.g., `b/multi off` to turn off",
+        );
+        variables.add_built_in(
+            Command::BrushMode(BrushMode::Perfect),
+            "getter/swapper for pixel-perfect brush option if $0 is null/present, \
+            e.g., `b/perfect 0` to turn off",
+        );
+        variables.add_built_in(
+            Command::BrushMode(BrushMode::XSym),
+            "getter/swapper for draw with x-symmetry brush option if $0 is null/present, \
+            e.g., `b/xsym false` to turn off",
+        );
+        variables.add_built_in(
+            Command::BrushMode(BrushMode::YSym),
+            "getter/swapper for draw with y-symmetry brush option if $0 is null/present, \
+            e.g., `b/ysym true` to turn on",
+        );
+        variables.add_built_in(
+            Command::BrushMode(BrushMode::XRay),
+            "getter/swapper for x-ray (see underlying pixel) brush option if $0 is null/present, \
+            e.g., `b/xray 1` to turn on",
+        );
+        variables.add_built_in(
+            Command::BrushMode(BrushMode::Line),
+            "getter/swapper for line angle brush option if $0 is null/present, \
+            e.g., `b/line 30` to set to 30 degrees, `b/line 0` to turn off",
+        );
+        variables.add_built_in(
+            Command::Mode,
+            "getter/swapper for the current mode if $0 is null/present, \
+            e.g., `mode 'normal'` to go to normal mode",
+        );
+        variables.add_built_in(
+            Command::Quit(Quit::Safe),
+            "quits the current view if it has been saved",
+        );
+        variables.add_built_in(
+            Command::Quit(Quit::AllSafe),
+            "quits all views if they have been saved",
+        );
+        variables.add_built_in(
+            Command::Quit(Quit::Forced),
+            "quits current view even if it hasn't been saved",
+        );
+        variables.add_built_in(
+            Command::Quit(Quit::AllForced),
+            "quits all views even if they haven't been saved",
+        );
+        variables.set("?".to_string(), Variable::BuiltIn("TODO".to_string()));
+        variables.set("run".to_string(), Variable::BuiltIn("TODO".to_string()));
 
         variables.set("null".to_string(), Variable::Const(Argument::Null));
         variables.set("on".to_string(), Variable::Const(Argument::I64(1)));
@@ -798,7 +892,7 @@ impl Variables {
                         Variable::Alias(alias) => {
                             name = alias.clone();
                         }
-                        Variable::BuiltIn => {
+                        Variable::BuiltIn(_) => {
                             // TODO: figure out how we want to do this; if we eventually
                             // support calling functions like this:
                             // `prepare 'if'; evaluate $0 $1 $2` to run `if` dynamically.
@@ -841,7 +935,7 @@ impl Variables {
                 Variable::Const(_) => {
                     return Err(format!("variable `{}` is not reassignable", name))
                 }
-                Variable::BuiltIn => {
+                Variable::BuiltIn(_) => {
                     return Err(format!("built-in `{}` is not reassignable", name))
                 }
             },
@@ -1806,7 +1900,10 @@ mod test {
             Err("built-in `paint` is not reassignable".to_string())
         );
         assert_eq!(
-            variables.set("const".to_string(), Variable::BuiltIn,),
+            variables.set(
+                "const".to_string(),
+                Variable::BuiltIn("try to override".to_string())
+            ),
             Err("built-in `const` is not reassignable".to_string())
         );
     }
