@@ -9,6 +9,7 @@ use crate::event::{Event, TimedEvent};
 use crate::execution::{DigestMode, DigestState, Execution};
 use crate::flood::FloodFiller;
 use crate::hashmap;
+use crate::message::*;
 use crate::palette::*;
 use crate::platform::{self, InputState, Key, KeyboardInput, LogicalSize, ModifiersState};
 use crate::script::{
@@ -282,100 +283,6 @@ impl From<Direction> for i32 {
         match dir {
             Direction::Backward => -1,
             Direction::Forward => 1,
-        }
-    }
-}
-
-/// A message to the user, displayed in the session.
-pub struct Message {
-    /// The message string.
-    string: String,
-    /// The message type.
-    message_type: MessageType,
-}
-
-impl Message {
-    /// Create a new message.
-    pub fn new<D: fmt::Display>(s: D, t: MessageType) -> Self {
-        Message {
-            string: format!("{}", s),
-            message_type: t,
-        }
-    }
-
-    /// Return the color of a message.
-    pub fn color(&self) -> Rgba8 {
-        self.message_type.color()
-    }
-
-    pub fn is_execution(&self) -> bool {
-        self.message_type == MessageType::Execution
-    }
-
-    pub fn is_debug(&self) -> bool {
-        self.message_type == MessageType::Debug
-    }
-
-    /// Log a message to stdout/stderr.
-    fn log(&self) {
-        match self.message_type {
-            MessageType::Info => info!("{}", self),
-            MessageType::Hint => {}
-            MessageType::Echo => info!("{}", self),
-            MessageType::Error => error!("{}", self),
-            MessageType::Warning => warn!("{}", self),
-            MessageType::Execution => {}
-            MessageType::Okay => info!("{}", self),
-            MessageType::Debug => debug!("{}", self),
-        }
-    }
-}
-
-impl Default for Message {
-    fn default() -> Self {
-        Message::new("", MessageType::Info)
-    }
-}
-
-impl std::fmt::Display for Message {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.string.fmt(f)
-    }
-}
-
-/// The type of a `Message`.
-#[derive(Eq, PartialEq, Clone, Copy, Debug)]
-pub enum MessageType {
-    /// A hint that can be ignored.
-    Hint,
-    /// Informational message.
-    Info,
-    /// A message that is displayed by the `:echo` command.
-    Echo,
-    /// An error message.
-    Error,
-    /// Non-critical warning.
-    Warning,
-    /// Execution-related message.
-    Execution,
-    /// Debug message.
-    Debug,
-    /// Success message.
-    Okay,
-}
-
-impl MessageType {
-    /// Returns the color associated with a `MessageType`.
-    fn color(self) -> Rgba8 {
-        match self {
-            MessageType::Info => color::LIGHT_GREY,
-            MessageType::Hint => color::DARK_GREY,
-            MessageType::Echo => color::LIGHT_GREEN,
-            MessageType::Error => color::RED,
-            MessageType::Warning => color::YELLOW,
-            MessageType::Execution => color::GREY,
-            MessageType::Debug => color::LIGHT_GREEN,
-            MessageType::Okay => color::GREEN,
         }
     }
 }
@@ -1241,20 +1148,6 @@ impl Session {
         if self.mouse_state == InputState::Pressed {
             self.handle_mouse_input(platform::MouseButton::Left, InputState::Released);
         }
-    }
-
-    ///////////////////////////////////////////////////////////////////////////////
-    /// Messages
-    ///////////////////////////////////////////////////////////////////////////////
-
-    /// Display a message to the user. Also logs.
-    pub fn message<D: fmt::Display>(&mut self, msg: D, t: MessageType) {
-        self.message = Message::new(msg, t);
-        self.message.log();
-    }
-
-    fn message_clear(&mut self) {
-        self.message = Message::default();
     }
 
     fn unimplemented(&mut self) {

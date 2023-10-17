@@ -1,4 +1,5 @@
 use crate::gfx::Rgba8;
+use crate::message::*;
 use crate::palette::Palette;
 
 use std::collections::HashMap;
@@ -112,6 +113,11 @@ pub enum Command {
     ///     `bg`            just returns the background color without changing it
     BackgroundColor,
 
+    // TODO: think of the getter/swapper way to do brushes.
+    //      `b/erase` to get the erase state (or set it)
+    //      `b/multi` to get the multi state (or set it)
+    //      `b/reset`, etc.
+    //      with aliases `brush/abc`
     /// Uses $0 for x, $1 for y, and $2 as an optional color (defaults to foreground color).
     /// E.g., `paint 5 10` to paint the pixel at (5, 10) with the foreground color,
     /// and `paint 11 12 #123456` to paint the pixel at (11, 12) with #123456.
@@ -394,7 +400,17 @@ pub trait ScriptRunner {
 macro_rules! script_runner {
     ( $name:ident ) => {
         impl $name {
-            // TODO: could add common methods (if we wanted).
+            // TODO: could add other common methods.
+
+            /// Display a message to the user. Also logs.
+            pub fn message<D: fmt::Display>(&mut self, msg: D, t: MessageType) {
+                self.message = Message::new(msg, t);
+                self.message.log();
+            }
+
+            fn message_clear(&mut self) {
+                self.message = Message::default();
+            }
         }
 
         impl ScriptRunner for $name {
@@ -675,6 +691,11 @@ impl Variables {
         variables.set("run".to_string(), Variable::BuiltIn);
 
         variables.set("null".to_string(), Variable::Const(Argument::Null));
+        variables.set("on".to_string(), Variable::Const(Argument::I64(1)));
+        variables.set("off".to_string(), Variable::Const(Argument::I64(0)));
+        variables.set("true".to_string(), Variable::Const(Argument::I64(1)));
+        variables.set("false".to_string(), Variable::Const(Argument::I64(0)));
+
         variables.set(
             "swap".to_string(),
             Variable::Const(Argument::Script(Script {
@@ -848,6 +869,7 @@ mod test {
         bg: Rgba8,
         palette: Palette,
         test_painted: Vec<Painted>,
+        message: Message,
     }
 
     script_runner! {TestRunner}
@@ -917,6 +939,7 @@ mod test {
                 fg: Rgba8::WHITE,
                 bg: Rgba8::BLACK,
                 test_painted: vec![],
+                message: Message::default(),
             }
         }
 
@@ -1669,6 +1692,30 @@ mod test {
     }
 
     #[test]
+    fn test_variables_has_some_const_defaults() {
+        let mut variables = Variables::with_built_ins();
+        assert_eq!(variables.get("null".to_string()), Argument::Null);
+        assert_eq!(variables.get("on".to_string()), Argument::I64(1));
+        assert_eq!(variables.get("off".to_string()), Argument::I64(0));
+        assert_eq!(variables.get("true".to_string()), Argument::I64(1));
+        assert_eq!(variables.get("false".to_string()), Argument::I64(0));
+    }
+
+    #[test]
+    fn test_variables_can_serialize_built_ins() {
+        let variables = Variables::with_built_ins();
+        let swap = variables
+            .get("swap".to_string())
+            .get_script("for test")
+            .unwrap();
+
+        assert_eq!(
+            format!("{}", Serialize::Script(&swap)),
+            "fg (bg fg)".to_string()
+        );
+    }
+
+    #[test]
     fn test_get_or_set_color_works_with_palette() {
         let mut palette = Palette::new(12.0, 50);
         palette.add(Rgba8 {
@@ -1857,20 +1904,6 @@ mod test {
             Ok(Command::Evaluate("gnarly345".to_string()))
         );
         assert_eq!(Command::from_str(""), Err(EmptyCommandParseError));
-    }
-
-    #[test]
-    fn test_variables_can_serialize_built_ins() {
-        let variables = Variables::with_built_ins();
-        let swap = variables
-            .get("swap".to_string())
-            .get_script("for test")
-            .unwrap();
-
-        assert_eq!(
-            format!("{}", Serialize::Script(&swap)),
-            "fg (bg fg)".to_string()
-        );
     }
 
     #[test]
