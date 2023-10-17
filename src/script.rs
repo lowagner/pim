@@ -738,6 +738,13 @@ impl Variables {
         variables.set("fg".to_string(), Variable::BuiltIn);
         variables.set("bg".to_string(), Variable::BuiltIn);
         variables.set("paint".to_string(), Variable::BuiltIn);
+        variables.set("b/erase".to_string(), Variable::BuiltIn);
+        variables.set("b/multi".to_string(), Variable::BuiltIn);
+        variables.set("b/perfect".to_string(), Variable::BuiltIn);
+        variables.set("b/xsym".to_string(), Variable::BuiltIn);
+        variables.set("b/ysym".to_string(), Variable::BuiltIn);
+        variables.set("b/xray".to_string(), Variable::BuiltIn);
+        variables.set("b/line".to_string(), Variable::BuiltIn);
         variables.set("mode".to_string(), Variable::BuiltIn);
         variables.set("quit".to_string(), Variable::BuiltIn);
         variables.set("?".to_string(), Variable::BuiltIn);
@@ -761,6 +768,10 @@ impl Variables {
         );
 
         variables.set("quit".to_string(), Variable::Alias("q".to_string()));
+        variables.set("quit!".to_string(), Variable::Alias("q!".to_string()));
+        for c in ["erase", "multi", "perfect", "xsym", "ysym", "xray", "line"] {
+            variables.set(format!("brush/{}", c), Variable::Alias(format!("b/{}", c)));
+        }
         variables
     }
 
