@@ -50,6 +50,27 @@ pub enum Command {
     /// *Does not evaluate* $0, returns info about the script/command instead.
     Help,
 
+    // TODO: Error
+    /// Evaluates all `Argument`s in turn, returning early if any is an Err.
+    /// Keeps track of the first argument's result (the `push`) regardless of
+    /// any errors later, and when done with the other arguments, reaches into
+    /// the first argument and runs it as a script with the `push` result,
+    /// i.e., which returns the variable to its original value, i.e., the `pop`.
+    /// NOTE: the first argument should be a script which is setting the pushed value.
+    /// E.g., this will change the foreground color for the duration of the script,
+    /// but then reset it after the script is done:
+    /// `push/pop (fg #123456) do_stuff_with_new_fg`
+    PushPop,
+    /// Evaluates each Argument in turn, returning early if any is an Err,
+    /// returning Ok with last result otherwise.  Will return any errors
+    /// from earlier arguments since that prevents the last argument from
+    /// executing.
+    RunAll,
+
+    // Evaluates the first argument, then uses it as an index into the remaining arguments.
+    // TODO: option 1: if 0, don't run anything.  1, 2, etc. index the arguments directly as $1, $2, etc.
+    // TODO: option 2: if 0, run argument $1.  1, 2, etc. index the arguments at offset $2, $3, etc.
+    // TODO: RunIndex,
     /// Runs $0, returns 0 if truthy, 1 if falsy.
     Not,
     /// Runs $0, checks if it's truthy, then evaluates $1 if so, otherwise $2.
@@ -58,21 +79,16 @@ pub enum Command {
     If,
     /// Returns 1 if $0 is even, otherwise 0.  This is an error if $0 does
     /// not evaluate to an integer.
+    // TODO: evaluate all arguments as a sum, initialize to 0
     Even,
     /// Returns 1 if $0 is odd, otherwise 0.  This is an error if $0 does
     /// not evaluate to an integer.
+    // TODO: evaluate all arguments as a sum, initialize to 0
     Odd,
     /// Sums all arguments, using $0 as the type to return.
     /// E.g., if $0 is an integer, then $1, $2, etc. will be cast to integers.
     Sum,
 
-    // Evaluates each Argument in turn, returning early if any is an Err,
-    // returning Ok with last result otherwise.
-    // TODO: Sequential,
-    // Evaluates the first argument, then uses it as an index into the remaining arguments.
-    // TODO: option 1: if 0, don't run anything.  1, 2, etc. index the arguments directly as $1, $2, etc.
-    // TODO: option 2: if 0, run argument $1.  1, 2, etc. index the arguments at offset $2, $3, etc.
-    // TODO: RunIndex,
     /// Gets the value of a variable that is known to the compiler; evaluates it.
     /// This will also evaluate scripts, etc., returning an argument that evaluates as
     /// a value, i.e., `argument.is_value()` is true.
@@ -156,6 +172,8 @@ impl fmt::Display for Command {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Command::Help => write!(f, "?"),
+            Command::PushPop => write!(f, "push/pop"),
+            Command::RunAll => write!(f, "run/all"),
             Command::Not => write!(f, "not"),
             Command::If => write!(f, "if"),
             Command::Even => write!(f, "even"),
@@ -227,6 +245,8 @@ impl FromStr for Command {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.trim() {
             "?" => Ok(Command::Help),
+            "push/pop" => Ok(Command::PushPop),
+            "run/all" => Ok(Command::RunAll),
             "not" => Ok(Command::Not),
             "if" => Ok(Command::If),
             "even" => Ok(Command::Even),
@@ -327,16 +347,6 @@ pub enum Argument {
     Use(Use),
 }
 
-#[derive(PartialEq, Debug, Clone, Copy)]
-pub struct Use {
-    /// Index of argument on the script that we'll use to evaluate this argument.
-    pub index: u32,
-    /// Number of stacks to look back for the script to use.  Should be < 0.
-    /// -1 implies looking back one script.
-    // Note we're using a negative number to more easily distinguish from index.
-    pub lookback: i32,
-}
-
 impl Argument {
     pub fn is_value(&self) -> bool {
         !matches!(self, Self::Script(_) | Self::Use(_))
@@ -389,11 +399,6 @@ impl Argument {
     }
 }
 
-pub type OptionalI64Result = Result<Option<i64>, String>;
-pub type I64Result = Result<i64, String>;
-pub type StringResult = Result<String, String>;
-pub type ScriptResult = Result<Script, String>;
-
 impl fmt::Display for Argument {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -418,6 +423,21 @@ impl fmt::Display for Argument {
         }
     }
 }
+
+#[derive(PartialEq, Debug, Clone, Copy)]
+pub struct Use {
+    /// Index of argument on the script that we'll use to evaluate this argument.
+    pub index: u32,
+    /// Number of stacks to look back for the script to use.  Should be < 0.
+    /// -1 implies looking back one script.
+    // Note we're using a negative number to more easily distinguish from index.
+    pub lookback: i32,
+}
+
+pub type OptionalI64Result = Result<Option<i64>, String>;
+pub type I64Result = Result<i64, String>;
+pub type StringResult = Result<String, String>;
+pub type ScriptResult = Result<Script, String>;
 
 fn serialize_argument(argument: &Argument, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     match argument {
@@ -528,6 +548,41 @@ macro_rules! script_runner {
                             }
                         }
                         Ok(Argument::Null)
+                    }
+                    Command::PushPop => {
+                        if script.arguments.len() == 0 {
+                            return Err("push/pop (fg #12345) do_stuff_with_pushed_fg".to_string())
+                        }
+                        let reset_script = match &script.arguments[0] {
+                            Argument::Script(argument_script) => {
+                                // The first argument is a script that "pushes" some value to a variable,
+                                // but we try to make commands "swappers" that will return the old value
+                                // if you set a new value.  The returned value will be swapped back later:
+                                let reset_value = self.script_evaluate(&script_stack, Evaluate::Index(0))?;
+
+                                // The last command we'll run pops the variable, or resets it to what it returned here:
+                                Script {
+                                    command: argument_script.command.clone(),
+                                    arguments: vec![reset_value],
+                                }
+                            }
+                            _ => return Err("push/pop needs a script as its first argument".to_string())
+                        };
+                        for i in 1..script.arguments.len() {
+                            if self.script_evaluate(&script_stack, Evaluate::Index(i as u32)).is_err() {
+                                break;
+                            }
+                        }
+                        // We shouldn't need much context on the reset script; it doesn't
+                        // have any arguments like Argument::Use or Argument::Script internally.
+                        reset_script.run(self)
+                    }
+                    Command::RunAll => {
+                        let mut value = self.script_evaluate(&script_stack, Evaluate::Index(0))?;
+                        for i in 1..script.arguments.len() {
+                            value = self.script_evaluate(&script_stack, Evaluate::Index(i as u32))?;
+                        }
+                        Ok(value)
                     }
                     Command::Not => {
                         let value = self.script_evaluate(&script_stack, Evaluate::Index(0))?;
@@ -813,6 +868,24 @@ impl Variables {
         let mut variables = Variables::new();
 
         variables.add_built_in(
+            Command::Help,
+            "explains what $0 does without evaluating it, \
+            e.g., `? paint` to explain what the `paint` command does",
+        );
+        variables.add_built_in(
+            Command::PushPop,
+            "first argument should be a script that swaps in a value to a variable, \
+            all other arguments will be evaluated,
+            and afterwards the variable will be reset; \
+            e.g., `push/pop (fg #123456) (paint 3 4)` to set `fg` temporarily",
+        );
+        variables.add_built_in(
+            Command::RunAll,
+            "evaluates all arguments until any error, \
+            returning the last evaluated argument; \
+            e.g., `run/all 'take me' (fg #123456)` returns the previous foreground color",
+        );
+        variables.add_built_in(
             Command::Not,
             "if $0 evaluates to truthy, returns 0, otherwise 1, \
             e.g., `not 3` returns 0 and `not 0` returns 1",
@@ -923,11 +996,6 @@ impl Variables {
             Command::Quit(Quit::AllForced),
             "quits all views even if they haven't been saved",
         );
-        variables.add_built_in(
-            Command::Help,
-            "explains what $0 does without evaluating it, \
-            e.g., `? paint` to explain what the `paint` command does",
-        );
         variables.set("run".to_string(), Variable::BuiltIn("TODO".to_string()));
 
         variables.set("null".to_string(), Variable::Const(Argument::Null));
@@ -936,6 +1004,7 @@ impl Variables {
         variables.set("true".to_string(), Variable::Const(Argument::I64(1)));
         variables.set("false".to_string(), Variable::Const(Argument::I64(0)));
         // TODO: add "red", "blue", etc. as Mutable color variables
+        // e.g., add `red 1`, `red 2`, etc.
 
         variables.set(
             "swap".to_string(),
@@ -1423,6 +1492,147 @@ mod test {
         assert!(result.is_ok());
         assert_eq!(result.ok(), Some(Argument::Color(Rgba8::BLUE)));
     }
+
+    #[test]
+    fn test_script_push_pop_works() {
+        let new_color = Rgba8::RED;
+        let script = Script {
+            command: Command::PushPop,
+            arguments: Vec::from([
+                Argument::Script(Script {
+                    command: Command::ForegroundColor,
+                    arguments: Vec::from([Argument::Color(new_color)]),
+                }),
+                Argument::Script(Script::zero_arg(Command::ForegroundColor)),
+            ]),
+        };
+        let mut test_runner = TestRunner::new();
+        let initial_color = Rgba8 {
+            r: 123,
+            g: 45,
+            b: 6,
+            a: 0xff,
+        };
+        test_runner.fg = initial_color;
+
+        let result = script.run(&mut test_runner);
+
+        // Very important: FG is reset to initial color:
+        assert_eq!(test_runner.fg, initial_color);
+        assert_eq!(
+            test_runner.test_what_ran,
+            Vec::from([
+                WhatRan::Begin(Command::PushPop),
+                // Evaluating the "push" part of PushPop; pushing a new color:
+                WhatRan::Begin(Command::ForegroundColor),
+                WhatRan::Evaluated(Ok(Argument::Color(new_color))),
+                WhatRan::End(Command::ForegroundColor),
+                WhatRan::Evaluated(Ok(Argument::Color(initial_color))),
+                // Now running the later arguments:
+                WhatRan::Begin(Command::ForegroundColor),
+                WhatRan::Evaluated(Ok(Argument::Null)), // no argument to fg, getter.
+                WhatRan::End(Command::ForegroundColor),
+                // Foreground color inside the commands is evaluating to this:
+                WhatRan::Evaluated(Ok(Argument::Color(new_color))),
+                // Now we are evaluating the "pop" part of PushPop; resetting color:
+                WhatRan::Begin(Command::ForegroundColor),
+                WhatRan::Evaluated(Ok(Argument::Color(initial_color))),
+                WhatRan::End(Command::ForegroundColor),
+                WhatRan::End(Command::PushPop),
+            ])
+        );
+        // As a consequence of the swapper logic, PushPop will return what the value
+        // was *inside* the script.
+        assert_eq!(result, Ok(Argument::Color(new_color)));
+    }
+
+    #[test]
+    fn test_script_push_pop_successfully_resets_even_if_error() {
+        let new_color = Rgba8::BLACK;
+        let script = Script {
+            command: Command::PushPop,
+            arguments: Vec::from([
+                Argument::Script(Script {
+                    command: Command::BackgroundColor,
+                    arguments: Vec::from([Argument::Color(new_color)]),
+                }),
+                Argument::Script(Script::zero_arg(Command::BackgroundColor)),
+                // This will be an error:
+                Argument::Use(Use {
+                    lookback: 0,
+                    index: 1234,
+                }),
+                // Ensure we don't evaluate this:
+                Argument::I64(4042),
+            ]),
+        };
+        let mut test_runner = TestRunner::new();
+        let initial_color = Rgba8 {
+            r: 12,
+            g: 34,
+            b: 56,
+            a: 0xff,
+        };
+        test_runner.bg = initial_color;
+
+        let result = script.run(&mut test_runner);
+
+        // Very important: BG is reset to initial color:
+        assert_eq!(test_runner.bg, initial_color);
+        assert_eq!(
+            test_runner.test_what_ran,
+            Vec::from([
+                WhatRan::Begin(Command::PushPop),
+                // Evaluating the "push" part of PushPop; pushing a new color:
+                WhatRan::Begin(Command::BackgroundColor),
+                WhatRan::Evaluated(Ok(Argument::Color(new_color))),
+                WhatRan::End(Command::BackgroundColor),
+                WhatRan::Evaluated(Ok(Argument::Color(initial_color))),
+                // Now running the later arguments:
+                WhatRan::Begin(Command::BackgroundColor),
+                WhatRan::Evaluated(Ok(Argument::Null)), // no argument to bg, getter.
+                WhatRan::End(Command::BackgroundColor),
+                // Background color inside the commands is evaluating to this:
+                WhatRan::Evaluated(Ok(Argument::Color(new_color))),
+                // Trying something that will error:
+                WhatRan::Evaluated(Err("$1234 should only be used inside a script".to_string())),
+                // NOTE: I64(4042) should NOT be evaluated!
+                // Now we are evaluating the "pop" part of PushPop; resetting color:
+                WhatRan::Begin(Command::BackgroundColor),
+                WhatRan::Evaluated(Ok(Argument::Color(initial_color))),
+                WhatRan::End(Command::BackgroundColor),
+                WhatRan::End(Command::PushPop),
+            ])
+        );
+        // As a consequence of the swapper logic, PushPop will return what the value
+        // was *inside* the script.
+        assert_eq!(result, Ok(Argument::Color(new_color)));
+    }
+
+    #[test]
+    fn test_script_push_pop_fails_if_first_argument_is_not_a_script() {
+        let script = Script {
+            command: Command::PushPop,
+            arguments: Vec::from([
+                Argument::I64(0),
+                Argument::Script(Script::zero_arg(Command::BackgroundColor)),
+            ]),
+        };
+        let mut test_runner = TestRunner::new();
+
+        let result = script.run(&mut test_runner);
+
+        assert_eq!(
+            test_runner.test_what_ran,
+            Vec::from([WhatRan::Begin(Command::PushPop),])
+        );
+        assert_eq!(
+            result,
+            Err("push/pop needs a script as its first argument".to_string())
+        );
+    }
+
+    // TODO: RunAll tests
 
     #[test]
     fn test_script_can_look_back_multiple_script_arguments() {
@@ -2307,6 +2517,10 @@ mod test {
 
     #[test]
     fn test_command_parsing() {
+        assert_eq!(Command::from_str("?"), Ok(Command::Help));
+        assert_eq!(Command::from_str("push/pop"), Ok(Command::PushPop));
+        assert_eq!(Command::from_str("run/all"), Ok(Command::RunAll));
+        assert_eq!(Command::from_str("not"), Ok(Command::Not));
         assert_eq!(Command::from_str("if"), Ok(Command::If));
         assert_eq!(Command::from_str("even"), Ok(Command::Even));
         assert_eq!(Command::from_str("odd"), Ok(Command::Odd));
