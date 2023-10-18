@@ -731,9 +731,13 @@ pub fn evaluate(
                 return runner.run(new_stack);
             }
             Argument::Use(use_argument) => {
-                // TODO: if lookback >= 0 return an Err.
-                // this can happen if we parse a script that's self referential `do stuff $0 $1`
-                assert!(use_argument.lookback < 0);
+                if use_argument.lookback >= 0 {
+                    // This can happen if we parse a script that's self referential `do stuff $0 $1`
+                    return Err(format!(
+                        "${} should only be used inside a script",
+                        use_argument.index
+                    ));
+                }
                 let subtract: usize = -use_argument.lookback as usize;
                 script_index -= subtract;
                 // Check for underflow:
@@ -931,6 +935,7 @@ impl Variables {
         variables.set("off".to_string(), Variable::Const(Argument::I64(0)));
         variables.set("true".to_string(), Variable::Const(Argument::I64(1)));
         variables.set("false".to_string(), Variable::Const(Argument::I64(0)));
+        // TODO: add "red", "blue", etc. as Mutable color variables
 
         variables.set(
             "swap".to_string(),
@@ -1060,6 +1065,7 @@ impl Variables {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::parser::*;
 
     #[test]
     fn test_argument_values() {
@@ -1747,6 +1753,38 @@ mod test {
     }
 
     #[test]
+    fn test_evaluate_errors_when_use_lookback_is_invalid() {
+        let script = Script {
+            command: Command::If,
+            arguments: vec![
+                Argument::Use(Use {
+                    lookback: 0,
+                    index: 1,
+                }),
+                Argument::String("reference me".to_string()),
+                Argument::Use(Use {
+                    lookback: 0,
+                    index: 2,
+                }), // this would be self-referential
+            ],
+        };
+        let mut test_runner = TestRunner::new();
+
+        assert_eq!(
+            script.run(&mut test_runner),
+            Err("$1 should only be used inside a script".to_string())
+        );
+
+        assert_eq!(
+            test_runner.test_what_ran,
+            vec![
+                WhatRan::Begin(Command::If),
+                WhatRan::Evaluated(Err("$1 should only be used inside a script".to_string()))
+            ]
+        );
+    }
+
+    #[test]
     fn test_script_help_is_great() {
         let mut test_runner = TestRunner::new();
 
@@ -2231,7 +2269,7 @@ mod test {
         };
         let initial_color = color;
 
-        // String doesn't work.  TODO: would it be good to add e.g., 'red', 'blue', etc. someday?
+        // String doesn't work.
         assert_eq!(
             get_or_set_color(&mut color, &palette, Argument::String("asdf".to_string())),
             Err("invalid argument to get_or_set_color: 'asdf'".to_string())

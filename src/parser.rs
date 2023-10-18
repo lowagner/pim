@@ -16,7 +16,7 @@ pub type Error = memoir::result::Error;
 
 impl Parse for Script {
     fn parser() -> Parser<Self> {
-        get_script_parser(-1)
+        get_script_parser(0)
     }
 }
 
@@ -471,9 +471,6 @@ mod test {
     fn test_script_with_nested_scripts() {
         let p = Script::parser();
 
-        // TODO: i think this lookback might be incorrect.
-        // we need lookback to start at 0 probably, since we define lambdas like this:
-        // `const lambda (if $10 (hello 'world' ...))`
         let (result, rest) = p
             .parse("if $10 (hello 'world' (hi 42 \"earth\" $5)) (hey 'moon' -7 $93)")
             .unwrap();
@@ -486,7 +483,7 @@ mod test {
                 arguments: vec![
                     Argument::Use(Use {
                         index: 10,
-                        lookback: -1
+                        lookback: 0 // note this would be invalid
                     }),
                     Argument::Script(Script {
                         command: Command::Evaluate("hello".to_string()),
@@ -499,7 +496,7 @@ mod test {
                                     Argument::String("earth".to_string()),
                                     Argument::Use(Use {
                                         index: 5,
-                                        lookback: -3
+                                        lookback: -2
                                     }),
                                 ],
                             }),
@@ -512,7 +509,7 @@ mod test {
                             Argument::I64(-7),
                             Argument::Use(Use {
                                 index: 93,
-                                lookback: -2
+                                lookback: -1
                             }),
                         ],
                     }),
