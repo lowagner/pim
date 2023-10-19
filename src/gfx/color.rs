@@ -1,5 +1,3 @@
-use claim::assert_ok;
-
 use std::fmt;
 use std::str::FromStr;
 
@@ -137,19 +135,27 @@ impl FromStr for Rgba8 {
         if !hex_code.starts_with('#') {
             return Err(format!("color should start with #, got `{}`", hex_code));
         }
+        // TODO: improve error messages, e.g., "bad r in color `{}`"
         match hex_code.len() {
             9 => {
-                let r: u8 = assert_ok!(u8::from_str_radix(&hex_code[1..3], 16));
-                let g: u8 = assert_ok!(u8::from_str_radix(&hex_code[3..5], 16));
-                let b: u8 = assert_ok!(u8::from_str_radix(&hex_code[5..7], 16));
-                let a: u8 = assert_ok!(u8::from_str_radix(&hex_code[7..9], 16));
+                let r: u8 =
+                    u8::from_str_radix(&hex_code[1..3], 16).map_err(|_| "bad r".to_string())?;
+                let g: u8 =
+                    u8::from_str_radix(&hex_code[3..5], 16).map_err(|_| "bad g".to_string())?;
+                let b: u8 =
+                    u8::from_str_radix(&hex_code[5..7], 16).map_err(|_| "bad b".to_string())?;
+                let a: u8 =
+                    u8::from_str_radix(&hex_code[7..9], 16).map_err(|_| "bad a".to_string())?;
 
                 Ok(Rgba8 { r, g, b, a })
             }
             7 => {
-                let r: u8 = assert_ok!(u8::from_str_radix(&hex_code[1..3], 16));
-                let g: u8 = assert_ok!(u8::from_str_radix(&hex_code[3..5], 16));
-                let b: u8 = assert_ok!(u8::from_str_radix(&hex_code[5..7], 16));
+                let r: u8 =
+                    u8::from_str_radix(&hex_code[1..3], 16).map_err(|_| "bad r".to_string())?;
+                let g: u8 =
+                    u8::from_str_radix(&hex_code[3..5], 16).map_err(|_| "bad g".to_string())?;
+                let b: u8 =
+                    u8::from_str_radix(&hex_code[5..7], 16).map_err(|_| "bad b".to_string())?;
                 let a: u8 = 0xff;
 
                 Ok(Rgba8 { r, g, b, a })
@@ -157,24 +163,31 @@ impl FromStr for Rgba8 {
             5 => {
                 // Multiplying by 17 since 15 is the largest hex digit you can get (with `f`),
                 // and 15 * 17 = 255 would therefore be the max color value.
-                let r: u8 = assert_ok!(u8::from_str_radix(&hex_code[1..2], 16)) * 17;
-                let g: u8 = assert_ok!(u8::from_str_radix(&hex_code[2..3], 16)) * 17;
-                let b: u8 = assert_ok!(u8::from_str_radix(&hex_code[3..4], 16)) * 17;
-                let a: u8 = assert_ok!(u8::from_str_radix(&hex_code[4..5], 16)) * 17;
+                let r: u8 =
+                    u8::from_str_radix(&hex_code[1..2], 16).map_err(|_| "bad r".to_string())? * 17;
+                let g: u8 =
+                    u8::from_str_radix(&hex_code[2..3], 16).map_err(|_| "bad g".to_string())? * 17;
+                let b: u8 =
+                    u8::from_str_radix(&hex_code[3..4], 16).map_err(|_| "bad b".to_string())? * 17;
+                let a: u8 =
+                    u8::from_str_radix(&hex_code[4..5], 16).map_err(|_| "bad a".to_string())? * 17;
 
                 Ok(Rgba8 { r, g, b, a })
             }
             4 => {
                 // Multiplying by 17 since 15 is the largest hex digit you can get (with `f`),
                 // and 15 * 17 = 255 would therefore be the max color value.
-                let r: u8 = assert_ok!(u8::from_str_radix(&hex_code[1..2], 16)) * 17;
-                let g: u8 = assert_ok!(u8::from_str_radix(&hex_code[2..3], 16)) * 17;
-                let b: u8 = assert_ok!(u8::from_str_radix(&hex_code[3..4], 16)) * 17;
+                let r: u8 =
+                    u8::from_str_radix(&hex_code[1..2], 16).map_err(|_| "bad r".to_string())? * 17;
+                let g: u8 =
+                    u8::from_str_radix(&hex_code[2..3], 16).map_err(|_| "bad g".to_string())? * 17;
+                let b: u8 =
+                    u8::from_str_radix(&hex_code[3..4], 16).map_err(|_| "bad b".to_string())? * 17;
                 let a: u8 = 0xff;
 
                 Ok(Rgba8 { r, g, b, a })
             }
-            _ => Err(format!("malformed color: {}", hex_code)),
+            _ => Err(format!("malformed color: `{}`", hex_code)),
         }
     }
 }
@@ -300,6 +313,114 @@ mod test {
                 b: 0xba,
                 a: 0x98,
             })
+        );
+    }
+
+    #[test]
+    fn test_rgba8_invalid_strings() {
+        assert_eq!(
+            Rgba8::from_str("abcdef"),
+            Err("color should start with #, got `abcdef`".to_string())
+        );
+
+        // TODO: make this gray
+        assert_eq!(
+            Rgba8::from_str("#3"),
+            Err("malformed color: `#3`".to_string())
+        );
+
+        // TODO: make this double-digit gray
+        assert_eq!(
+            Rgba8::from_str("#ab"),
+            Err("malformed color: `#ab`".to_string())
+        );
+
+        assert_eq!(
+            Rgba8::from_str("#123de"),
+            Err("malformed color: `#123de`".to_string())
+        );
+
+        assert_eq!(
+            Rgba8::from_str("#123def3"),
+            Err("malformed color: `#123def3`".to_string())
+        );
+
+        assert_eq!(
+            Rgba8::from_str("#123def359"),
+            Err("malformed color: `#123def359`".to_string())
+        );
+    }
+
+    #[test]
+    fn test_rgba8_invalid_digits() {
+        assert_eq!(
+            Rgba8::from_str("#p23"), // short, r bad
+            Err("bad r".to_string())
+        );
+
+        assert_eq!(
+            Rgba8::from_str("#p234"), // short, r bad, with alpha
+            Err("bad r".to_string())
+        );
+
+        assert_eq!(
+            Rgba8::from_str("#p12345"), // long, r bad
+            Err("bad r".to_string())
+        );
+
+        assert_eq!(
+            Rgba8::from_str("#p1234567"), // long, r bad, with alpha
+            Err("bad r".to_string())
+        );
+
+        assert_eq!(
+            Rgba8::from_str("#1p3"), // short, g bad
+            Err("bad g".to_string())
+        );
+
+        assert_eq!(
+            Rgba8::from_str("#1p34"), // short, g bad, with alpha
+            Err("bad g".to_string())
+        );
+
+        assert_eq!(
+            Rgba8::from_str("#12p345"), // long, g bad
+            Err("bad g".to_string())
+        );
+
+        assert_eq!(
+            Rgba8::from_str("#12p34567"), // long, g bad, with alpha
+            Err("bad g".to_string())
+        );
+
+        assert_eq!(
+            Rgba8::from_str("#12p"), // short, b bad
+            Err("bad b".to_string())
+        );
+
+        assert_eq!(
+            Rgba8::from_str("#13p4"), // short, b bad, with alpha
+            Err("bad b".to_string())
+        );
+
+        assert_eq!(
+            Rgba8::from_str("#1234p5"), // long, b bad
+            Err("bad b".to_string())
+        );
+
+        assert_eq!(
+            Rgba8::from_str("#1234p567"), // long, b bad, with alpha
+            Err("bad b".to_string())
+        );
+
+        assert_eq!(
+            Rgba8::from_str("#123q"), // short, bad alpha
+            Err("bad a".to_string())
+        );
+
+        assert_eq!(
+            Rgba8::from_str("#123456p7"), // long, bad alpha
+            Err("bad a".to_string())
         );
     }
 }

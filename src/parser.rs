@@ -64,6 +64,8 @@ fn get_argument_parser(lookback: i32) -> Parser<Argument> {
             let i64_arg = integer::<i64>().map(Argument::I64).label("<i64>");
             let color_arg = color().map(Argument::Color).label("<color>");
             let string_arg = quoted().map(Argument::String).label("<string>");
+            // TODO: maybe look for an optional `-[0-9]+` (e.g., full use `$1-4`) to do lookback -4.
+            // if we see a use-case for looking back on arguments not scripted in.
             let use_arg = symbol('$')
                 .then(natural::<u32>())
                 .map(move |(_symbol, index)| Argument::Use(Use { index, lookback }));
