@@ -286,31 +286,7 @@ pub fn param<T: Parse>() -> Parser<T> {
 pub fn color() -> Parser<Rgba8> {
     peek(
         token()
-            .try_map(move |input| {
-                if input.is_empty() {
-                    return Err("expected color".to_owned());
-                }
-                // TODO: support e.g. #fff and #abc
-                if input.len() < 7 {
-                    return Err(format!("{:?} is not a valid color value", input));
-                }
-                let (s, alpha) = input.split_at(7);
-
-                match Rgba8::from_str(s) {
-                    Ok(color) => {
-                        if let Ok((a, _)) = symbol('/')
-                            .then(rational::<f64>())
-                            .map(|(_, a)| a)
-                            .parse(alpha)
-                        {
-                            Ok(color.alpha((a * std::u8::MAX as f64) as u8))
-                        } else {
-                            Ok(color)
-                        }
-                    }
-                    Err(_) => Err(format!("malformed color value `{}`", s)),
-                }
-            })
+            .try_map(|input| Rgba8::from_str(&input))
             .label("<color>"),
     )
 }
@@ -405,7 +381,7 @@ mod test {
     fn test_color() {
         let p = color().skip(whitespace()).then(color());
 
-        let ((a, b), rest) = p.parse("#ffaa44/0.5 #141414").unwrap();
+        let ((a, b), rest) = p.parse("#ffaa447f #141414").unwrap();
 
         assert_eq!(rest, "");
         assert_eq!(a, Rgba8::new(0xff, 0xaa, 0x44, 127));

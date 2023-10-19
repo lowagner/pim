@@ -1,3 +1,5 @@
+use claim::assert_ok;
+
 use std::fmt;
 use std::str::FromStr;
 
@@ -125,18 +127,55 @@ impl From<u32> for Rgba8 {
 }
 
 impl FromStr for Rgba8 {
-    type Err = std::num::ParseIntError;
+    type Err = String;
 
-    /// Parse a color code of the form `#ffffff` into an
-    /// instance of `Rgba8`. The alpha is always `0xff`.
-    fn from_str(hex_code: &str) -> Result<Self, Self::Err> {
-        // TODO: support e.g. #fff and #abc if hex_code is of length 4
-        let r: u8 = u8::from_str_radix(&hex_code[1..3], 16)?;
-        let g: u8 = u8::from_str_radix(&hex_code[3..5], 16)?;
-        let b: u8 = u8::from_str_radix(&hex_code[5..7], 16)?;
-        let a: u8 = 0xff;
+    /// Parses a color code of the form `#ffffff` or `#abc` into an
+    /// instance of `Rgba8`.  Can have optional alpha hex digit(s)
+    /// at the end, e.g., `#123456ef` with `0xef` being the alpha,
+    /// or `#abc3` with `0x3` being the alpha.
+    fn from_str(hex_code: &str) -> Result<Self, String> {
+        if !hex_code.starts_with('#') {
+            return Err(format!("color should start with #, got `{}`", hex_code));
+        }
+        match hex_code.len() {
+            9 => {
+                let r: u8 = assert_ok!(u8::from_str_radix(&hex_code[1..3], 16));
+                let g: u8 = assert_ok!(u8::from_str_radix(&hex_code[3..5], 16));
+                let b: u8 = assert_ok!(u8::from_str_radix(&hex_code[5..7], 16));
+                let a: u8 = assert_ok!(u8::from_str_radix(&hex_code[7..9], 16));
 
-        Ok(Rgba8 { r, g, b, a })
+                Ok(Rgba8 { r, g, b, a })
+            }
+            7 => {
+                let r: u8 = assert_ok!(u8::from_str_radix(&hex_code[1..3], 16));
+                let g: u8 = assert_ok!(u8::from_str_radix(&hex_code[3..5], 16));
+                let b: u8 = assert_ok!(u8::from_str_radix(&hex_code[5..7], 16));
+                let a: u8 = 0xff;
+
+                Ok(Rgba8 { r, g, b, a })
+            }
+            5 => {
+                // Multiplying by 17 since 15 is the largest hex digit you can get (with `f`),
+                // and 15 * 17 = 255 would therefore be the max color value.
+                let r: u8 = assert_ok!(u8::from_str_radix(&hex_code[1..2], 16)) * 17;
+                let g: u8 = assert_ok!(u8::from_str_radix(&hex_code[2..3], 16)) * 17;
+                let b: u8 = assert_ok!(u8::from_str_radix(&hex_code[3..4], 16)) * 17;
+                let a: u8 = assert_ok!(u8::from_str_radix(&hex_code[4..5], 16)) * 17;
+
+                Ok(Rgba8 { r, g, b, a })
+            }
+            4 => {
+                // Multiplying by 17 since 15 is the largest hex digit you can get (with `f`),
+                // and 15 * 17 = 255 would therefore be the max color value.
+                let r: u8 = assert_ok!(u8::from_str_radix(&hex_code[1..2], 16)) * 17;
+                let g: u8 = assert_ok!(u8::from_str_radix(&hex_code[2..3], 16)) * 17;
+                let b: u8 = assert_ok!(u8::from_str_radix(&hex_code[3..4], 16)) * 17;
+                let a: u8 = 0xff;
+
+                Ok(Rgba8 { r, g, b, a })
+            }
+            _ => Err(format!("malformed color: {}", hex_code)),
+        }
     }
 }
 
@@ -183,6 +222,7 @@ pub struct Rgba {
     pub a: f32,
 }
 
+// TODO: what is this used for?  switch to OkLab color instead.
 impl Rgba {
     pub const RED: Self = Rgba::new(1.0, 0.0, 0.0, 1.0);
     pub const GREEN: Self = Rgba::new(0.0, 1.0, 0.0, 1.0);
@@ -210,5 +250,56 @@ impl From<Rgba8> for Rgba {
             b: (rgba8.b as f32 / 255.0),
             a: (rgba8.a as f32 / 255.0),
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_rgba8_short_parsing() {
+        assert_eq!(
+            Rgba8::from_str("#abc"),
+            Ok(Rgba8 {
+                r: 0xa * 17,
+                g: 0xb * 17,
+                b: 0xc * 17,
+                a: 0xff,
+            })
+        );
+
+        assert_eq!(
+            Rgba8::from_str("#123d"),
+            Ok(Rgba8 {
+                r: 0x1 * 17,
+                g: 0x2 * 17,
+                b: 0x3 * 17,
+                a: 0xd * 17,
+            })
+        );
+    }
+
+    #[test]
+    fn test_rgba8_long_parsing() {
+        assert_eq!(
+            Rgba8::from_str("#123456"),
+            Ok(Rgba8 {
+                r: 0x12,
+                g: 0x34,
+                b: 0x56,
+                a: 0xff,
+            })
+        );
+
+        assert_eq!(
+            Rgba8::from_str("#fedcba98"),
+            Ok(Rgba8 {
+                r: 0xfe,
+                g: 0xdc,
+                b: 0xba,
+                a: 0x98,
+            })
+        );
     }
 }

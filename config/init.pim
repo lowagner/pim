@@ -59,7 +59,7 @@ map/visual  b             :selection/jump -
 set scale = 1                                                 --  Set interface scale to 100%
 set checker = off                                             --  Turn off alpha checker
 set debug = off                                               --  Turn off debug mode
-set background = #000000/0.0                                  --  Set background appearance to black
+set background = #0000                                        --  Set background appearance to black
 
 brush/set perfect                                             --  Set brush to "pixel-perfect" mode
 
