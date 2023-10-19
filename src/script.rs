@@ -8,8 +8,15 @@ use std::fmt;
 use std::mem;
 use std::str::FromStr;
 
+// TODO: explain why we're using $0 for the first argument rather than the function name.
+// if we switched to $0 for the function name, this would make it more bash-like, and we
+// could call recursively like this:
+//      :const 'factorial' (if (positive $1) (* $1 ($0 (+ $1 -1))) 1)
+// alternatively, if we want to support this, we could create our own re-evaluation function,
+// e.g., $$.
+//      :const 'factorial' (if (positive $0) (* $0 ($$ (+ $0 -1))) 1)
 /*
-TODO: how is parsing going to work here?
+    Creating your own commands, and how to run them:
 
         :set 'cmd_name' (the_cmd $0 123)
     =>  :cmd_name 5     -- calls `the_cmd` with arguments `5` `123`
@@ -23,25 +30,12 @@ TODO: how is parsing going to work here?
         -- note the truthy clause happens second since `run (truthy $0)`
         -- will run argument 0 for false and argument 1 for truthy:
 
-    option 1:
         :set 'if' (run (truthy $0) $2 $1)
-    option 2 (NOT USED!)
-        :set('if' run(truthy($0) $2 $1))
-    with option 1 we can avoid parentheses if we use a simple command.
 
     then we can do `if (conditional) (truthy) (falsy)`.
 
-TODO: add test/functionality for parsing like this:
-        :set 'check' (paint cx cy (if (even (sum cx cy)) fg bg))
-    i.e., `fg` and `bg` here are variables that we evaluate without any arguments.
-    we could create a specialized argument for this, but i think it's better to
-    just parse as `Argument::Script({ command: Evaluate("fg"), args: [] })`.
-
 TODO: add `cx`/`cy` as functions/commands to get cursor position x/y
-
-TODO: we should probably have an error if people try to overwrite 'if', 'set', etc.
-
-TODO: make push have an automatic pop at the end of a script runner.
+TODO: or maybe `mx`/`my` for mouse x/y.  could do both.
 */
 
 /// The commands that are possible in a script.
@@ -54,7 +48,6 @@ pub enum Command {
     /// Creates an error with a string that combines all arguments.
     Error,
 
-    // TODO: Error
     /// Evaluates all `Argument`s in turn, returning early if any is an Err.
     /// Keeps track of the first argument's result (the `push`) regardless of
     /// any errors later, and when done with the other arguments, reaches into
@@ -89,9 +82,13 @@ pub enum Command {
     /// not evaluate to an integer.
     // TODO: evaluate all arguments as a sum, initialize to 0
     Odd,
+
     /// Sums all arguments, using $0 as the type to return.
     /// E.g., if $0 is an integer, then $1, $2, etc. will be cast to integers.
     Sum,
+    /// Multiplies all arguments.  Each argument will be cast to an integer.
+    /// If no arguments are present, returns 1.
+    Product,
 
     /// Gets the value of a variable that is known to the compiler; evaluates it.
     /// This will also evaluate scripts, etc., returning an argument that evaluates as
@@ -183,7 +180,8 @@ impl fmt::Display for Command {
             Command::If => write!(f, "if"),
             Command::Even => write!(f, "even"),
             Command::Odd => write!(f, "odd"),
-            Command::Sum => write!(f, "sum"),
+            Command::Sum => write!(f, "+"),
+            Command::Product => write!(f, "*"),
             Command::Evaluate(value) => write!(f, "{}", value),
             Command::SetVariable => write!(f, "set"),
             Command::ConstVariable => write!(f, "const"),
@@ -257,7 +255,8 @@ impl FromStr for Command {
             "if" => Ok(Command::If),
             "even" => Ok(Command::Even),
             "odd" => Ok(Command::Odd),
-            "sum" => Ok(Command::Sum),
+            "+" => Ok(Command::Sum),
+            "*" => Ok(Command::Product),
             "set" => Ok(Command::SetVariable),
             "const" => Ok(Command::ConstVariable),
             "alias" => Ok(Command::CreateAlias),
@@ -368,8 +367,8 @@ impl Argument {
         }
     }
 
+    /// Returns an i64 if possible, coercing Null to 0.
     pub fn get_i64(&self, what_for: &str) -> I64Result {
-        // TODO: add parsing for strings, etc.
         match self {
             Argument::Null => Ok(0),
             Argument::I64(value) => Ok(*value),
@@ -377,8 +376,8 @@ impl Argument {
         }
     }
 
+    /// Returns an optional i64 if the argument is I64 or Null.
     pub fn get_optional_i64(&self, what_for: &str) -> OptionalI64Result {
-        // TODO: add parsing for strings, etc.
         match self {
             Argument::Null => Ok(None),
             Argument::I64(value) => Ok(Some(*value)),
@@ -387,7 +386,7 @@ impl Argument {
     }
 
     pub fn get_string(&self, what_for: &str) -> StringResult {
-        // TODO: add parsing for other things.
+        // TODO: we probably can coerce integers, etc., to strings
         match self {
             Argument::Null => Ok("".to_string()),
             Argument::String(value) => Ok(value.clone()),
@@ -641,7 +640,7 @@ macro_rules! script_runner {
                     Command::Sum => {
                         let starting_value =
                             self.script_evaluate(&script_stack, Evaluate::Index(0))?;
-                        let argument_count = script_stack.last().unwrap().arguments.len() as u32;
+                        let argument_count = script.arguments.len() as u32;
                         match starting_value {
                             Argument::I64(i64_value) => {
                                 let mut sum = i64_value;
@@ -655,6 +654,19 @@ macro_rules! script_runner {
                             // TODO: implement some of these sums (i.e., for other value-like args)
                             _ => Err("sum for things besides i64 not implemented yet".to_string()),
                         }
+                    }
+                    Command::Product => {
+                        let mut product: i64 = 1;
+                        for i in 0..script.arguments.len() {
+                            match self.script_evaluate(
+                                &script_stack,
+                                Evaluate::Index(i as u32),
+                            )?.get_optional_i64("for product")? {
+                                Some(result) => {product *= result;},
+                                None => {}, // skip nulls, they act as if they aren't arguments.
+                            }
+                        }
+                        Ok(Argument::I64(product))
                     }
                     Command::Evaluate(name) => {
                         // Need to make a clone here since executing commands could
@@ -944,7 +956,12 @@ impl Variables {
         variables.add_built_in(
             Command::Sum,
             "adds all evaluated arguments together into the type of $0, \
-            e.g., `sum 1 2 3` to return 6",
+            e.g., `+ 1 2 3 4` to return 10",
+        );
+        variables.add_built_in(
+            Command::Product,
+            "multiplies all evaluated arguments together, \
+            e.g., `* -1 2 3 4` to return -24",
         );
         variables.add_built_in(
             Command::SetVariable,
@@ -1053,6 +1070,9 @@ impl Variables {
             })),
         ));
 
+        assert_ok!(variables.set("multiply".to_string(), Variable::Alias("*".to_string())));
+        assert_ok!(variables.set("product".to_string(), Variable::Alias("*".to_string())));
+        assert_ok!(variables.set("sum".to_string(), Variable::Alias("+".to_string())));
         assert_ok!(variables.set("quit".to_string(), Variable::Alias("q".to_string())));
         assert_ok!(variables.set("quit!".to_string(), Variable::Alias("q!".to_string())));
         for c in ["erase", "multi", "perfect", "xsym", "ysym", "xray", "line"] {
@@ -1325,7 +1345,11 @@ mod test {
             Ok(Argument::Color(Self::PAINT_RETURN_COLOR))
         }
 
-        fn script_brush_mode(&mut self, _mode: BrushMode, _argument: Option<i64>) -> ArgumentResult {
+        fn script_brush_mode(
+            &mut self,
+            _mode: BrushMode,
+            _argument: Option<i64>,
+        ) -> ArgumentResult {
             // Real implementation should set the brush mode (if argument is something)
             // and return what it was.
             Ok(Argument::I64(0))
@@ -1740,17 +1764,14 @@ mod test {
             test_runner.test_what_ran,
             Vec::from([
                 WhatRan::Begin(Command::RunAll),
-
                 WhatRan::Begin(Command::ForegroundColor),
                 WhatRan::Evaluated(Ok(Argument::Null)),
                 WhatRan::End(Command::ForegroundColor),
                 WhatRan::Evaluated(Ok(Argument::Color(test_runner.fg))),
-
                 WhatRan::Begin(Command::BackgroundColor),
                 WhatRan::Evaluated(Ok(Argument::Null)),
                 WhatRan::End(Command::BackgroundColor),
                 WhatRan::Evaluated(Ok(Argument::Color(test_runner.bg))),
-
                 WhatRan::Evaluated(Ok(Argument::I64(33))),
                 WhatRan::End(Command::RunAll),
             ])
@@ -1887,6 +1908,90 @@ mod test {
         );
         assert!(result.is_ok());
         assert_eq!(result.ok(), Some(Argument::Color(Rgba8::BLUE)));
+    }
+
+    #[test]
+    fn test_script_empty_multiply_returns_unity() {
+        let mut test_runner = TestRunner::new();
+
+        assert_eq!(
+            Script {
+                command: Command::Product,
+                arguments: vec![],
+            }
+            .run(&mut test_runner),
+            Ok(Argument::I64(1))
+        );
+
+        assert_eq!(
+            test_runner.test_what_ran,
+            vec![
+                WhatRan::Begin(Command::Product),
+                WhatRan::End(Command::Product),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_script_nulls_in_multiply_are_ignored() {
+        let mut test_runner = TestRunner::new();
+
+        assert_eq!(
+            Script {
+                command: Command::Product,
+                arguments: vec![Argument::Null],
+            }
+            .run(&mut test_runner),
+            Ok(Argument::I64(1))
+        );
+
+        assert_eq!(
+            test_runner.test_what_ran,
+            vec![
+                WhatRan::Begin(Command::Product),
+                WhatRan::Evaluated(Ok(Argument::Null)),
+                WhatRan::End(Command::Product),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_script_multiply_works_correctly() {
+        let mut test_runner = TestRunner::new();
+
+        assert_eq!(
+            Script {
+                command: Command::Product,
+                arguments: vec![
+                    Argument::Null,
+                    Argument::Script(Script {
+                        command: Command::Sum,
+                        arguments: vec![Argument::I64(3), Argument::Null, Argument::I64(27)]
+                    }),
+                    Argument::I64(100),
+                    Argument::I64(5),
+                ],
+            }
+            .run(&mut test_runner),
+            Ok(Argument::I64(30 * 100 * 5))
+        );
+
+        assert_eq!(
+            test_runner.test_what_ran,
+            vec![
+                WhatRan::Begin(Command::Product),
+                WhatRan::Evaluated(Ok(Argument::Null)),
+                WhatRan::Begin(Command::Sum),
+                WhatRan::Evaluated(Ok(Argument::I64(3))),
+                WhatRan::Evaluated(Ok(Argument::Null)),
+                WhatRan::Evaluated(Ok(Argument::I64(27))),
+                WhatRan::End(Command::Sum),
+                WhatRan::Evaluated(Ok(Argument::I64(30))),
+                WhatRan::Evaluated(Ok(Argument::I64(100))),
+                WhatRan::Evaluated(Ok(Argument::I64(5))),
+                WhatRan::End(Command::Product),
+            ]
+        );
     }
 
     // TODO: add test for Odd
@@ -2708,7 +2813,8 @@ mod test {
         assert_eq!(Command::from_str("if"), Ok(Command::If));
         assert_eq!(Command::from_str("even"), Ok(Command::Even));
         assert_eq!(Command::from_str("odd"), Ok(Command::Odd));
-        assert_eq!(Command::from_str("sum"), Ok(Command::Sum));
+        assert_eq!(Command::from_str("+"), Ok(Command::Sum));
+        assert_eq!(Command::from_str("*"), Ok(Command::Product));
         assert_eq!(Command::from_str("set"), Ok(Command::SetVariable));
         assert_eq!(Command::from_str("const"), Ok(Command::ConstVariable));
         assert_eq!(Command::from_str("alias"), Ok(Command::CreateAlias));
