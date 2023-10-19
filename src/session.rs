@@ -114,7 +114,7 @@ impl FromStr for Mode {
             "visual" => Ok(Mode::Visual(VisualState::default())),
             "command" => Ok(Mode::Command),
             "help" => Ok(Mode::Help),
-            name => Err(ModeParseError),
+            _ => Err(ModeParseError),
         }
     }
 }
@@ -2071,7 +2071,6 @@ impl Session {
                         return;
                     }
                 }
-                _ => {}
             }
 
             if let Some(kb) = self
@@ -3093,7 +3092,7 @@ impl Session {
                 self.brush.set(brush_mode);
             }
         }
-        Ok(Argument::I64((result)))
+        Ok(Argument::I64(result))
     }
 
     fn get_or_set_mode(&mut self, mode_string: String) -> StringResult {

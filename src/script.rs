@@ -1,6 +1,7 @@
 use crate::gfx::Rgba8;
-use crate::message::*;
 use crate::palette::Palette;
+
+use claim::assert_ok;
 
 use std::collections::HashMap;
 use std::fmt;
@@ -877,10 +878,10 @@ impl Variables {
     }
 
     fn add_built_in(&mut self, command: Command, description: &str) {
-        self.set(
+        assert_ok!(self.set(
             format!("{}", command),
             Variable::BuiltIn(description.to_string()),
-        );
+        ));
     }
 
     pub fn describe(&self, command: Command) -> String {
@@ -1031,17 +1032,17 @@ impl Variables {
             Command::Quit(Quit::AllForced),
             "quits all views even if they haven't been saved",
         );
-        variables.set("run".to_string(), Variable::BuiltIn("TODO".to_string()));
+        assert_ok!(variables.set("run".to_string(), Variable::BuiltIn("TODO".to_string())));
 
-        variables.set("null".to_string(), Variable::Const(Argument::Null));
-        variables.set("on".to_string(), Variable::Const(Argument::I64(1)));
-        variables.set("off".to_string(), Variable::Const(Argument::I64(0)));
-        variables.set("true".to_string(), Variable::Const(Argument::I64(1)));
-        variables.set("false".to_string(), Variable::Const(Argument::I64(0)));
+        assert_ok!(variables.set("null".to_string(), Variable::Const(Argument::Null)));
+        assert_ok!(variables.set("on".to_string(), Variable::Const(Argument::I64(1))));
+        assert_ok!(variables.set("off".to_string(), Variable::Const(Argument::I64(0))));
+        assert_ok!(variables.set("true".to_string(), Variable::Const(Argument::I64(1))));
+        assert_ok!(variables.set("false".to_string(), Variable::Const(Argument::I64(0))));
         // TODO: add "red", "blue", etc. as Mutable color variables
         // e.g., add `red 1`, `red 2`, etc.
 
-        variables.set(
+        assert_ok!(variables.set(
             "swap".to_string(),
             Variable::Const(Argument::Script(Script {
                 command: Command::ForegroundColor,
@@ -1050,12 +1051,12 @@ impl Variables {
                     arguments: vec![Argument::Script(Script::zero_arg(Command::ForegroundColor))],
                 })],
             })),
-        );
+        ));
 
-        variables.set("quit".to_string(), Variable::Alias("q".to_string()));
-        variables.set("quit!".to_string(), Variable::Alias("q!".to_string()));
+        assert_ok!(variables.set("quit".to_string(), Variable::Alias("q".to_string())));
+        assert_ok!(variables.set("quit!".to_string(), Variable::Alias("q!".to_string())));
         for c in ["erase", "multi", "perfect", "xsym", "ysym", "xray", "line"] {
-            variables.set(format!("brush/{}", c), Variable::Alias(format!("b/{}", c)));
+            assert_ok!(variables.set(format!("brush/{}", c), Variable::Alias(format!("b/{}", c))));
         }
         variables
     }
@@ -1169,7 +1170,7 @@ impl Variables {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::parser::*;
+    use crate::message::*;
 
     #[test]
     fn test_argument_values() {
@@ -1324,7 +1325,7 @@ mod test {
             Ok(Argument::Color(Self::PAINT_RETURN_COLOR))
         }
 
-        fn script_brush_mode(&mut self, mode: BrushMode, argument: Option<i64>) -> ArgumentResult {
+        fn script_brush_mode(&mut self, _mode: BrushMode, _argument: Option<i64>) -> ArgumentResult {
             // Real implementation should set the brush mode (if argument is something)
             // and return what it was.
             Ok(Argument::I64(0))
@@ -1721,7 +1722,41 @@ mod test {
         assert_eq!(result, Err("".to_string()));
     }
 
-    // TODO: test run/all works correctly to the end
+    #[test]
+    fn test_script_run_all_returns_ok_result() {
+        let script = Script {
+            command: Command::RunAll,
+            arguments: Vec::from([
+                Argument::Script(Script::zero_arg(Command::ForegroundColor)),
+                Argument::Script(Script::zero_arg(Command::BackgroundColor)),
+                Argument::I64(33),
+            ]),
+        };
+        let mut test_runner = TestRunner::new();
+
+        let result = script.run(&mut test_runner);
+
+        assert_eq!(
+            test_runner.test_what_ran,
+            Vec::from([
+                WhatRan::Begin(Command::RunAll),
+
+                WhatRan::Begin(Command::ForegroundColor),
+                WhatRan::Evaluated(Ok(Argument::Null)),
+                WhatRan::End(Command::ForegroundColor),
+                WhatRan::Evaluated(Ok(Argument::Color(test_runner.fg))),
+
+                WhatRan::Begin(Command::BackgroundColor),
+                WhatRan::Evaluated(Ok(Argument::Null)),
+                WhatRan::End(Command::BackgroundColor),
+                WhatRan::Evaluated(Ok(Argument::Color(test_runner.bg))),
+
+                WhatRan::Evaluated(Ok(Argument::I64(33))),
+                WhatRan::End(Command::RunAll),
+            ])
+        );
+        assert_eq!(result, Ok(Argument::I64(33)));
+    }
 
     #[test]
     fn test_script_error_stringifies_the_evaluation_of_all_arguments() {
@@ -1788,7 +1823,6 @@ mod test {
 
     #[test]
     fn test_script_can_look_back_multiple_script_arguments() {
-        // TODO: test parsing from `(if (even (sum $0 $1)) color0 color1)`
         let mut test_runner = TestRunner::new();
         let function = Script {
             command: Command::If,
@@ -2080,11 +2114,9 @@ mod test {
             ],
         };
 
-        let mut result = script.run(&mut test_runner);
-        assert!(result.is_ok());
         assert_eq!(
-            result.ok(),
-            Some(Argument::Color(TestRunner::PAINT_RETURN_COLOR))
+            script.run(&mut test_runner),
+            Ok(Argument::Color(TestRunner::PAINT_RETURN_COLOR))
         );
 
         assert_eq!(
