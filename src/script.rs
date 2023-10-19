@@ -50,6 +50,9 @@ pub enum Command {
     /// *Does not evaluate* $0, returns info about the script/command instead.
     Help,
 
+    /// Creates an error with a string that combines all arguments.
+    Error,
+
     // TODO: Error
     /// Evaluates all `Argument`s in turn, returning early if any is an Err.
     /// Keeps track of the first argument's result (the `push`) regardless of
@@ -172,6 +175,7 @@ impl fmt::Display for Command {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Command::Help => write!(f, "?"),
+            Command::Error => write!(f, "error"),
             Command::PushPop => write!(f, "push/pop"),
             Command::RunAll => write!(f, "run/all"),
             Command::Not => write!(f, "not"),
@@ -245,6 +249,7 @@ impl FromStr for Command {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.trim() {
             "?" => Ok(Command::Help),
+            "error" => Ok(Command::Error),
             "push/pop" => Ok(Command::PushPop),
             "run/all" => Ok(Command::RunAll),
             "not" => Ok(Command::Not),
@@ -462,6 +467,7 @@ fn serialize_argument(argument: &Argument, f: &mut fmt::Formatter<'_>) -> fmt::R
 pub enum Serialize<'a> {
     Argument(&'a Argument),
     Script(&'a Script),
+    ArgumentResult(&'a ArgumentResult),
 }
 
 impl<'a> fmt::Display for Serialize<'a> {
@@ -469,6 +475,16 @@ impl<'a> fmt::Display for Serialize<'a> {
         match self {
             Serialize::Argument(argument) => serialize_argument(argument, f),
             Serialize::Script(script) => serialize_script(script, f),
+            Serialize::ArgumentResult(result) => match result {
+                Err(string) => {
+                    if string.is_empty() {
+                        write!(f, "(error)")
+                    } else {
+                        write!(f, "(error `{}`)", string)
+                    }
+                }
+                Ok(argument) => serialize_argument(argument, f),
+            },
         }
     }
 }
@@ -548,6 +564,18 @@ macro_rules! script_runner {
                             }
                         }
                         Ok(Argument::Null)
+                    }
+                    Command::Error => {
+                        let mut string = String::new();
+                        for i in 0..script.arguments.len() {
+                            let result = self.script_evaluate(&script_stack, Evaluate::Index(i as u32));
+                            let next_string = format!("{}", Serialize::ArgumentResult(&result));
+                            if i > 0 {
+                                string.push_str(" ");
+                            }
+                            string.push_str(&next_string);
+                        }
+                        Err(string)
                     }
                     Command::PushPop => {
                         if script.arguments.len() == 0 {
@@ -682,6 +710,8 @@ macro_rules! script_runner {
                         Ok(Argument::Null)
                     }
                 };
+                // TODO: move the above `match` into its own function so
+                // this method always gets called:
                 self.end_script_command(command);
                 result
             }
@@ -871,6 +901,11 @@ impl Variables {
             Command::Help,
             "explains what $0 does without evaluating it, \
             e.g., `? paint` to explain what the `paint` command does",
+        );
+        variables.add_built_in(
+            Command::Error,
+            "evaluates all arguments, joining them into an error string, \
+            e.g., `error 'oh no' fg` will return an error of 'oh no {foreground-color}'",
         );
         variables.add_built_in(
             Command::PushPop,
@@ -1189,6 +1224,12 @@ mod test {
 
     script_runner! {TestRunner}
     impl TestRunner {
+        const PAINT_RETURN_COLOR: Rgba8 = Rgba8 {
+            r: 254,
+            g: 253,
+            b: 252,
+            a: 251,
+        };
         fn new() -> Self {
             let mut palette = Palette::new(12.0, 50);
             palette.add(Rgba8::BLACK);
@@ -1279,9 +1320,8 @@ mod test {
 
         fn script_paint(&mut self, x: i64, y: i64, color: Rgba8) -> ArgumentResult {
             self.test_painted.push(Painted { x, y, color });
-            // NOTE! It is not required to return this color, you could do
-            // something fancier (e.g., return the color that was under the cursor).
-            Ok(Argument::Color(color))
+            // In the implementation, return the color that was under the cursor.
+            Ok(Argument::Color(Self::PAINT_RETURN_COLOR))
         }
 
         fn script_brush_mode(&mut self, mode: BrushMode, argument: Option<i64>) -> ArgumentResult {
@@ -1632,7 +1672,119 @@ mod test {
         );
     }
 
-    // TODO: RunAll tests
+    #[test]
+    fn test_script_run_all_exits_early_on_failure() {
+        let script = Script {
+            command: Command::RunAll,
+            arguments: Vec::from([
+                Argument::Script(Script::zero_arg(Command::ForegroundColor)),
+                // Not much point to a non-script argument in RunAll unless you refer to
+                // it later, e.g., via $1 or similar.
+                Argument::I64(32),
+                Argument::Script(Script {
+                    command: Command::Paint,
+                    arguments: vec![
+                        Argument::I64(101),
+                        Argument::I64(202),
+                        Argument::Color(Rgba8::BLUE),
+                    ],
+                }),
+                Argument::Script(Script::zero_arg(Command::Error)),
+                // Should not evaluate this:
+                Argument::Script(Script::zero_arg(Command::BackgroundColor)),
+            ]),
+        };
+        let mut test_runner = TestRunner::new();
+
+        let result = script.run(&mut test_runner);
+
+        assert_eq!(
+            test_runner.test_what_ran,
+            Vec::from([
+                WhatRan::Begin(Command::RunAll),
+                WhatRan::Begin(Command::ForegroundColor),
+                WhatRan::Evaluated(Ok(Argument::Null)),
+                WhatRan::End(Command::ForegroundColor),
+                WhatRan::Evaluated(Ok(Argument::Color(test_runner.fg))),
+                WhatRan::Evaluated(Ok(Argument::I64(32))),
+                WhatRan::Begin(Command::Paint),
+                WhatRan::Evaluated(Ok(Argument::I64(101))),
+                WhatRan::Evaluated(Ok(Argument::I64(202))),
+                WhatRan::Evaluated(Ok(Argument::Color(Rgba8::BLUE))),
+                WhatRan::End(Command::Paint),
+                WhatRan::Evaluated(Ok(Argument::Color(TestRunner::PAINT_RETURN_COLOR))),
+                WhatRan::Begin(Command::Error),
+                WhatRan::End(Command::Error),
+                WhatRan::Evaluated(Err("".to_string())),
+            ])
+        );
+        assert_eq!(result, Err("".to_string()));
+    }
+
+    // TODO: test run/all works correctly to the end
+
+    #[test]
+    fn test_script_error_stringifies_the_evaluation_of_all_arguments() {
+        let script = Script {
+            command: Command::Error,
+            arguments: vec![
+                Argument::I64(123),
+                Argument::String("asdf".to_string()),
+                Argument::Script(Script::zero_arg(Command::Error)),
+                Argument::Script(Script {
+                    command: Command::RunAll,
+                    arguments: vec![Argument::I64(456), Argument::Null],
+                }),
+                Argument::Script(Script {
+                    command: Command::Error,
+                    arguments: vec![
+                        Argument::Null,
+                        Argument::Use(Use {
+                            lookback: -1,
+                            index: 0,
+                        }),
+                        Argument::Color(Rgba8::GREEN),
+                    ],
+                }),
+                Argument::Script(Script::zero_arg(Command::BackgroundColor)),
+            ],
+        };
+        let mut test_runner = TestRunner::new();
+
+        let result = script.run(&mut test_runner);
+
+        assert_eq!(
+            test_runner.test_what_ran,
+            Vec::from([
+                WhatRan::Begin(Command::Error),
+                WhatRan::Evaluated(Ok(Argument::I64(123))),
+                WhatRan::Evaluated(Ok(Argument::String("asdf".to_string()))),
+                WhatRan::Begin(Command::Error),
+                WhatRan::End(Command::Error),
+                WhatRan::Evaluated(Err("".to_string())), // result of Err
+                WhatRan::Begin(Command::RunAll),
+                WhatRan::Evaluated(Ok(Argument::I64(456))),
+                WhatRan::Evaluated(Ok(Argument::Null)),
+                WhatRan::End(Command::RunAll),
+                WhatRan::Evaluated(Ok(Argument::Null)), // result of RunAll:
+                WhatRan::Begin(Command::Error),
+                WhatRan::Evaluated(Ok(Argument::Null)),
+                WhatRan::Evaluated(Ok(Argument::I64(123))), // Use $0
+                WhatRan::Evaluated(Ok(Argument::Color(Rgba8::GREEN))),
+                WhatRan::End(Command::Error),
+                WhatRan::Evaluated(Err("null 123 #00ff00".to_string())),
+                WhatRan::Begin(Command::BackgroundColor),
+                WhatRan::Evaluated(Ok(Argument::Null)),
+                WhatRan::End(Command::BackgroundColor),
+                WhatRan::Evaluated(Ok(Argument::Color(test_runner.bg))),
+                WhatRan::End(Command::Error),
+            ])
+        );
+        assert_eq!(
+            result,
+            Err("123 'asdf' (error) null (error `null 123 #00ff00`) #000000".to_string())
+        );
+    }
 
     #[test]
     fn test_script_can_look_back_multiple_script_arguments() {
@@ -1932,7 +2084,7 @@ mod test {
         assert!(result.is_ok());
         assert_eq!(
             result.ok(),
-            Some(Argument::Color(test_runner.palette.colors[5]))
+            Some(Argument::Color(TestRunner::PAINT_RETURN_COLOR))
         );
 
         assert_eq!(
