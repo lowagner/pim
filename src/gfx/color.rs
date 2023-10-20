@@ -130,7 +130,8 @@ impl FromStr for Rgba8 {
     /// Parses a color code of the form `#ffffff` or `#abc` into an
     /// instance of `Rgba8`.  Can have optional alpha hex digit(s)
     /// at the end, e.g., `#123456ef` with `0xef` being the alpha,
-    /// or `#abc3` with `0x3` being the alpha.
+    /// or `#abc3` with `0x3` being the alpha.  We also allow gray
+    /// shorthand with `#31` being `#313131` and `#a` being `#aaa`.
     fn from_str(hex_code: &str) -> Result<Self, String> {
         if !hex_code.starts_with('#') {
             return Err(format!("color should start with #, got `{}`", hex_code));
@@ -171,6 +172,14 @@ impl FromStr for Rgba8 {
                 let a: u8 = 0xff;
 
                 Ok(Rgba8 { r, g, b, a })
+            }
+            3 => {
+                let gray = hex_u8(&hex_code[1..3], "gray")?;
+                Ok(Rgba8 { r: gray, g: gray, b: gray, a: 0xff })
+            }
+            2 => {
+                let gray = hex_u8(&hex_code[1..2], "gray")? * 17;
+                Ok(Rgba8 { r: gray, g: gray, b: gray, a: 0xff })
             }
             _ => Err(format!("malformed color: `{}`", hex_code)),
         }
@@ -261,6 +270,29 @@ mod test {
     use super::*;
 
     #[test]
+    fn test_rgba8_gray_parsing() {
+        assert_eq!(
+            Rgba8::from_str("#ab"),
+            Ok(Rgba8 {
+                r: 0xab,
+                g: 0xab,
+                b: 0xab,
+                a: 0xff,
+            })
+        );
+
+        assert_eq!(
+            Rgba8::from_str("#a"),
+            Ok(Rgba8 {
+                r: 0xa * 17,
+                g: 0xa * 17,
+                b: 0xa * 17,
+                a: 0xff,
+            })
+        );
+    }
+
+    #[test]
     fn test_rgba8_short_parsing() {
         assert_eq!(
             Rgba8::from_str("#abc"),
@@ -313,18 +345,6 @@ mod test {
             Err("color should start with #, got `abcdef`".to_string())
         );
 
-        // TODO: make this gray
-        assert_eq!(
-            Rgba8::from_str("#3"),
-            Err("malformed color: `#3`".to_string())
-        );
-
-        // TODO: make this double-digit gray
-        assert_eq!(
-            Rgba8::from_str("#ab"),
-            Err("malformed color: `#ab`".to_string())
-        );
-
         assert_eq!(
             Rgba8::from_str("#123de"),
             Err("malformed color: `#123de`".to_string())
@@ -343,6 +363,16 @@ mod test {
 
     #[test]
     fn test_rgba8_invalid_digits() {
+        assert_eq!(
+            Rgba8::from_str("#p"), // short gray
+            Err("invalid gray: `p`".to_string())
+        );
+
+        assert_eq!(
+            Rgba8::from_str("#1p"), // long gray
+            Err("invalid gray: `1p`".to_string())
+        );
+
         assert_eq!(
             Rgba8::from_str("#p23"), // short, r bad
             Err("invalid r: `p`".to_string())

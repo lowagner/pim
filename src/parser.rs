@@ -90,7 +90,6 @@ fn get_argument_parser(lookback: i32) -> Parser<Argument> {
 }
 
 pub fn command() -> Parser<Command> {
-    // TODO: maybe switch to `identifier()`.
     token().map(
         // It's safe to unwrap this token here since token is non-whitespace
         // and the only command parse error is if the string is just whitespace.
@@ -110,6 +109,10 @@ pub fn word() -> Parser<String> {
     many(letter())
 }
 
+/// The next run of consecutive, non-white-space characters that aren't `(` or `)`.
+/// We need to avoid () so that we can create scripts like this:
+/// `const 'my-script' (fg #123456)` and not get `(fg` lumped in one token
+/// and `#123456)` in another.
 pub fn token() -> Parser<String> {
     many::<_, String>(satisfy(
         |c| !c.is_whitespace() && c != '(' && c != ')',
