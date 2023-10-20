@@ -112,8 +112,11 @@ pub enum Command {
     /// Returns the current mode, changing it to what's in $0 if present and valid.
     Mode,
 
-    // TODO: `frame/crop` to resize to content.
-    // TODO: `frame/resize` to resize width height as $0 $1.
+    /// Setter for the width x height of each frame, using $0 for width and $1 for height.
+    /// If either $0 or $1 is null, it keeps that dimension the same; if both are null,
+    /// it crops the frames to content.  Returns the number of pixels in one frame, i.e.,
+    /// width * height, from *before* the operation.
+    FrameResize,
     /// Getter/swapper for the width of each frame.  If $0 is null, this returns the current width;
     /// if $0 is an integer, sets the frame width to $0 and returns the old value.
     FrameWidth,
@@ -189,6 +192,7 @@ impl fmt::Display for Command {
             Command::ConstVariable => write!(f, "const"),
             Command::CreateAlias => write!(f, "alias"),
             Command::Mode => write!(f, "mode"),
+            Command::FrameResize => write!(f, "f/resize"),
             Command::FrameWidth => write!(f, "f/width"),
             Command::FrameHeight => write!(f, "f/height"),
             Command::ForegroundColor => write!(f, "fg"),
@@ -266,6 +270,7 @@ impl FromStr for Command {
             "const" => Ok(Command::ConstVariable),
             "alias" => Ok(Command::CreateAlias),
             "mode" => Ok(Command::Mode),
+            "f/resize" => Ok(Command::FrameResize),
             "f/width" => Ok(Command::FrameWidth),
             "f/height" => Ok(Command::FrameHeight),
             "fg" => Ok(Command::ForegroundColor),
@@ -699,6 +704,27 @@ macro_rules! script_runner {
                             .get_string("for mode")?;
                         Ok(Argument::String(self.get_or_set_mode(mode)?))
                     }
+                    Command::FrameResize => {
+                        let optional_width = self
+                            .script_evaluate(&script_stack, Evaluate::Index(0))?
+                            .get_optional_i64("for frame width")?;
+                        let optional_height = self
+                            .script_evaluate(&script_stack, Evaluate::Index(1))?
+                            .get_optional_i64("for frame height")?;
+                        let old_width = self.get_or_swap_frame_width(None)?;
+                        let old_height = self.get_or_swap_frame_height(None)?;
+                        if optional_width.is_some() && optional_height.is_some() {
+                            self.resize_frames(optional_width.unwrap(), optional_height.unwrap())?;
+                        } else if optional_width.is_some() {
+                            self.resize_frames(optional_width.unwrap(), old_height)?;
+                        } else if optional_height.is_some() {
+                            self.resize_frames(old_width, optional_height.unwrap())?;
+                        } else {
+                            // TODO: Crop to content
+                            return Err("`f/resize` without arguments is not yet implemented".to_string());
+                        }
+                        Ok(Argument::I64(old_width * old_height))
+                    }
                     Command::FrameWidth => {
                         let value = self
                             .script_evaluate(&script_stack, Evaluate::Index(0))?
@@ -1045,6 +1071,11 @@ impl Variables {
             e.g., `mode 'normal'` to go to normal mode",
         );
         variables.add_built_in(
+            Command::FrameResize,
+            "sets frame size, or crops to content if no arguments, \
+            e.g., `f/resize 12 34` to set to 12 pixels wide and 34 pixels high",
+        );
+        variables.add_built_in(
             Command::FrameWidth,
             "getter/swapper for the frame width if $0 is null/present, \
             e.g., `f/width 123` to set to 123 pixels wide",
@@ -1306,6 +1337,7 @@ mod test {
         Begin(Command),
         End(Command),
         Evaluated(ArgumentResult),
+        Mocked(String),
     }
 
     #[derive(PartialEq, Debug, Clone, Copy)]
@@ -1322,6 +1354,7 @@ mod test {
         fg: Rgba8,
         bg: Rgba8,
         palette: Palette,
+        // TODO: move into test_what_ran as a new enum value
         test_painted: Vec<Painted>,
         message: Message,
     }
@@ -1432,6 +1465,11 @@ mod test {
         fn get_or_set_mode(&mut self, mode: String) -> StringResult {
             // Actually switch modes
             Ok(mode)
+        }
+
+        fn resize_frames(&mut self, width: i64, height: i64) -> Result<(), String> {
+            self.test_what_ran.push(WhatRan::Mocked(format!("f/resize {} {}", width, height)));
+            Ok(())
         }
 
         fn get_or_swap_frame_width(&mut self, _value: Option<i64>) -> I64Result {
