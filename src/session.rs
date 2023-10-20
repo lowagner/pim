@@ -1,7 +1,7 @@
 #![allow(clippy::needless_collect)]
 //! Session
 use crate::autocomplete::FileCompleter;
-use crate::brush::*;
+use crate::brush::{self, Brush, BrushState};
 use crate::cmd::{self, Cmd, CommandLine, KeyMapping, Op, Value};
 use crate::color;
 use crate::data;
@@ -14,7 +14,7 @@ use crate::palette::*;
 use crate::platform::{self, InputState, Key, KeyboardInput, LogicalSize, ModifiersState};
 use crate::script::{
     self, evaluate, get_or_set_color, Argument, ArgumentResult, Command, Evaluate, Quit, Script,
-    ScriptRunner, Serialize, StringResult, Variables,
+    ScriptRunner, Serialize, StringResult, Variables, BrushMode
 };
 use crate::script_runner;
 use crate::util;
@@ -856,13 +856,13 @@ impl Session {
                 Stroke::NONE,
                 Fill::Solid(brush.color.into()),
                 1.0,
-                Align::BottomLeft,
+                brush::Align::BottomLeft,
             );
             if !output.is_empty() {
                 match brush.state {
                     // If we're erasing, we can't use the staging framebuffer, since we
                     // need to be replacing pixels on the real buffer.
-                    _ if brush.is_set(BrushMode::Erase) => {
+                    _ if brush.is_set(brush::BrushMode::Erase) => {
                         self.effects.extend_from_slice(&[
                             Effect::ViewBlendingChanged(Blending::Constant),
                             Effect::ViewPaintFinal(output),
@@ -1792,7 +1792,7 @@ impl Session {
                         match self.mode {
                             Mode::Normal => match self.tool {
                                 Tool::Brush => {
-                                    let color = if self.brush.is_set(BrushMode::Erase) {
+                                    let color = if self.brush.is_set(brush::BrushMode::Erase) {
                                         Rgba8::TRANSPARENT
                                     } else {
                                         self.fg
@@ -1912,7 +1912,7 @@ impl Session {
                                 let brush = &mut self.brush;
                                 let mut p: ViewCoords<i32> = p.into();
 
-                                if brush.is_set(BrushMode::Multi) {
+                                if brush.is_set(brush::BrushMode::Multi) {
                                     p.clamp(Rect::new(
                                         (brush.size / 2) as i32,
                                         (brush.size / 2) as i32,
@@ -3057,42 +3057,6 @@ impl Session {
         // TODO: there's probably something better to return here, e.g., the pixel
         // color that was under the cursor.
         Ok(Argument::Color(color))
-    }
-
-    pub fn script_brush_mode(
-        &mut self,
-        mode: script::BrushMode,
-        argument: Option<i64>,
-    ) -> ArgumentResult {
-        // TODO: clean up when script::BrushMode folds into BrushMode
-        let mut maybe_result = None;
-        let brush_mode = match mode {
-            script::BrushMode::Erase => BrushMode::Erase,
-            script::BrushMode::Multi => BrushMode::Multi,
-            script::BrushMode::Perfect => BrushMode::Perfect,
-            script::BrushMode::XSym => BrushMode::XSym,
-            script::BrushMode::YSym => BrushMode::YSym,
-            script::BrushMode::XRay => BrushMode::XRay,
-            script::BrushMode::Line => {
-                maybe_result = Some(
-                    if let Some(BrushMode::Line(snap)) = self.brush.line_mode() {
-                        snap.unwrap_or(0) as i64
-                    } else {
-                        0
-                    },
-                );
-                BrushMode::Line(Some(argument.unwrap_or(0) as u32))
-            }
-        };
-        let result = maybe_result.unwrap_or(self.brush.is_set(brush_mode) as i64);
-        if let Some(value) = argument {
-            if value == 0 {
-                self.brush.unset(brush_mode);
-            } else {
-                self.brush.set(brush_mode);
-            }
-        }
-        Ok(Argument::I64(result))
     }
 
     fn get_or_set_mode(&mut self, mode_string: String) -> StringResult {

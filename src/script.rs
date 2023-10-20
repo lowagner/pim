@@ -721,11 +721,38 @@ macro_rules! script_runner {
                         Ok(Argument::I64(old_size))
                     }
                     Command::BrushMode(mode) => {
-                        let optional = self
+                        let argument = self
                             .script_evaluate(&script_stack, Evaluate::Index(0))?
                             .get_optional_i64("for brush mode")?;
-                        // TODO: possibly bring this here to manipulate self.brush.
-                        self.script_brush_mode(mode, optional)
+                        // TODO: clean up when script::BrushMode folds into BrushMode
+                        let mut maybe_result = None;
+                        let brush_mode = match mode {
+                            BrushMode::Erase => brush::BrushMode::Erase,
+                            BrushMode::Multi => brush::BrushMode::Multi,
+                            BrushMode::Perfect => brush::BrushMode::Perfect,
+                            BrushMode::XSym => brush::BrushMode::XSym,
+                            BrushMode::YSym => brush::BrushMode::YSym,
+                            BrushMode::XRay => brush::BrushMode::XRay,
+                            BrushMode::Line => {
+                                maybe_result = Some(
+                                    if let Some(brush::BrushMode::Line(snap)) = self.brush.line_mode() {
+                                        snap.unwrap_or(0) as i64
+                                    } else {
+                                        0
+                                    },
+                                );
+                                brush::BrushMode::Line(Some(argument.unwrap_or(0) as u32))
+                            }
+                        };
+                        let result = maybe_result.unwrap_or(self.brush.is_set(brush_mode) as i64);
+                        if let Some(value) = argument {
+                            if value == 0 {
+                                self.brush.unset(brush_mode);
+                            } else {
+                                self.brush.set(brush_mode);
+                            }
+                        }
+                        Ok(Argument::I64(result))
                     }
                     Command::Quit(q) => {
                         self.script_quit(q);
@@ -1206,7 +1233,7 @@ impl Variables {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::brush::Brush;
+    use crate::brush::{self, Brush};
     use crate::message::*;
 
     #[test]
@@ -1362,16 +1389,6 @@ mod test {
             self.test_painted.push(Painted { x, y, color });
             // In the implementation, return the color that was under the cursor.
             Ok(Argument::Color(Self::PAINT_RETURN_COLOR))
-        }
-
-        fn script_brush_mode(
-            &mut self,
-            _mode: BrushMode,
-            _argument: Option<i64>,
-        ) -> ArgumentResult {
-            // Real implementation should set the brush mode (if argument is something)
-            // and return what it was.
-            Ok(Argument::I64(0))
         }
 
         fn get_or_set_mode(&mut self, mode: String) -> StringResult {
@@ -2269,6 +2286,62 @@ mod test {
             }],
         );
     }
+
+    #[test]
+    fn test_evaluate_brush_erase_via_getter() {
+        let mut test_runner = TestRunner::new();
+
+        test_runner.brush.set(brush::BrushMode::Erase);
+        assert_eq!(
+            Script {
+                command: Command::BrushMode(BrushMode::Erase),
+                arguments: vec![]
+            }
+            .run(&mut test_runner),
+            Ok(Argument::I64(1))
+        );
+        assert_eq!(test_runner.brush.is_set(brush::BrushMode::Erase), true); // doesn't change it
+
+        test_runner.brush.unset(brush::BrushMode::Erase);
+        assert_eq!(
+            Script {
+                command: Command::BrushMode(BrushMode::Erase),
+                arguments: vec![Argument::Null]
+            }
+            .run(&mut test_runner),
+            Ok(Argument::I64(0))
+        );
+        assert_eq!(test_runner.brush.is_set(brush::BrushMode::Erase), false); // doesn't change it
+    }
+
+    #[test]
+    fn test_evaluate_brush_erase_via_swapper() {
+        let mut test_runner = TestRunner::new();
+
+        test_runner.brush.set(brush::BrushMode::Erase);
+        assert_eq!(
+            Script {
+                command: Command::BrushMode(BrushMode::Erase),
+                arguments: vec![Argument::I64(0)]
+            }
+            .run(&mut test_runner),
+            Ok(Argument::I64(1)) // returns old value
+        );
+        assert_eq!(test_runner.brush.is_set(brush::BrushMode::Erase), false); // does change it
+
+        test_runner.brush.unset(brush::BrushMode::Erase);
+        assert_eq!(
+            Script {
+                command: Command::BrushMode(BrushMode::Erase),
+                arguments: vec![Argument::I64(1)]
+            }
+            .run(&mut test_runner),
+            Ok(Argument::I64(0)) // returns old value
+        );
+        assert_eq!(test_runner.brush.is_set(brush::BrushMode::Erase), true); // does change it
+    }
+
+    // TODO: Other BrushMode tests
 
     #[test]
     fn test_evaluate_brush_size_via_getter() {
