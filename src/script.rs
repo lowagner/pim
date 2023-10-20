@@ -2344,6 +2344,59 @@ mod test {
     // TODO: Other BrushMode tests
 
     #[test]
+    fn test_evaluate_brush_line_via_getter() {
+        let mut test_runner = TestRunner::new();
+
+        test_runner.brush.set(brush::BrushMode::Line(Some(15)));
+        assert_eq!(
+            Script {
+                command: Command::BrushMode(BrushMode::Line),
+                arguments: vec![Argument::Null]
+            }
+            .run(&mut test_runner),
+            Ok(Argument::I64(15))
+        );
+        assert_eq!(test_runner.brush.line_mode(), Some(brush::BrushMode::Line(Some(15)))); // doesn't change it
+
+        test_runner.brush.unset(brush::BrushMode::Line(None));
+        assert_eq!(
+            Script {
+                command: Command::BrushMode(BrushMode::Line),
+                arguments: vec![]
+            }
+            .run(&mut test_runner),
+            Ok(Argument::I64(0))
+        );
+        assert_eq!(test_runner.brush.line_mode(), None); // doesn't change it
+    }
+
+    #[test]
+    fn test_evaluate_brush_line_via_swapper() {
+        let mut test_runner = TestRunner::new();
+
+        test_runner.brush.set(brush::BrushMode::Line(Some(15)));
+        assert_eq!(
+            Script {
+                command: Command::BrushMode(BrushMode::Line),
+                arguments: vec![Argument::I64(77)]
+            }
+            .run(&mut test_runner),
+            Ok(Argument::I64(15))
+        );
+        assert_eq!(test_runner.brush.line_mode(), Some(brush::BrushMode::Line(Some(77)))); // changes it
+
+        assert_eq!(
+            Script {
+                command: Command::BrushMode(BrushMode::Line),
+                arguments: vec![Argument::I64(0)]
+            }
+            .run(&mut test_runner),
+            Ok(Argument::I64(77)) // was 77
+        );
+        assert_eq!(test_runner.brush.line_mode(), None); // changes change it
+    }
+
+    #[test]
     fn test_evaluate_brush_size_via_getter() {
         let mut test_runner = TestRunner::new();
 
