@@ -1,4 +1,3 @@
-use crate::brush::Brush;
 use crate::gfx::Rgba8;
 use crate::palette::Palette;
 
@@ -1207,6 +1206,7 @@ impl Variables {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::brush::Brush;
     use crate::message::*;
 
     #[test]
@@ -2311,6 +2311,18 @@ mod test {
             Ok(Argument::I64(123)) // returns old value
         );
         assert_eq!(test_runner.brush.size, 777); // sets new value
+
+        // Can't go below 1
+        test_runner.brush.size = 1234;
+        assert_eq!(
+            Script {
+                command: Command::BrushSize,
+                arguments: vec![Argument::I64(0)]
+            }
+            .run(&mut test_runner),
+            Ok(Argument::I64(1234)) // returns old value
+        );
+        assert_eq!(test_runner.brush.size, 1); // sets new value
     }
 
     #[test]
