@@ -175,11 +175,21 @@ impl FromStr for Rgba8 {
             }
             3 => {
                 let gray = hex_u8(&hex_code[1..3], "gray")?;
-                Ok(Rgba8 { r: gray, g: gray, b: gray, a: 0xff })
+                Ok(Rgba8 {
+                    r: gray,
+                    g: gray,
+                    b: gray,
+                    a: 0xff,
+                })
             }
             2 => {
                 let gray = hex_u8(&hex_code[1..2], "gray")? * 17;
-                Ok(Rgba8 { r: gray, g: gray, b: gray, a: 0xff })
+                Ok(Rgba8 {
+                    r: gray,
+                    g: gray,
+                    b: gray,
+                    a: 0xff,
+                })
             }
             _ => Err(format!("malformed color: `{}`", hex_code)),
         }

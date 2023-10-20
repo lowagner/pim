@@ -1,3 +1,4 @@
+use crate::brush::Brush;
 use crate::gfx::Rgba8;
 use crate::palette::Palette;
 
@@ -8,31 +9,23 @@ use std::fmt;
 use std::mem;
 use std::str::FromStr;
 
-// TODO: explain why we're using $0 for the first argument rather than the function name.
-// if we switched to $0 for the function name, this would make it more bash-like, and we
-// could call recursively like this:
-//      :const 'factorial' (if (positive $1) (* $1 ($0 (+ $1 -1))) 1)
-// alternatively, if we want to support this, we could create our own re-evaluation function,
-// e.g., $$.
-//      :const 'factorial' (if (positive $0) (* $0 ($$ (+ $0 -1))) 1)
 /*
     Creating your own commands, and how to run them:
 
         :set 'cmd_name' (the_cmd $0 123)
     =>  :cmd_name 5     -- calls `the_cmd` with arguments `5` `123`
 
-        $0          -- evaluate argument at index 0.  similarly for $1, etc.
-        run         -- evaluates next argument, uses it as index as to which argument to run
-                    -- (index starts at 0 for the first argument after the argument index.)
-        truthy      -- returns 1 if all arguments are truthy otherwise 0
+    where $0 means to use the argument at index 0.  Similarly for $1, etc.
 
-    based on the above, `if` can be built like this:
-        -- note the truthy clause happens second since `run (truthy $0)`
-        -- will run argument 0 for false and argument 1 for truthy:
+    The reason we use $0 for the first argument is to avoid off-by-one errors while
+    indexing the arguments internally within this script interpreter.
 
-        :set 'if' (run (truthy $0) $2 $1)
-
-    then we can do `if (conditional) (truthy) (falsy)`.
+    If we used $0 for the function name, this would make it more bash-like, and we
+    could call recursively like this:
+         :const 'factorial' (if (positive $1) (* $1 ($0 (+ $1 -1))) 1)
+    But we want to avoid off-by-one errors, so if we want to support this, we will create
+    our own re-evaluation function, e.g., $$.
+         :const 'factorial' (if (positive $0) (* $0 ($$ (+ $0 -1))) 1)
 
 TODO: add `cx`/`cy` as functions/commands to get cursor position x/y
 TODO: or maybe `mx`/`my` for mouse x/y.  could do both.
@@ -117,7 +110,6 @@ pub enum Command {
     CreateAlias,
 
     // TODO: Map: uses mode $0, with keybinding at $1, to evaluate command at $2.  optional command at $3 for release
-
     /// Returns the current mode, changing it to what's in $0 if present and valid.
     Mode,
 
@@ -143,6 +135,9 @@ pub enum Command {
     /// Note that an integer for the color also works as an index to the palette.
     Paint,
 
+    /// Getter/swapper for brush size.  If $0 is null, returns current brush size;
+    /// if $0 is an integer, sets the brush size to that and returns the old brush size.
+    BrushSize,
     /// Getter/swapper for BrushMode.  E.g., without an argument, will return the current value;
     /// with an argument, will set/unset the BrushMode if $0 is truthy/falsey.  In the latter case,
     /// the command will return the old value.  For specific values, `b/erase` to get/swap erase
@@ -152,7 +147,6 @@ pub enum Command {
     // TODO: BrushReset,
 
     // TODO: Shift: moves the animation over one to start one frame down
-
     /// Versions of quit, see enum `Quit`.
     Quit(Quit),
 }
@@ -191,6 +185,7 @@ impl fmt::Display for Command {
             Command::ForegroundColor => write!(f, "fg"),
             Command::BackgroundColor => write!(f, "bg"),
             Command::Paint => write!(f, "paint"),
+            Command::BrushSize => write!(f, "b/size"),
             Command::BrushMode(BrushMode::Erase) => write!(f, "b/erase"),
             Command::BrushMode(BrushMode::Multi) => write!(f, "b/multi"),
             Command::BrushMode(BrushMode::Perfect) => write!(f, "b/perfect"),
@@ -265,6 +260,7 @@ impl FromStr for Command {
             "fg" => Ok(Command::ForegroundColor),
             "bg" => Ok(Command::BackgroundColor),
             "paint" => Ok(Command::Paint),
+            "b/size" => Ok(Command::BrushSize),
             "b/erase" => Ok(Command::BrushMode(BrushMode::Erase)),
             "b/multi" => Ok(Command::BrushMode(BrushMode::Multi)),
             "b/perfect" => Ok(Command::BrushMode(BrushMode::Perfect)),
@@ -713,10 +709,23 @@ macro_rules! script_runner {
 
                         self.script_paint(x, y, color)
                     }
+                    Command::BrushSize => {
+                        let optional = self
+                            .script_evaluate(&script_stack, Evaluate::Index(0))?
+                            .get_optional_i64("for brush size")?;
+                        let old_size = self.brush.size as i64;
+                        let new_size = match optional {
+                            None => return Ok(Argument::I64(old_size)),
+                            Some(value) => value,
+                        };
+                        self.brush.size = new_size.max(1) as usize;
+                        Ok(Argument::I64(old_size))
+                    }
                     Command::BrushMode(mode) => {
                         let optional = self
                             .script_evaluate(&script_stack, Evaluate::Index(0))?
                             .get_optional_i64("for brush mode")?;
+                        // TODO: possibly bring this here to manipulate self.brush.
                         self.script_brush_mode(mode, optional)
                     }
                     Command::Quit(q) => {
@@ -1000,6 +1009,11 @@ impl Variables {
             e.g., `paint 3 4 #765432`",
         );
         variables.add_built_in(
+            Command::BrushSize,
+            "getter/swapper for brush size if $0 is null/present, \
+            e.g., `b/size 15` to set to 15",
+        );
+        variables.add_built_in(
             Command::BrushMode(BrushMode::Erase),
             "getter/swapper for erase brush option if $0 is null/present, \
             e.g., `b/erase on` to turn on",
@@ -1076,7 +1090,9 @@ impl Variables {
         assert_ok!(variables.set("sum".to_string(), Variable::Alias("+".to_string())));
         assert_ok!(variables.set("quit".to_string(), Variable::Alias("q".to_string())));
         assert_ok!(variables.set("quit!".to_string(), Variable::Alias("q!".to_string())));
-        for c in ["erase", "multi", "perfect", "xsym", "ysym", "xray", "line"] {
+        for c in [
+            "size", "erase", "multi", "perfect", "xsym", "ysym", "xray", "line",
+        ] {
             assert_ok!(variables.set(format!("brush/{}", c), Variable::Alias(format!("b/{}", c))));
         }
         variables
@@ -1237,6 +1253,7 @@ mod test {
     struct TestRunner {
         test_what_ran: Vec<WhatRan>,
         variables: Variables,
+        brush: Brush,
         fg: Rgba8,
         bg: Rgba8,
         palette: Palette,
@@ -1312,6 +1329,7 @@ mod test {
             palette.add(Rgba8::WHITE);
             Self {
                 palette,
+                brush: Brush::default(),
                 test_what_ran: Vec::new(),
                 variables: Variables::with_built_ins(),
                 fg: Rgba8::WHITE,
@@ -2250,6 +2268,49 @@ mod test {
                 color: test_runner.palette.colors[5]
             }],
         );
+    }
+
+    #[test]
+    fn test_evaluate_brush_size_via_getter() {
+        let mut test_runner = TestRunner::new();
+
+        test_runner.brush.size = 123456;
+        assert_eq!(
+            Script {
+                command: Command::BrushSize,
+                arguments: vec![]
+            }
+            .run(&mut test_runner),
+            Ok(Argument::I64(123456))
+        );
+        assert_eq!(test_runner.brush.size, 123456); // doesn't change it
+
+        test_runner.brush.size = 1234567;
+        assert_eq!(
+            Script {
+                command: Command::BrushSize,
+                arguments: vec![Argument::Null]
+            }
+            .run(&mut test_runner),
+            Ok(Argument::I64(1234567))
+        );
+        assert_eq!(test_runner.brush.size, 1234567); // doesn't change it
+    }
+
+    #[test]
+    fn test_evaluate_brush_size_via_swapper() {
+        let mut test_runner = TestRunner::new();
+
+        test_runner.brush.size = 123;
+        assert_eq!(
+            Script {
+                command: Command::BrushSize,
+                arguments: vec![Argument::I64(777)]
+            }
+            .run(&mut test_runner),
+            Ok(Argument::I64(123)) // returns old value
+        );
+        assert_eq!(test_runner.brush.size, 777); // sets new value
     }
 
     #[test]
