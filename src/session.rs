@@ -13,8 +13,8 @@ use crate::message::*;
 use crate::palette::*;
 use crate::platform::{self, InputState, Key, KeyboardInput, LogicalSize, ModifiersState};
 use crate::script::{
-    self, evaluate, get_or_set_color, Argument, ArgumentResult, Command, Evaluate, Quit, Script,
-    ScriptRunner, Serialize, StringResult, Variables, BrushMode
+    self, evaluate, get_or_set_color, Argument, ArgumentResult, BrushMode, Command, Evaluate,
+    I64Result, Quit, Script, ScriptRunner, Serialize, StringResult, Variables,
 };
 use crate::script_runner;
 use crate::util;
@@ -2349,32 +2349,10 @@ impl Session {
                     b.size = Self::MIN_BRUSH_SIZE;
                 }
             }
-            Cmd::FrameResize(fw, fh) => {
-                if fw == 0 || fh == 0 {
-                    self.message(
-                        "Error: cannot set frame dimension to `0`",
-                        MessageType::Error,
-                    );
-                    return result;
-                }
-                if fw > Self::MAX_FRAME_SIZE || fh > Self::MAX_FRAME_SIZE {
-                    self.message(
-                        format!(
-                            "Error: maximum frame size is {}x{}",
-                            Self::MAX_FRAME_SIZE,
-                            Self::MAX_FRAME_SIZE,
-                        ),
-                        MessageType::Error,
-                    );
-                    return result;
-                }
-
-                let v = self.active_view_mut();
-                v.resize_frames(fw, fh);
-
-                self.check_selection();
-                self.organize_views();
-            }
+            Cmd::FrameResize(fw, fh) => match self.resize_frames(fw as i64, fh as i64) {
+                Err(error) => self.message(format!("Error: {}", error), MessageType::Error),
+                _ => {}
+            },
             Cmd::FrameCurrent => {
                 let (frame, _) = self.current_frame();
                 result = frame.to_string();
@@ -3082,6 +3060,53 @@ impl Session {
             Quit::Forced => self.quit_view(self.views.active_id),
             Quit::AllForced => self.quit(ExitReason::Normal),
         }
+    }
+
+    fn get_or_swap_frame_width(&mut self, value: Option<i64>) -> I64Result {
+        let v = self.active_view();
+        let old_width = v.fw as i64;
+        let new_width = match value {
+            None => return Ok(old_width),
+            Some(width) => width,
+        };
+        self.resize_frames(new_width, v.fh as i64)?;
+        Ok(old_width)
+    }
+
+    fn get_or_swap_frame_height(&mut self, value: Option<i64>) -> I64Result {
+        let v = self.active_view();
+        let old_height = v.fh as i64;
+        let new_height = match value {
+            None => return Ok(old_height),
+            Some(height) => height,
+        };
+        self.resize_frames(v.fw as i64, new_height)?;
+        Ok(old_height)
+    }
+
+    fn resize_frames(&mut self, width: i64, height: i64) -> Result<(), String> {
+        if width <= 0 || height <= 0 {
+            return Err(format!(
+                "cannot set frame dimensions to ({}, {})",
+                width, height
+            ));
+        }
+        if width > Self::MAX_FRAME_SIZE.into() || height > Self::MAX_FRAME_SIZE.into() {
+            return Err(format!(
+                "({}, {}) is larger than the maximum frame size ({}, {})",
+                width,
+                height,
+                Self::MAX_FRAME_SIZE,
+                Self::MAX_FRAME_SIZE,
+            ));
+        }
+
+        let v = self.active_view_mut();
+        v.resize_frames(width as u32, height as u32);
+
+        self.check_selection();
+        self.organize_views();
+        return Ok(());
     }
 }
 

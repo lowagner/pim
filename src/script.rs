@@ -112,6 +112,14 @@ pub enum Command {
     /// Returns the current mode, changing it to what's in $0 if present and valid.
     Mode,
 
+    // TODO: `frame/crop` to resize to content.
+    // TODO: `frame/resize` to resize width height as $0 $1.
+    /// Getter/swapper for the width of each frame.  If $0 is null, this returns the current width;
+    /// if $0 is an integer, sets the frame width to $0 and returns the old value.
+    FrameWidth,
+    /// Getter/swapper for the height of each frame.  Compare with FrameWidth.
+    FrameHeight,
+
     // TODO: UiScale (1,2,3,4).  TODO: make it a percentage?  e.g., `ui/scale% 100` for scale=1, etc.
     // TODO: FitPixelWidth, FitPixelHeight; zoom to fit that many pixels within the screen based on available area
     /// Uses $0 to set the foreground color, if not null, and returns the old value.
@@ -181,6 +189,8 @@ impl fmt::Display for Command {
             Command::ConstVariable => write!(f, "const"),
             Command::CreateAlias => write!(f, "alias"),
             Command::Mode => write!(f, "mode"),
+            Command::FrameWidth => write!(f, "f/width"),
+            Command::FrameHeight => write!(f, "f/height"),
             Command::ForegroundColor => write!(f, "fg"),
             Command::BackgroundColor => write!(f, "bg"),
             Command::Paint => write!(f, "paint"),
@@ -256,6 +266,8 @@ impl FromStr for Command {
             "const" => Ok(Command::ConstVariable),
             "alias" => Ok(Command::CreateAlias),
             "mode" => Ok(Command::Mode),
+            "f/width" => Ok(Command::FrameWidth),
+            "f/height" => Ok(Command::FrameHeight),
             "fg" => Ok(Command::ForegroundColor),
             "bg" => Ok(Command::BackgroundColor),
             "paint" => Ok(Command::Paint),
@@ -681,10 +693,23 @@ macro_rules! script_runner {
                     Command::ConstVariable => self.variables.set_from_script(&script),
                     Command::CreateAlias => self.variables.set_from_script(&script),
                     Command::Mode => {
+                        // TODO: rename `get_or_set_X` to `get_or_swap_X` everywhere
                         let mode = self
                             .script_evaluate(&script_stack, Evaluate::Index(0))?
                             .get_string("for mode")?;
                         Ok(Argument::String(self.get_or_set_mode(mode)?))
+                    }
+                    Command::FrameWidth => {
+                        let value = self
+                            .script_evaluate(&script_stack, Evaluate::Index(0))?
+                            .get_optional_i64("for frame width")?;
+                        Ok(Argument::I64(self.get_or_swap_frame_width(value)?))
+                    }
+                    Command::FrameHeight => {
+                        let value = self
+                            .script_evaluate(&script_stack, Evaluate::Index(0))?
+                            .get_optional_i64("for frame height")?;
+                        Ok(Argument::I64(self.get_or_swap_frame_height(value)?))
                     }
                     Command::ForegroundColor => {
                         let color_arg = self.script_evaluate(&script_stack, Evaluate::Index(0))?;
@@ -1020,6 +1045,16 @@ impl Variables {
             e.g., `mode 'normal'` to go to normal mode",
         );
         variables.add_built_in(
+            Command::FrameWidth,
+            "getter/swapper for the frame width if $0 is null/present, \
+            e.g., `f/width 123` to set to 123 pixels wide",
+        );
+        variables.add_built_in(
+            Command::FrameHeight,
+            "getter/swapper for the frame height if $0 is null/present, \
+            e.g., `f/height 456` to set to 456 pixels high",
+        );
+        variables.add_built_in(
             Command::ForegroundColor,
             "getter/swapper for foreground color if $0 is null/present, \
             e.g., `fg 3` to set foreground color to palette 3",
@@ -1092,6 +1127,8 @@ impl Variables {
         );
         assert_ok!(variables.set("run".to_string(), Variable::BuiltIn("TODO".to_string())));
 
+        // TODO: add `normal` as a Const variable to the string "normal",
+        // same for other modes that you can set.
         assert_ok!(variables.set("null".to_string(), Variable::Const(Argument::Null)));
         assert_ok!(variables.set("on".to_string(), Variable::Const(Argument::I64(1))));
         assert_ok!(variables.set("off".to_string(), Variable::Const(Argument::I64(0))));
@@ -1153,6 +1190,7 @@ impl Variables {
 
     /// Sets the variable, returning the old value if it was present in the map.
     /// NOTE! Will return an error if the variable was present and const.
+    // TODO: rename `swap_in`
     pub fn set(&mut self, name: String, variable: Variable) -> ArgumentResult {
         match &variable {
             Variable::Alias(alias) => {
@@ -1394,6 +1432,16 @@ mod test {
         fn get_or_set_mode(&mut self, mode: String) -> StringResult {
             // Actually switch modes
             Ok(mode)
+        }
+
+        fn get_or_swap_frame_width(&mut self, _value: Option<i64>) -> I64Result {
+            // Actually set width
+            Ok(987)
+        }
+
+        fn get_or_swap_frame_height(&mut self, _value: Option<i64>) -> I64Result {
+            // Actually set height
+            Ok(321)
         }
 
         fn script_quit(&mut self, _quit: Quit) {
@@ -2356,7 +2404,10 @@ mod test {
             .run(&mut test_runner),
             Ok(Argument::I64(15))
         );
-        assert_eq!(test_runner.brush.line_mode(), Some(brush::BrushMode::Line(Some(15)))); // doesn't change it
+        assert_eq!(
+            test_runner.brush.line_mode(),
+            Some(brush::BrushMode::Line(Some(15)))
+        ); // doesn't change it
 
         test_runner.brush.unset(brush::BrushMode::Line(None));
         assert_eq!(
@@ -2383,7 +2434,10 @@ mod test {
             .run(&mut test_runner),
             Ok(Argument::I64(15))
         );
-        assert_eq!(test_runner.brush.line_mode(), Some(brush::BrushMode::Line(Some(77)))); // changes it
+        assert_eq!(
+            test_runner.brush.line_mode(),
+            Some(brush::BrushMode::Line(Some(77)))
+        ); // changes it
 
         assert_eq!(
             Script {
