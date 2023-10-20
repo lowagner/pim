@@ -118,6 +118,9 @@ pub enum Command {
 
     // TODO: Map: uses mode $0, with keybinding at $1, to evaluate command at $2.  optional command at $3 for release
 
+    /// Returns the current mode, changing it to what's in $0 if present and valid.
+    Mode,
+
     // TODO: UiScale (1,2,3,4).  TODO: make it a percentage?  e.g., `ui/scale% 100` for scale=1, etc.
     // TODO: FitPixelWidth, FitPixelHeight; zoom to fit that many pixels within the screen based on available area
     /// Uses $0 to set the foreground color, if not null, and returns the old value.
@@ -149,8 +152,6 @@ pub enum Command {
     // TODO: BrushReset,
 
     // TODO: Shift: moves the animation over one to start one frame down
-    /// Returns the current mode, changing it to what's in $0 if present and valid.
-    Mode,
 
     /// Versions of quit, see enum `Quit`.
     Quit(Quit),
@@ -186,6 +187,7 @@ impl fmt::Display for Command {
             Command::SetVariable => write!(f, "set"),
             Command::ConstVariable => write!(f, "const"),
             Command::CreateAlias => write!(f, "alias"),
+            Command::Mode => write!(f, "mode"),
             Command::ForegroundColor => write!(f, "fg"),
             Command::BackgroundColor => write!(f, "bg"),
             Command::Paint => write!(f, "paint"),
@@ -196,7 +198,6 @@ impl fmt::Display for Command {
             Command::BrushMode(BrushMode::YSym) => write!(f, "b/ysym"),
             Command::BrushMode(BrushMode::XRay) => write!(f, "b/xray"),
             Command::BrushMode(BrushMode::Line) => write!(f, "b/line"),
-            Command::Mode => write!(f, "mode"),
             Command::Quit(Quit::Safe) => write!(f, "q"),
             Command::Quit(Quit::AllSafe) => write!(f, "qa"),
             Command::Quit(Quit::Forced) => write!(f, "q!"),
@@ -260,6 +261,7 @@ impl FromStr for Command {
             "set" => Ok(Command::SetVariable),
             "const" => Ok(Command::ConstVariable),
             "alias" => Ok(Command::CreateAlias),
+            "mode" => Ok(Command::Mode),
             "fg" => Ok(Command::ForegroundColor),
             "bg" => Ok(Command::BackgroundColor),
             "paint" => Ok(Command::Paint),
@@ -270,7 +272,6 @@ impl FromStr for Command {
             "b/ysym" => Ok(Command::BrushMode(BrushMode::YSym)),
             "b/xray" => Ok(Command::BrushMode(BrushMode::XRay)),
             "b/line" => Ok(Command::BrushMode(BrushMode::Line)),
-            "mode" => Ok(Command::Mode),
             "q" => Ok(Command::Quit(Quit::Safe)),
             "qa" => Ok(Command::Quit(Quit::AllSafe)),
             "q!" => Ok(Command::Quit(Quit::Forced)),
@@ -684,6 +685,12 @@ macro_rules! script_runner {
                     Command::SetVariable => self.variables.set_from_script(&script),
                     Command::ConstVariable => self.variables.set_from_script(&script),
                     Command::CreateAlias => self.variables.set_from_script(&script),
+                    Command::Mode => {
+                        let mode = self
+                            .script_evaluate(&script_stack, Evaluate::Index(0))?
+                            .get_string("for mode")?;
+                        Ok(Argument::String(self.get_or_set_mode(mode)?))
+                    }
                     Command::ForegroundColor => {
                         let color_arg = self.script_evaluate(&script_stack, Evaluate::Index(0))?;
                         get_or_set_color(&mut self.fg, &self.palette, color_arg)
@@ -711,12 +718,6 @@ macro_rules! script_runner {
                             .script_evaluate(&script_stack, Evaluate::Index(0))?
                             .get_optional_i64("for brush mode")?;
                         self.script_brush_mode(mode, optional)
-                    }
-                    Command::Mode => {
-                        let mode = self
-                            .script_evaluate(&script_stack, Evaluate::Index(0))?
-                            .get_string("for mode")?;
-                        Ok(Argument::String(self.get_or_set_mode(mode)?))
                     }
                     Command::Quit(q) => {
                         self.script_quit(q);
@@ -979,6 +980,11 @@ impl Variables {
             e.g., `alias 'fgc' 'fg'` to add `fgc` as an alias for `fg`",
         );
         variables.add_built_in(
+            Command::Mode,
+            "getter/swapper for the current mode if $0 is null/present, \
+            e.g., `mode 'normal'` to go to normal mode",
+        );
+        variables.add_built_in(
             Command::ForegroundColor,
             "getter/swapper for foreground color if $0 is null/present, \
             e.g., `fg 3` to set foreground color to palette 3",
@@ -1027,11 +1033,6 @@ impl Variables {
             Command::BrushMode(BrushMode::Line),
             "getter/swapper for line angle brush option if $0 is null/present, \
             e.g., `b/line 30` to set to 30 degrees, `b/line 0` to turn off",
-        );
-        variables.add_built_in(
-            Command::Mode,
-            "getter/swapper for the current mode if $0 is null/present, \
-            e.g., `mode 'normal'` to go to normal mode",
         );
         variables.add_built_in(
             Command::Quit(Quit::Safe),
