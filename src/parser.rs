@@ -522,7 +522,7 @@ mod test {
     fn test_script_converts_unknown_tokens_to_zero_arg_scripts() {
         let p = Script::parser();
 
-        let (result, rest) = p.parse("paint x1 y2 (fg swap3)").unwrap();
+        let (result, rest) = p.parse("p x1 y2 (fg swap3)").unwrap();
 
         assert_eq!(rest, "");
         assert_eq!(

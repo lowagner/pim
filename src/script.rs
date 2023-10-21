@@ -197,7 +197,7 @@ impl fmt::Display for Command {
             Command::FrameHeight => write!(f, "f/height"),
             Command::ForegroundColor => write!(f, "fg"),
             Command::BackgroundColor => write!(f, "bg"),
-            Command::Paint => write!(f, "paint"),
+            Command::Paint => write!(f, "p"),
             Command::BrushSize => write!(f, "b/size"),
             Command::BrushMode(BrushMode::Erase) => write!(f, "b/erase"),
             Command::BrushMode(BrushMode::Multi) => write!(f, "b/multi"),
@@ -213,6 +213,57 @@ impl fmt::Display for Command {
         }
     }
 }
+
+impl FromStr for Command {
+    type Err = EmptyCommandParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.trim() {
+            "?" => Ok(Command::Help),
+            "error" => Ok(Command::Error),
+            "push/pop" => Ok(Command::PushPop),
+            "run/all" => Ok(Command::RunAll),
+            "not" => Ok(Command::Not),
+            "if" => Ok(Command::If),
+            "even" => Ok(Command::Even),
+            "odd" => Ok(Command::Odd),
+            "+" => Ok(Command::Sum),
+            "*" => Ok(Command::Product),
+            "set" => Ok(Command::SetVariable),
+            "const" => Ok(Command::ConstVariable),
+            "alias" => Ok(Command::CreateAlias),
+            "mode" => Ok(Command::Mode),
+            "f/resize" => Ok(Command::FrameResize),
+            "f/width" => Ok(Command::FrameWidth),
+            "f/height" => Ok(Command::FrameHeight),
+            "fg" => Ok(Command::ForegroundColor),
+            "bg" => Ok(Command::BackgroundColor),
+            "p" => Ok(Command::Paint),
+            "b/size" => Ok(Command::BrushSize),
+            "b/erase" => Ok(Command::BrushMode(BrushMode::Erase)),
+            "b/multi" => Ok(Command::BrushMode(BrushMode::Multi)),
+            "b/perfect" => Ok(Command::BrushMode(BrushMode::Perfect)),
+            "b/xsym" => Ok(Command::BrushMode(BrushMode::XSym)),
+            "b/ysym" => Ok(Command::BrushMode(BrushMode::YSym)),
+            "b/xray" => Ok(Command::BrushMode(BrushMode::XRay)),
+            "b/line" => Ok(Command::BrushMode(BrushMode::Line)),
+            "q" => Ok(Command::Quit(Quit::Safe)),
+            "qa" => Ok(Command::Quit(Quit::AllSafe)),
+            "q!" => Ok(Command::Quit(Quit::Forced)),
+            "qa!" => Ok(Command::Quit(Quit::AllForced)),
+            name => {
+                if name.len() > 0 {
+                    Ok(Command::Evaluate(name.to_string()))
+                } else {
+                    Err(EmptyCommandParseError)
+                }
+            }
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct EmptyCommandParseError;
 
 // TODO: rename BrushMode to BrushOption
 /// Brush mode. Any number of these modes can be active at once.
@@ -246,57 +297,6 @@ pub enum Quit {
     Forced,
     /// Force quit all views, via `qa!`.
     AllForced,
-}
-
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub struct EmptyCommandParseError;
-
-impl FromStr for Command {
-    type Err = EmptyCommandParseError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.trim() {
-            "?" => Ok(Command::Help),
-            "error" => Ok(Command::Error),
-            "push/pop" => Ok(Command::PushPop),
-            "run/all" => Ok(Command::RunAll),
-            "not" => Ok(Command::Not),
-            "if" => Ok(Command::If),
-            "even" => Ok(Command::Even),
-            "odd" => Ok(Command::Odd),
-            "+" => Ok(Command::Sum),
-            "*" => Ok(Command::Product),
-            "set" => Ok(Command::SetVariable),
-            "const" => Ok(Command::ConstVariable),
-            "alias" => Ok(Command::CreateAlias),
-            "mode" => Ok(Command::Mode),
-            "f/resize" => Ok(Command::FrameResize),
-            "f/width" => Ok(Command::FrameWidth),
-            "f/height" => Ok(Command::FrameHeight),
-            "fg" => Ok(Command::ForegroundColor),
-            "bg" => Ok(Command::BackgroundColor),
-            "paint" => Ok(Command::Paint),
-            "b/size" => Ok(Command::BrushSize),
-            "b/erase" => Ok(Command::BrushMode(BrushMode::Erase)),
-            "b/multi" => Ok(Command::BrushMode(BrushMode::Multi)),
-            "b/perfect" => Ok(Command::BrushMode(BrushMode::Perfect)),
-            "b/xsym" => Ok(Command::BrushMode(BrushMode::XSym)),
-            "b/ysym" => Ok(Command::BrushMode(BrushMode::YSym)),
-            "b/xray" => Ok(Command::BrushMode(BrushMode::XRay)),
-            "b/line" => Ok(Command::BrushMode(BrushMode::Line)),
-            "q" => Ok(Command::Quit(Quit::Safe)),
-            "qa" => Ok(Command::Quit(Quit::AllSafe)),
-            "q!" => Ok(Command::Quit(Quit::Forced)),
-            "qa!" => Ok(Command::Quit(Quit::AllForced)),
-            name => {
-                if name.len() > 0 {
-                    Ok(Command::Evaluate(name.to_string()))
-                } else {
-                    Err(EmptyCommandParseError)
-                }
-            }
-        }
-    }
 }
 
 #[derive(PartialEq, Debug, Clone)]
@@ -1098,7 +1098,7 @@ impl Variables {
         variables.add_built_in(
             Command::Paint,
             "paints coordinates ($0, $1) with color $2, defaulting to foreground, \
-            e.g., `paint 3 4 #765432`",
+            e.g., `p 3 4 #765432`",
         );
         variables.add_built_in(
             Command::BrushSize,
@@ -1182,6 +1182,7 @@ impl Variables {
         assert_ok!(variables.set("multiply".to_string(), Variable::Alias("*".to_string())));
         assert_ok!(variables.set("product".to_string(), Variable::Alias("*".to_string())));
         assert_ok!(variables.set("sum".to_string(), Variable::Alias("+".to_string())));
+        assert_ok!(variables.set("paint".to_string(), Variable::Alias("p".to_string())));
         assert_ok!(variables.set("quit".to_string(), Variable::Alias("q".to_string())));
         assert_ok!(variables.set("quit!".to_string(), Variable::Alias("q!".to_string())));
         for c in [
@@ -1354,8 +1355,6 @@ mod test {
         fg: Rgba8,
         bg: Rgba8,
         palette: Palette,
-        // TODO: move into test_what_ran as a new enum value
-        test_painted: Vec<Painted>,
         message: Message,
     }
 
@@ -1432,7 +1431,6 @@ mod test {
                 variables: Variables::with_built_ins(),
                 fg: Rgba8::WHITE,
                 bg: Rgba8::BLACK,
-                test_painted: vec![],
                 message: Message::default(),
             }
         }
@@ -1457,13 +1455,13 @@ mod test {
         }
 
         fn script_paint(&mut self, x: i64, y: i64, color: Rgba8) -> ArgumentResult {
-            self.test_painted.push(Painted { x, y, color });
+            self.test_what_ran.push(WhatRan::Mocked(format!("p {} {} {}", x, y, color)));
             // In the implementation, return the color that was under the cursor.
             Ok(Argument::Color(Self::PAINT_RETURN_COLOR))
         }
 
         fn get_or_set_mode(&mut self, mode: String) -> StringResult {
-            // Actually switch modes
+            self.test_what_ran.push(WhatRan::Mocked(format!("mode {}", mode)));
             Ok(mode)
         }
 
@@ -1472,18 +1470,18 @@ mod test {
             Ok(())
         }
 
-        fn get_or_swap_frame_width(&mut self, _value: Option<i64>) -> I64Result {
-            // Actually set width
+        fn get_or_swap_frame_width(&mut self, value: Option<i64>) -> I64Result {
+            self.test_what_ran.push(WhatRan::Mocked(format!("f/width {:?}", value)));
             Ok(987)
         }
 
-        fn get_or_swap_frame_height(&mut self, _value: Option<i64>) -> I64Result {
-            // Actually set height
+        fn get_or_swap_frame_height(&mut self, value: Option<i64>) -> I64Result {
+            self.test_what_ran.push(WhatRan::Mocked(format!("f/height {:?}", value)));
             Ok(321)
         }
 
-        fn script_quit(&mut self, _quit: Quit) {
-            // Actually quit
+        fn script_quit(&mut self, quit: Quit) {
+            self.test_what_ran.push(WhatRan::Mocked(format!("quit{{{:?}}}", quit)));
         }
     }
 
@@ -1501,6 +1499,7 @@ mod test {
             test_runner.test_what_ran,
             Vec::from([
                 WhatRan::Begin(Command::Quit(Quit::Safe)),
+                WhatRan::Mocked("quit{Safe}".to_string()),
                 WhatRan::End(Command::Quit(Quit::Safe)),
             ])
         );
@@ -1858,6 +1857,7 @@ mod test {
                 WhatRan::Evaluated(Ok(Argument::I64(101))),
                 WhatRan::Evaluated(Ok(Argument::I64(202))),
                 WhatRan::Evaluated(Ok(Argument::Color(Rgba8::BLUE))),
+                WhatRan::Mocked("p 101 202 #0000ff".to_string()),
                 WhatRan::End(Command::Paint),
                 WhatRan::Evaluated(Ok(Argument::Color(TestRunner::PAINT_RETURN_COLOR))),
                 WhatRan::Begin(Command::Error),
@@ -2358,18 +2358,11 @@ mod test {
                 WhatRan::Evaluated(Ok(Argument::I64(37))), // x coordinate
                 WhatRan::Evaluated(Ok(Argument::I64(10))), // y coordinate
                 WhatRan::Evaluated(Ok(Argument::I64(5))),  // color palette
+                WhatRan::Mocked(format!("p 37 10 {}", test_runner.palette.colors[5])),
                 WhatRan::End(Command::Paint),
                 WhatRan::End(Command::Evaluate(function2.clone())),
                 WhatRan::End(Command::Evaluate(function1.clone())),
             ]
-        );
-        assert_eq!(
-            test_runner.test_painted,
-            vec![Painted {
-                x: 37,
-                y: 10,
-                color: test_runner.palette.colors[5]
-            }],
         );
     }
 
@@ -2676,10 +2669,10 @@ mod test {
         );
         assert_eq!(
             variables.set(
-                "paint".to_string(),
+                "p".to_string(),
                 Variable::Alias("super-paint".to_string()),
             ),
-            Err("built-in `paint` is not reassignable".to_string())
+            Err("built-in `p` is not reassignable".to_string())
         );
         assert_eq!(
             variables.set(
@@ -3112,7 +3105,7 @@ mod test {
         assert_eq!(Command::from_str("alias"), Ok(Command::CreateAlias));
         assert_eq!(Command::from_str("fg"), Ok(Command::ForegroundColor));
         assert_eq!(Command::from_str("bg"), Ok(Command::BackgroundColor));
-        assert_eq!(Command::from_str("paint"), Ok(Command::Paint));
+        assert_eq!(Command::from_str("p"), Ok(Command::Paint));
         assert_eq!(Command::from_str("q"), Ok(Command::Quit(Quit::Safe)));
         assert_eq!(Command::from_str("qa"), Ok(Command::Quit(Quit::AllSafe)));
         assert_eq!(Command::from_str("q!"), Ok(Command::Quit(Quit::Forced)));
@@ -3166,7 +3159,7 @@ mod test {
 
         assert_eq!(
             format!("{}", Serialize::Script(&script)),
-            "if $0 (paint x1 y2 $1) (jangles (fg $2) q $3)".to_string()
+            "if $0 (p x1 y2 $1) (jangles (fg $2) q $3)".to_string()
         );
     }
 }
