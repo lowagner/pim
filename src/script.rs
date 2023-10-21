@@ -122,6 +122,14 @@ pub enum Command {
     FrameWidth,
     /// Getter/swapper for the height of each frame.  Compare with FrameWidth.
     FrameHeight,
+    /// Getter/swapper for the current frame index.  If $0 is null, returns the current frame;
+    /// if $0 is an integer, sets the current frame to that value and returns the old value.
+    /// Note that we mod by the number of frames, so `f -1` will go to the last frame.
+    FrameIndex,
+    // TODO: FrameClone
+    // TODO: FrameDelete
+    // TODO: FrameSwap
+    // TODO: FrameShift, moves the animation over one to start one frame down
 
     // TODO: UiScale (1,2,3,4).  TODO: make it a percentage?  e.g., `ui/scale% 100` for scale=1, etc.
     // TODO: FitPixelWidth, FitPixelHeight; zoom to fit that many pixels within the screen based on available area
@@ -155,8 +163,6 @@ pub enum Command {
     /// argument for the angle (in degrees) to snap to when drawing a line; 0 for no snapping.
     BrushMode(BrushMode),
     // TODO: BrushReset,
-
-    // TODO: Shift: moves the animation over one to start one frame down
     /// Versions of quit, see enum `Quit`.
     Quit(Quit),
 }
@@ -195,6 +201,7 @@ impl fmt::Display for Command {
             Command::FrameResize => write!(f, "f/resize"),
             Command::FrameWidth => write!(f, "f/width"),
             Command::FrameHeight => write!(f, "f/height"),
+            Command::FrameIndex => write!(f, "f"),
             Command::ForegroundColor => write!(f, "fg"),
             Command::BackgroundColor => write!(f, "bg"),
             Command::Paint => write!(f, "p"),
@@ -236,6 +243,7 @@ impl FromStr for Command {
             "f/resize" => Ok(Command::FrameResize),
             "f/width" => Ok(Command::FrameWidth),
             "f/height" => Ok(Command::FrameHeight),
+            "f" => Ok(Command::FrameIndex),
             "fg" => Ok(Command::ForegroundColor),
             "bg" => Ok(Command::BackgroundColor),
             "p" => Ok(Command::Paint),
@@ -477,6 +485,8 @@ fn serialize_argument(argument: &Argument, f: &mut fmt::Formatter<'_>) -> fmt::R
     }
 }
 
+// TODO: we probably can just use fmt::Display for the nice serialization,
+// and fmt::Debug for the debug display version.
 pub enum Serialize<'a> {
     Argument(&'a Argument),
     Script(&'a Script),
@@ -736,6 +746,12 @@ macro_rules! script_runner {
                             .script_evaluate(&script_stack, Evaluate::Index(0))?
                             .get_optional_i64("for frame height")?;
                         Ok(Argument::I64(self.get_or_swap_frame_height(value)?))
+                    }
+                    Command::FrameIndex => {
+                        let value = self
+                            .script_evaluate(&script_stack, Evaluate::Index(0))?
+                            .get_optional_i64("for frame")?;
+                        Ok(Argument::I64(self.get_or_swap_frame_index(value)?))
                     }
                     Command::ForegroundColor => {
                         let color_arg = self.script_evaluate(&script_stack, Evaluate::Index(0))?;
@@ -1086,6 +1102,12 @@ impl Variables {
             e.g., `f/height 456` to set to 456 pixels high",
         );
         variables.add_built_in(
+            Command::FrameIndex,
+            "getter/swapper for the frame index if $0 is null/present, \
+            e.g., `f 3` to switch to the fourth frame (0-indexed), \
+            or `f -1` to switch to the last frame (wrap around)",
+        );
+        variables.add_built_in(
             Command::ForegroundColor,
             "getter/swapper for foreground color if $0 is null/present, \
             e.g., `fg 3` to set foreground color to palette 3",
@@ -1165,6 +1187,32 @@ impl Variables {
         assert_ok!(variables.set("off".to_string(), Variable::Const(Argument::I64(0))));
         assert_ok!(variables.set("true".to_string(), Variable::Const(Argument::I64(1))));
         assert_ok!(variables.set("false".to_string(), Variable::Const(Argument::I64(0))));
+        assert_ok!(variables.set(
+            "f++".to_string(),
+            Variable::Const(Argument::Script(Script {
+                command: Command::FrameIndex,
+                arguments: vec![Argument::Script(Script {
+                    command: Command::Sum,
+                    arguments: vec![
+                        Argument::Script(Script::zero_arg(Command::FrameIndex)),
+                        Argument::I64(1),
+                    ],
+                })],
+            }))
+        ));
+        assert_ok!(variables.set(
+            "f--".to_string(),
+            Variable::Const(Argument::Script(Script {
+                command: Command::FrameIndex,
+                arguments: vec![Argument::Script(Script {
+                    command: Command::Sum,
+                    arguments: vec![
+                        Argument::Script(Script::zero_arg(Command::FrameIndex)),
+                        Argument::I64(-1),
+                    ],
+                })],
+            }))
+        ));
         // TODO: add "red", "blue", etc. as Mutable color variables
         // e.g., add `red 1`, `red 2`, etc.
 
@@ -1183,6 +1231,7 @@ impl Variables {
         assert_ok!(variables.set("product".to_string(), Variable::Alias("*".to_string())));
         assert_ok!(variables.set("sum".to_string(), Variable::Alias("+".to_string())));
         assert_ok!(variables.set("paint".to_string(), Variable::Alias("p".to_string())));
+        assert_ok!(variables.set("f/index".to_string(), Variable::Alias("f".to_string())));
         assert_ok!(variables.set("quit".to_string(), Variable::Alias("q".to_string())));
         assert_ok!(variables.set("quit!".to_string(), Variable::Alias("q!".to_string())));
         for c in [
@@ -1455,33 +1504,45 @@ mod test {
         }
 
         fn script_paint(&mut self, x: i64, y: i64, color: Rgba8) -> ArgumentResult {
-            self.test_what_ran.push(WhatRan::Mocked(format!("p {} {} {}", x, y, color)));
+            self.test_what_ran
+                .push(WhatRan::Mocked(format!("p {} {} {}", x, y, color)));
             // In the implementation, return the color that was under the cursor.
             Ok(Argument::Color(Self::PAINT_RETURN_COLOR))
         }
 
         fn get_or_set_mode(&mut self, mode: String) -> StringResult {
-            self.test_what_ran.push(WhatRan::Mocked(format!("mode {}", mode)));
+            self.test_what_ran
+                .push(WhatRan::Mocked(format!("mode {}", mode)));
             Ok(mode)
         }
 
         fn resize_frames(&mut self, width: i64, height: i64) -> Result<(), String> {
-            self.test_what_ran.push(WhatRan::Mocked(format!("f/resize {} {}", width, height)));
+            self.test_what_ran
+                .push(WhatRan::Mocked(format!("f/resize {} {}", width, height)));
             Ok(())
         }
 
         fn get_or_swap_frame_width(&mut self, value: Option<i64>) -> I64Result {
-            self.test_what_ran.push(WhatRan::Mocked(format!("f/width {:?}", value)));
+            self.test_what_ran
+                .push(WhatRan::Mocked(format!("f/width {:?}", value)));
             Ok(987)
         }
 
         fn get_or_swap_frame_height(&mut self, value: Option<i64>) -> I64Result {
-            self.test_what_ran.push(WhatRan::Mocked(format!("f/height {:?}", value)));
+            self.test_what_ran
+                .push(WhatRan::Mocked(format!("f/height {:?}", value)));
             Ok(321)
         }
 
+        fn get_or_swap_frame_index(&mut self, value: Option<i64>) -> I64Result {
+            self.test_what_ran
+                .push(WhatRan::Mocked(format!("f {:?}", value)));
+            Ok(404)
+        }
+
         fn script_quit(&mut self, quit: Quit) {
-            self.test_what_ran.push(WhatRan::Mocked(format!("quit{{{:?}}}", quit)));
+            self.test_what_ran
+                .push(WhatRan::Mocked(format!("quit{{{:?}}}", quit)));
         }
     }
 
@@ -2668,10 +2729,7 @@ mod test {
             Err("built-in `fg` is not reassignable".to_string())
         );
         assert_eq!(
-            variables.set(
-                "p".to_string(),
-                Variable::Alias("super-paint".to_string()),
-            ),
+            variables.set("p".to_string(), Variable::Alias("super-paint".to_string()),),
             Err("built-in `p` is not reassignable".to_string())
         );
         assert_eq!(
@@ -2707,10 +2765,27 @@ mod test {
             .get("swap".to_string())
             .get_script("for test")
             .unwrap();
-
         assert_eq!(
             format!("{}", Serialize::Script(&swap)),
             "fg (bg fg)".to_string()
+        );
+
+        let next_frame = variables
+            .get("f++".to_string())
+            .get_script("for test")
+            .unwrap();
+        assert_eq!(
+            format!("{}", Serialize::Script(&next_frame)),
+            "f (+ f 1)".to_string()
+        );
+
+        let previous_frame = variables
+            .get("f--".to_string())
+            .get_script("for test")
+            .unwrap();
+        assert_eq!(
+            format!("{}", Serialize::Script(&previous_frame)),
+            "f (+ f -1)".to_string()
         );
     }
 

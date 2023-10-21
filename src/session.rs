@@ -3108,6 +3108,16 @@ impl Session {
         self.organize_views();
         return Ok(());
     }
+
+    fn get_or_swap_frame_index(&mut self, value: Option<i64>) -> I64Result {
+        let (old_frame, max_frames) = self.current_frame();
+        let new_frame = match value {
+            None => return Ok(old_frame as i64),
+            Some(frame) => frame.rem_euclid(max_frames as i64),
+        };
+        self.center_active_view_frame(new_frame as usize);
+        Ok(old_frame as i64)
+    }
 }
 
 #[cfg(test)]
