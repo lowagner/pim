@@ -13,7 +13,7 @@ use crate::message::*;
 use crate::palette::*;
 use crate::platform::{self, InputState, Key, KeyboardInput, LogicalSize, ModifiersState};
 use crate::script::{
-    self, evaluate, get_or_set_color, Argument, ArgumentResult, BrushMode, Command, Evaluate,
+    self, evaluate, get_or_swap_color, Argument, ArgumentResult, BrushMode, Command, Evaluate,
     I64Result, Quit, Script, ScriptRunner, Serialize, StringResult, Variables,
 };
 use crate::script_runner;
@@ -3037,7 +3037,7 @@ impl Session {
         Ok(Argument::Color(color))
     }
 
-    fn get_or_set_mode(&mut self, mode_string: String) -> StringResult {
+    fn get_or_swap_mode(&mut self, mode_string: String) -> StringResult {
         let old_mode = self.mode.to_string();
         if mode_string.is_empty() {
             return Ok(old_mode);

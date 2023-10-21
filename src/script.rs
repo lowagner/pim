@@ -708,11 +708,10 @@ macro_rules! script_runner {
                     Command::ConstVariable => self.variables.set_from_script(&script),
                     Command::CreateAlias => self.variables.set_from_script(&script),
                     Command::Mode => {
-                        // TODO: rename `get_or_set_X` to `get_or_swap_X` everywhere
                         let mode = self
                             .script_evaluate(&script_stack, Evaluate::Index(0))?
                             .get_string("for mode")?;
-                        Ok(Argument::String(self.get_or_set_mode(mode)?))
+                        Ok(Argument::String(self.get_or_swap_mode(mode)?))
                     }
                     Command::FrameResize => {
                         let optional_width = self
@@ -755,11 +754,11 @@ macro_rules! script_runner {
                     }
                     Command::ForegroundColor => {
                         let color_arg = self.script_evaluate(&script_stack, Evaluate::Index(0))?;
-                        get_or_set_color(&mut self.fg, &self.palette, color_arg)
+                        get_or_swap_color(&mut self.fg, &self.palette, color_arg)
                     }
                     Command::BackgroundColor => {
                         let color_arg = self.script_evaluate(&script_stack, Evaluate::Index(0))?;
-                        get_or_set_color(&mut self.bg, &self.palette, color_arg)
+                        get_or_swap_color(&mut self.bg, &self.palette, color_arg)
                     }
                     Command::Paint => {
                         let x = self
@@ -771,7 +770,7 @@ macro_rules! script_runner {
 
                         let mut color = self.fg; // default to foreground color
                         let color_arg = self.script_evaluate(&script_stack, Evaluate::Index(2))?;
-                        _ = get_or_set_color(&mut color, &self.palette, color_arg)?;
+                        get_or_swap_color(&mut color, &self.palette, color_arg)?;
 
                         self.script_paint(x, y, color)
                     }
@@ -839,7 +838,7 @@ macro_rules! script_runner {
 /// this behave as a getter and a non-Null argument as a swapper, i.e.,
 /// we return the old value as we swap in the new value.
 /// We will use the palette in case an integer argument is passed in.
-pub fn get_or_set_color(
+pub fn get_or_swap_color(
     maybe_set_color: &mut Rgba8,
     palette: &Palette,
     color_result: Argument,
@@ -865,7 +864,7 @@ pub fn get_or_set_color(
             mem::swap(&mut color, maybe_set_color);
             Ok(Argument::Color(color))
         }
-        arg => Err(format!("invalid argument to get_or_set_color: {}", arg)),
+        arg => Err(format!("invalid argument to get_or_swap_color: {}", arg)),
     }
 }
 
@@ -1180,13 +1179,16 @@ impl Variables {
         );
         assert_ok!(variables.set("run".to_string(), Variable::BuiltIn("TODO".to_string())));
 
-        // TODO: add `normal` as a Const variable to the string "normal",
-        // same for other modes that you can set.
+        // Helpful constants.
         assert_ok!(variables.set("null".to_string(), Variable::Const(Argument::Null)));
         assert_ok!(variables.set("on".to_string(), Variable::Const(Argument::I64(1))));
         assert_ok!(variables.set("off".to_string(), Variable::Const(Argument::I64(0))));
         assert_ok!(variables.set("true".to_string(), Variable::Const(Argument::I64(1))));
         assert_ok!(variables.set("false".to_string(), Variable::Const(Argument::I64(0))));
+        // TODO: add `normal` as a Const variable to the string "normal",
+        // same for other modes that you can set.
+
+        // Helpful scripts.
         assert_ok!(variables.set(
             "f++".to_string(),
             Variable::Const(Argument::Script(Script {
@@ -1213,9 +1215,6 @@ impl Variables {
                 })],
             }))
         ));
-        // TODO: add "red", "blue", etc. as Mutable color variables
-        // e.g., add `red 1`, `red 2`, etc.
-
         assert_ok!(variables.set(
             "swap".to_string(),
             Variable::Const(Argument::Script(Script {
@@ -1226,6 +1225,8 @@ impl Variables {
                 })],
             })),
         ));
+        // TODO: add "red", "blue", etc. as Mutable color variables
+        // e.g., add `red 1`, `red 2`, etc., using OkLab colors
 
         assert_ok!(variables.set("multiply".to_string(), Variable::Alias("*".to_string())));
         assert_ok!(variables.set("product".to_string(), Variable::Alias("*".to_string())));
@@ -1510,7 +1511,7 @@ mod test {
             Ok(Argument::Color(Self::PAINT_RETURN_COLOR))
         }
 
-        fn get_or_set_mode(&mut self, mode: String) -> StringResult {
+        fn get_or_swap_mode(&mut self, mode: String) -> StringResult {
             self.test_what_ran
                 .push(WhatRan::Mocked(format!("mode {}", mode)));
             Ok(mode)
@@ -2997,7 +2998,7 @@ mod test {
     }
 
     #[test]
-    fn test_get_or_set_color_works_with_palette() {
+    fn test_get_or_swap_color_works_with_palette() {
         let mut palette = Palette::new(12.0, 50);
         palette.add(Rgba8 {
             r: 111,
@@ -3023,14 +3024,14 @@ mod test {
 
         // going "under" the palette size:
         assert_eq!(
-            get_or_set_color(&mut color, &palette, Argument::I64(-1)),
+            get_or_swap_color(&mut color, &palette, Argument::I64(-1)),
             Err("no palette color with index -1".to_string())
         );
         assert_eq!(color, trailing_color); // no change
 
         // being within palette size:
         assert_eq!(
-            get_or_set_color(&mut color, &palette, Argument::I64(1)),
+            get_or_swap_color(&mut color, &palette, Argument::I64(1)),
             Ok(Argument::Color(trailing_color))
         );
         assert_eq!(color, palette.colors[1]);
@@ -3038,21 +3039,21 @@ mod test {
 
         // going over the palette size:
         assert_eq!(
-            get_or_set_color(&mut color, &palette, Argument::I64(2)),
+            get_or_swap_color(&mut color, &palette, Argument::I64(2)),
             Err("no palette color with index 2".to_string())
         );
         assert_eq!(color, trailing_color); // no change
 
         // another test within palette size:
         assert_eq!(
-            get_or_set_color(&mut color, &palette, Argument::I64(0)),
+            get_or_swap_color(&mut color, &palette, Argument::I64(0)),
             Ok(Argument::Color(trailing_color))
         );
         assert_eq!(color, palette.colors[0]);
     }
 
     #[test]
-    fn test_get_or_set_color_works_with_pure_colors() {
+    fn test_get_or_swap_color_works_with_pure_colors() {
         // Palette should be ignored.
         let palette = Palette::new(12.0, 50);
 
@@ -3073,7 +3074,7 @@ mod test {
             a: 0xff,
         };
         assert_eq!(
-            get_or_set_color(&mut color, &palette, Argument::Color(new_color)),
+            get_or_swap_color(&mut color, &palette, Argument::Color(new_color)),
             Ok(Argument::Color(trailing_color))
         );
         assert_eq!(color, new_color);
@@ -3087,14 +3088,14 @@ mod test {
             a: 0xff,
         };
         assert_eq!(
-            get_or_set_color(&mut color, &palette, Argument::Color(new_color)),
+            get_or_swap_color(&mut color, &palette, Argument::Color(new_color)),
             Ok(Argument::Color(trailing_color))
         );
         assert_eq!(color, new_color);
     }
 
     #[test]
-    fn test_get_or_set_color_returns_current_color_with_null_argument() {
+    fn test_get_or_swap_color_returns_current_color_with_null_argument() {
         // Palette should be ignored.
         let palette = Palette::new(12.0, 50);
 
@@ -3108,14 +3109,14 @@ mod test {
         let initial_color = color;
 
         assert_eq!(
-            get_or_set_color(&mut color, &palette, Argument::Null),
+            get_or_swap_color(&mut color, &palette, Argument::Null),
             Ok(Argument::Color(initial_color))
         );
         assert_eq!(color, initial_color);
     }
 
     #[test]
-    fn test_get_or_set_color_returns_error_with_invalid_arguments() {
+    fn test_get_or_swap_color_returns_error_with_invalid_arguments() {
         // Palette should be ignored.
         let palette = Palette::new(12.0, 50);
 
@@ -3130,14 +3131,14 @@ mod test {
 
         // String doesn't work.
         assert_eq!(
-            get_or_set_color(&mut color, &palette, Argument::String("asdf".to_string())),
-            Err("invalid argument to get_or_set_color: 'asdf'".to_string())
+            get_or_swap_color(&mut color, &palette, Argument::String("asdf".to_string())),
+            Err("invalid argument to get_or_swap_color: 'asdf'".to_string())
         );
         assert_eq!(color, initial_color);
 
         // Script doesn't work:
         assert_eq!(
-            get_or_set_color(
+            get_or_swap_color(
                 &mut color,
                 &palette,
                 Argument::Script(Script {
@@ -3145,13 +3146,15 @@ mod test {
                     arguments: vec![]
                 })
             ),
-            Err("invalid argument to get_or_set_color: {command: `fg`, arguments: []}".to_string())
+            Err(
+                "invalid argument to get_or_swap_color: {command: `fg`, arguments: []}".to_string()
+            )
         );
         assert_eq!(color, initial_color);
 
         // Use doesn't work:
         assert_eq!(
-            get_or_set_color(
+            get_or_swap_color(
                 &mut color,
                 &palette,
                 Argument::Use(Use {
@@ -3159,7 +3162,7 @@ mod test {
                     lookback: -1
                 })
             ),
-            Err("invalid argument to get_or_set_color: $1234".to_string())
+            Err("invalid argument to get_or_swap_color: $1234".to_string())
         );
         assert_eq!(color, initial_color);
     }
