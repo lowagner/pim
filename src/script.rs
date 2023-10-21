@@ -21,10 +21,15 @@ use std::str::FromStr;
 
     If we used $0 for the function name, this would make it more bash-like, and we
     could call recursively like this:
-         :const 'factorial' (if (positive $1) (* $1 ($0 (+ $1 -1))) 1)
+        :const 'factorial' (if (positive $1) (* $1 ($0 (+ $1 -1))) 1)
     But we want to avoid off-by-one errors, so if we want to support this, we will create
     our own re-evaluation function, e.g., $$.
-         :const 'factorial' (if (positive $0) (* $0 ($$ (+ $0 -1))) 1)
+        :const 'factorial' (if (positive $0) (* $0 ($$ (+ $0 -1))) 1)
+
+    Note we also put parentheses before the function name so that in the common case,
+    where we're running just one function, we don't need to use parentheses.
+    E.g., `my_function my_arg_0 my_arg_1 my_arg_etc` instead of
+    `my_function(my_arg_0 my_arg1 my_arg_etc)` (NOT VALID).
 
 TODO: add `cx`/`cy` as functions/commands to get cursor position x/y
 TODO: or maybe `mx`/`my` for mouse x/y.  could do both.
@@ -37,6 +42,8 @@ pub enum Command {
     /// *Does not evaluate* $0, returns info about the script/command instead.
     Help,
 
+    /// Creates a notification message with a string that combines all arguments.
+    Echo,
     /// Creates an error with a string that combines all arguments.
     Error,
 
@@ -184,6 +191,7 @@ impl fmt::Display for Command {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Command::Help => write!(f, "?"),
+            Command::Echo => write!(f, "echo"),
             Command::Error => write!(f, "error"),
             Command::PushPop => write!(f, "push/pop"),
             Command::RunAll => write!(f, "run/all"),
@@ -227,6 +235,7 @@ impl FromStr for Command {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.trim() {
             "?" => Ok(Command::Help),
+            "echo" => Ok(Command::Echo),
             "error" => Ok(Command::Error),
             "push/pop" => Ok(Command::PushPop),
             "run/all" => Ok(Command::RunAll),
@@ -532,6 +541,8 @@ macro_rules! script_runner {
 
             /// Display a message to the user. Also logs.
             pub fn message<D: fmt::Display>(&mut self, msg: D, t: MessageType) {
+                // TODO: if an existing message is present, we should wait a bit
+                // and then show the new message later, a la toasts.  we can log right away.
                 self.message = Message::new(msg, t);
                 self.message.log();
             }
@@ -587,6 +598,19 @@ macro_rules! script_runner {
                             }
                         }
                         Ok(Argument::Null)
+                    }
+                    Command::Echo => {
+                        let mut string = String::new();
+                        for i in 0..script.arguments.len() {
+                            let result = self.script_evaluate(&script_stack, Evaluate::Index(i as u32));
+                            let next_string = format!("{}", Serialize::ArgumentResult(&result));
+                            if i > 0 {
+                                string.push_str(" ");
+                            }
+                            string.push_str(&next_string);
+                        }
+                        self.message(string.clone(), MessageType::Echo);
+                        Ok(Argument::String(string))
                     }
                     Command::Error => {
                         let mut string = String::new();
@@ -1017,10 +1041,17 @@ impl Variables {
             "explains what $0 does without evaluating it, \
             e.g., `? paint` to explain what the `paint` command does",
         );
+        // TODO: consider serializing strings without '', at least for echo/error.
+        // we need them when serializing a script.
+        variables.add_built_in(
+            Command::Echo,
+            "evaluates all arguments, joining them into a string to print, \
+            e.g., `echo 'oh no' fg` will show a message of `'oh no' {foreground-color}`",
+        );
         variables.add_built_in(
             Command::Error,
             "evaluates all arguments, joining them into an error string, \
-            e.g., `error 'oh no' fg` will return an error of 'oh no {foreground-color}'",
+            e.g., `error 'oh no' fg` will return an error of `'oh no' {foreground-color}`",
         );
         variables.add_built_in(
             Command::PushPop,
@@ -1964,6 +1995,77 @@ mod test {
     }
 
     #[test]
+    fn test_script_echo_stringifies_the_evaluation_of_all_arguments() {
+        let script = Script {
+            command: Command::Echo,
+            arguments: vec![
+                Argument::I64(123),
+                Argument::String("jkl;".to_string()),
+                Argument::Script(Script::zero_arg(Command::Error)),
+                Argument::Script(Script {
+                    command: Command::RunAll,
+                    arguments: vec![Argument::Null, Argument::String("xyz".to_string()), Argument::I64(456)],
+                }),
+                Argument::Script(Script {
+                    command: Command::Error,
+                    arguments: vec![
+                        Argument::Use(Use {
+                            lookback: -1,
+                            index: 0,
+                        }),
+                        Argument::Null,
+                        Argument::Color(Rgba8::RED),
+                    ],
+                }),
+                Argument::Script(Script::zero_arg(Command::ForegroundColor)),
+            ],
+        };
+        let mut test_runner = TestRunner::new();
+
+        let result = script.run(&mut test_runner);
+
+        assert_eq!(
+            test_runner.test_what_ran,
+            Vec::from([
+                WhatRan::Begin(Command::Echo),
+                WhatRan::Evaluated(Ok(Argument::I64(123))),
+                WhatRan::Evaluated(Ok(Argument::String("jkl;".to_string()))),
+                WhatRan::Begin(Command::Error),
+                WhatRan::End(Command::Error),
+                WhatRan::Evaluated(Err("".to_string())), // result of Err
+                WhatRan::Begin(Command::RunAll),
+                WhatRan::Evaluated(Ok(Argument::Null)),
+                WhatRan::Evaluated(Ok(Argument::String("xyz".to_string()))),
+                WhatRan::Evaluated(Ok(Argument::I64(456))),
+                WhatRan::End(Command::RunAll),
+                WhatRan::Evaluated(Ok(Argument::I64(456))), // result of RunAll
+                WhatRan::Begin(Command::Error),
+                WhatRan::Evaluated(Ok(Argument::I64(123))), // Use $0
+                WhatRan::Evaluated(Ok(Argument::Null)),
+                WhatRan::Evaluated(Ok(Argument::Color(Rgba8::RED))),
+                WhatRan::End(Command::Error),
+                WhatRan::Evaluated(Err("123 null #ff0000".to_string())),
+                WhatRan::Begin(Command::ForegroundColor),
+                WhatRan::Evaluated(Ok(Argument::Null)),
+                WhatRan::End(Command::ForegroundColor),
+                WhatRan::Evaluated(Ok(Argument::Color(test_runner.fg))),
+                WhatRan::End(Command::Echo),
+            ])
+        );
+        let message = "123 'jkl;' (error) 456 (error `123 null #ff0000`) #ffffff".to_string();
+        assert_eq!(
+            result,
+            Ok(Argument::String(message.clone()))
+        );
+        assert_eq!(test_runner.message, 
+            Message {
+                string: message,
+                message_type: MessageType::Echo,
+            }
+        );
+    }
+
+    #[test]
     fn test_script_error_stringifies_the_evaluation_of_all_arguments() {
         let script = Script {
             command: Command::Error,
@@ -2006,7 +2108,7 @@ mod test {
                 WhatRan::Evaluated(Ok(Argument::I64(456))),
                 WhatRan::Evaluated(Ok(Argument::Null)),
                 WhatRan::End(Command::RunAll),
-                WhatRan::Evaluated(Ok(Argument::Null)), // result of RunAll:
+                WhatRan::Evaluated(Ok(Argument::Null)), // result of RunAll
                 WhatRan::Begin(Command::Error),
                 WhatRan::Evaluated(Ok(Argument::Null)),
                 WhatRan::Evaluated(Ok(Argument::I64(123))), // Use $0
