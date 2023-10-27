@@ -119,6 +119,11 @@ pub enum Command {
     /// Returns the current mode, changing it to what's in $0 if present and valid.
     Mode,
 
+    /// Getter/swapper for whether we animate the frames.
+    Animate,
+    /// Getter/swapper for the UI Scale (e.g., palette boxes and command line), as a percentage.
+    UiScale,
+
     /// Setter for the width x height of each frame, using $0 for width and $1 for height.
     /// If either $0 or $1 is null, it keeps that dimension the same; if both are null,
     /// it crops the frames to content.  Returns the number of pixels in one frame, i.e.,
@@ -138,7 +143,6 @@ pub enum Command {
     // TODO: FrameSwap
     // TODO: FrameShift, moves the animation over one to start one frame down
 
-    // TODO: UiScale (1,2,3,4).  TODO: make it a percentage?  e.g., `ui/scale% 100` for scale=1, etc.
     // TODO: FitPixelWidth, FitPixelHeight; zoom to fit that many pixels within the screen based on available area
     /// Uses $0 to set the foreground color, if not null, and returns the old value.
     /// If $0 is null, returns the current foreground color without changing it.
@@ -170,6 +174,7 @@ pub enum Command {
     /// argument for the angle (in degrees) to snap to when drawing a line; 0 for no snapping.
     BrushMode(BrushMode),
     // TODO: BrushReset,
+
     /// Versions of quit, see enum `Quit`.
     Quit(Quit),
 }
@@ -206,6 +211,8 @@ impl fmt::Display for Command {
             Command::ConstVariable => write!(f, "const"),
             Command::CreateAlias => write!(f, "alias"),
             Command::Mode => write!(f, "mode"),
+            Command::Animate => write!(f, "a"),
+            Command::UiScale => write!(f, "ui/scale%"),
             Command::FrameResize => write!(f, "f/resize"),
             Command::FrameWidth => write!(f, "f/width"),
             Command::FrameHeight => write!(f, "f/height"),
@@ -249,6 +256,8 @@ impl FromStr for Command {
             "const" => Ok(Command::ConstVariable),
             "alias" => Ok(Command::CreateAlias),
             "mode" => Ok(Command::Mode),
+            "a" => Ok(Command::Animate),
+            "ui/scale%" => Ok(Command::UiScale),
             "f/resize" => Ok(Command::FrameResize),
             "f/width" => Ok(Command::FrameWidth),
             "f/height" => Ok(Command::FrameHeight),
@@ -732,10 +741,22 @@ macro_rules! script_runner {
                     Command::ConstVariable => self.variables.set_from_script(&script),
                     Command::CreateAlias => self.variables.set_from_script(&script),
                     Command::Mode => {
-                        let mode = self
+                        let value = self
                             .script_evaluate(&script_stack, Evaluate::Index(0))?
                             .get_string("for mode")?;
-                        Ok(Argument::String(self.get_or_swap_mode(mode)?))
+                        Ok(Argument::String(self.get_or_swap_mode(value)?))
+                    }
+                    Command::Animate => {
+                        let value = self
+                            .script_evaluate(&script_stack, Evaluate::Index(0))?
+                            .get_optional_i64("for animate")?;
+                        Ok(Argument::I64(self.get_or_swap_animate(value)?))
+                    }
+                    Command::UiScale => {
+                        let value = self
+                            .script_evaluate(&script_stack, Evaluate::Index(0))?
+                            .get_optional_i64("for scale%")?;
+                        Ok(Argument::I64(self.get_or_swap_ui_scale(value)?))
                     }
                     Command::FrameResize => {
                         let optional_width = self
@@ -1117,6 +1138,16 @@ impl Variables {
             e.g., `mode 'normal'` to go to normal mode",
         );
         variables.add_built_in(
+            Command::Animate,
+            "getter/swapper for toggling animation if $0 is null/present, \
+            e.g., `a on` to turn on animation",
+        );
+        variables.add_built_in(
+            Command::UiScale,
+            "getter/swapper for current UI scale percentage if $0 is null/present, \
+            e.g., `ui/scale% 150` to set UI to 1.5x",
+        );
+        variables.add_built_in(
             Command::FrameResize,
             "sets frame size, or crops to content if no arguments, \
             e.g., `f/resize 12 34` to set to 12 pixels wide and 34 pixels high",
@@ -1220,6 +1251,8 @@ impl Variables {
         // same for other modes that you can set.
 
         // Helpful scripts.
+        // TODO: make this a Script parser so we can use it for other things.
+        // e.g., `a/delay++` should do this same logic for `a/delay`:
         assert_ok!(variables.set(
             "f++".to_string(),
             Variable::Const(Argument::Script(Script {
@@ -1546,6 +1579,18 @@ mod test {
             self.test_what_ran
                 .push(WhatRan::Mocked(format!("mode {}", mode)));
             Ok(mode)
+        }
+
+        fn get_or_swap_animate(&mut self, value: Option<i64>) -> I64Result {
+            self.test_what_ran
+                .push(WhatRan::Mocked(format!("a {:?}", value)));
+            Ok(1)
+        }
+
+        fn get_or_swap_ui_scale(&mut self, value: Option<i64>) -> I64Result {
+            self.test_what_ran
+                .push(WhatRan::Mocked(format!("ui/scale% {:?}", value)));
+            Ok(100)
         }
 
         fn resize_frames(&mut self, width: i64, height: i64) -> Result<(), String> {

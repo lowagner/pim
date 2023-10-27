@@ -48,6 +48,7 @@ use std::str::FromStr;
 use std::time;
 
 /// Settings help string.
+// TODO: remove after migration to script
 pub const SETTINGS: &str = r#"
 SETTINGS
 
@@ -448,7 +449,7 @@ impl Default for Settings {
                 "checker" => Value::Bool(false),
                 "background" => Value::Rgba8(color::TRANSPARENT),
                 "input/mouse" => Value::Bool(true),
-                "scale" => Value::U32(1),
+                "scale%" => Value::U32(100),
                 "animation" => Value::Bool(true),
                 "animation/delay" => Value::U32(160),
                 "ui/palette" => Value::Bool(true),
@@ -540,6 +541,7 @@ pub struct Session {
     /// The session's current settings.
     pub settings: Settings,
     /// Settings recently changed.
+    // TODO: why do we need this?  i think we can remove.
     pub settings_changed: HashSet<String>,
 
     /// Views loaded in the session.
@@ -1065,7 +1067,8 @@ impl Session {
     }
 
     /// Called when settings have been changed.
-    fn setting_changed(&mut self, name: &str, old: &Value, new: &Value) {
+    // TODO: remove me
+    fn setting_changed(&mut self, name: &str, old: Value, new: Value) {
         debug!("set `{}`: {} -> {}", name, old, new);
 
         self.settings_changed.insert(name.to_owned());
@@ -1075,13 +1078,18 @@ impl Session {
                 self.palette.height = new.to_u64() as usize;
                 self.center_palette();
             }
-            "scale" => {
+            "scale%" => {
+                let mut new_percentage = new.to_u64();
+                if new_percentage < 100 || new_percentage > 400 {
+                    self.message(format!("ui/scale% should be between 100 and 400, got {}", new_percentage), MessageType::Error);
+                    new_percentage = 100;
+                    self.settings.set("scale%", Value::U32(new_percentage as u32));
+                }
                 // TODO: We need to recompute the cursor position here
                 // from the window coordinates. Currently, cursor position
                 // is stored only in `SessionCoords`, which would have
                 // to change.
-                // TODO: we could use U64 / 100 as a per-cent for scaling.
-                self.rescale(old.to_u64() as f64, new.to_u64() as f64);
+                self.rescale((old.to_u64() as f64) / 100.0, new_percentage as f64 / 100.0);
             }
             _ => {}
         }
@@ -1223,7 +1231,7 @@ impl Session {
     /// Convert "logical" window coordinates to session coordinates.
     pub fn window_to_session_coords(&self, position: platform::LogicalPosition) -> SessionCoords {
         let (x, y) = (position.x, position.y);
-        let scale: f64 = self.settings["scale"].to_u64() as f64;
+        let scale = self.get_scale();
         SessionCoords::new(
             (x / scale).floor() as f32,
             self.height - (y / scale).floor() as f32 - 1.,
@@ -1737,8 +1745,12 @@ impl Session {
     }
 
     pub fn handle_resized(&mut self, size: platform::LogicalSize) {
-        self.resize(size, self.settings["scale"].to_u64() as f64);
+        self.resize(size, self.get_scale());
         self.effects.push(Effect::SessionResized(size));
+    }
+
+    fn get_scale(&self) -> f64 {
+        self.settings["scale%"].to_u64() as f64 / 100.0
     }
 
     fn handle_mouse_input(&mut self, button: platform::MouseButton, state: platform::InputState) {
@@ -2387,7 +2399,6 @@ impl Session {
                             let v = self.active_view();
                             Ok(Value::F32Tuple(v.offset.x, v.offset.y))
                         }
-                        // TODO: i don't know what this is, maybe delete
                         "v/zoom" => Ok(Value::U32(self.active_view().zoom as u32)),
                         _ => match self.settings.get(s) {
                             None => Err(format!("Error: {} is undefined", s)),
@@ -2575,9 +2586,9 @@ impl Session {
                     Err(e) => {
                         self.message(format!("Error: {}", e), MessageType::Error);
                     }
-                    Ok(ref old) => {
-                        if old != v {
-                            self.setting_changed(k, old, v);
+                    Ok(old) => {
+                        if old != *v {
+                            self.setting_changed(k, old, v.clone());
                         }
                     }
                 }
@@ -3046,6 +3057,34 @@ impl Session {
             Mode::from_str(&mode_string).map_err(|_| format!("invalid mode: `{}`", mode_string))?;
         self.switch_mode(mode);
         Ok(old_mode)
+    }
+
+    fn get_or_swap_animate(&mut self, value: Option<i64>) -> I64Result {
+        let old_anim = self.settings["animation"].is_set() as i64;
+        let new_anim = match value {
+            Some(anim) => anim,
+            None => return Ok(old_anim),
+        };
+        self.settings.set("animation", Value::Bool(new_anim != 0))?;
+        Ok(old_anim)
+    }
+
+    fn get_or_swap_ui_scale(&mut self, value: Option<i64>) -> I64Result {
+        let old_percentage = self.settings["scale%"].to_u64() as i64;
+        let new_percentage = match value {
+            Some(percentage) => percentage,
+            None => return Ok(old_percentage),
+        };
+        if new_percentage < 100 || new_percentage > 400 {
+            return Err(format!("ui/scale% should be between 100 and 400, got {}", new_percentage));
+        }
+        self.settings.set("scale%", Value::U32(new_percentage as u32))?;
+        // TODO: We need to recompute the cursor position here
+        // from the window coordinates. Currently, cursor position
+        // is stored only in `SessionCoords`, which would have
+        // to change.
+        self.rescale((old_percentage as f64) / 100.0, (new_percentage as f64) / 100.0);
+        Ok(old_percentage)
     }
 
     pub fn script_quit(&mut self, quit: Quit) {

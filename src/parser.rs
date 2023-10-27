@@ -99,7 +99,7 @@ pub fn command() -> Parser<Command> {
 
 pub fn identifier() -> Parser<String> {
     many::<_, String>(satisfy(
-        |c: char| c.is_ascii_alphabetic() || c == '/' || c == '-',
+        |c: char| c.is_ascii_alphabetic() || c == '/' || c == '-' || c == '%',
         "<identifier>",
     ))
     .label("<identifier>")
