@@ -3063,6 +3063,9 @@ impl Session {
     fn get_string_setting(&self, setting: StringSetting) -> String {
         match setting {
             StringSetting::Mode => self.mode.to_string(),
+            StringSetting::Cwd => {
+                std::env::current_dir().map_or("".to_string(), |cwd| cwd.display().to_string())
+            }
         }
     }
 
@@ -3072,6 +3075,11 @@ impl Session {
                 let mode =
                     Mode::from_str(&value).map_err(|_| format!("invalid mode: `{}`", value))?;
                 self.switch_mode(mode);
+            }
+            StringSetting::Cwd => {
+                if std::env::set_current_dir(&value).is_err() {
+                    return Err(format!("could not change directory to `{}`", value));
+                }
             }
         }
         Ok(())

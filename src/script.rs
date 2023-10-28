@@ -192,6 +192,7 @@ impl fmt::Display for Command {
             Command::ConstVariable => write!(f, "const"),
             Command::CreateAlias => write!(f, "alias"),
             Command::StringSetting(StringSetting::Mode) => write!(f, "mode"),
+            Command::StringSetting(StringSetting::Cwd) => write!(f, "cwd"),
             Command::I64Setting(I64Setting::UiAnimate) => write!(f, "ui-a"),
             Command::I64Setting(I64Setting::UiScalePercentage) => write!(f, "ui-scale%"),
             Command::I64Setting(I64Setting::CursorXRay) => write!(f, "c-xray"),
@@ -238,7 +239,7 @@ impl FromStr for Command {
             "const" => Ok(Command::ConstVariable),
             "alias" => Ok(Command::CreateAlias),
             "mode" => Ok(Command::StringSetting(StringSetting::Mode)),
-            // TODO: "cwd" => Ok(Command::StringSetting(StringSetting::Cwd)),
+            "cwd" => Ok(Command::StringSetting(StringSetting::Cwd)),
             "ui-a" => Ok(Command::I64Setting(I64Setting::UiAnimate)),
             "ui-scale%" => Ok(Command::I64Setting(I64Setting::UiScalePercentage)),
             "c-xray" => Ok(Command::I64Setting(I64Setting::CursorXRay)),
@@ -1039,6 +1040,11 @@ impl Variables {
             e.g., `$$ 'normal'` to go to normal mode",
         );
         variables.add_built_in(
+            Command::StringSetting(StringSetting::Cwd),
+            "getter/swapper for the current working directory if $0 is null/present, \
+            e.g., `$$ '/home/whatever'` to change directories",
+        );
+        variables.add_built_in(
             Command::I64Setting(I64Setting::UiAnimate),
             "getter/swapper for toggling animation if $0 is null/present, \
             e.g., `$$ on` to turn on animation",
@@ -1290,6 +1296,7 @@ impl Variables {
 mod test {
     use super::*;
     use crate::message::*;
+    use strum::IntoEnumIterator;
 
     #[test]
     fn test_argument_values() {
@@ -2590,6 +2597,45 @@ mod test {
             ),
             Err("built-in `const` is not reassignable".to_string())
         );
+
+        for string_setting in StringSetting::iter() {
+            let name = format!("{}", Command::StringSetting(string_setting));
+            assert_eq!(
+                variables.set(
+                    name.clone(),
+                    Variable::BuiltIn("should not override".to_string())
+                ),
+                Err(format!("built-in `{}` is not reassignable", name))
+            );
+        }
+        let settings = Settings::new();
+        for i64_setting in I64Setting::iter() {
+            let name = format!("{}", Command::I64Setting(i64_setting));
+            assert_eq!(
+                variables.set(
+                    name.clone(),
+                    Variable::BuiltIn("should not override".to_string())
+                ),
+                Err(format!("built-in `{}` is not reassignable", name))
+            );
+        }
+    }
+
+    #[test]
+    fn test_commands_can_be_printed_and_unprinted() {
+        for setting in StringSetting::iter() {
+            let command = Command::StringSetting(setting);
+            let name = format!("{}", command);
+            let command_from_name = Command::from_str(&name).unwrap();
+            assert_eq!(command_from_name, command);
+        }
+
+        for setting in I64Setting::iter() {
+            let command = Command::I64Setting(setting);
+            let name = format!("{}", command);
+            let command_from_name = Command::from_str(&name).unwrap();
+            assert_eq!(command_from_name, command);
+        }
     }
 
     #[test]

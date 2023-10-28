@@ -6,6 +6,8 @@ use strum_macros::EnumIter;
 pub enum StringSetting {
     /// Current mode (e.g., normal, command, etc.).
     Mode,
+    /// Current working directory
+    Cwd,
 }
 
 #[derive(Eq, Hash, PartialEq, Debug, Clone, Copy, EnumIter)]
@@ -63,6 +65,10 @@ impl Settings {
 
         let mut string_map = HashMap::new();
         string_map.insert(StringSetting::Mode, "normal".to_string());
+        string_map.insert(
+            StringSetting::Cwd,
+            std::env::current_dir().map_or("".to_string(), |cwd| cwd.display().to_string()),
+        );
 
         Self {
             i64_map,
