@@ -21,12 +21,18 @@ impl Parse for Script {
 }
 
 fn get_script_parser(lookback: i32) -> Parser<Script> {
-    command()
+    special_command()
         .skip(optional(whitespace()))
         .then(any::<Argument, Vec<Argument>>(
             get_argument_parser(lookback).skip(optional(whitespace()).skip(optional(comment()))),
         ))
-        .map(|(command, arguments)| Script { command, arguments })
+        .map(|(special, arguments)| match special {
+            SpecialCommand::Command(command) => Script { command, arguments },
+            SpecialCommand::Script(mut script) => {
+                script.arguments.extend_from_slice(&arguments);
+                script
+            }
+        })
         .label("<script>")
 }
 
@@ -73,7 +79,10 @@ fn get_argument_parser(lookback: i32) -> Parser<Argument> {
             // This allows things like `bg fg` to switch the background
             // to the foreground color.  E.g., zero-arg functions are
             // typically getters.
-            let zero_arg_script = command().map(|c| Argument::Script(Script::zero_arg(c)));
+            let zero_arg_script = special_command().map(|special| match special {
+                SpecialCommand::Command(c) => Argument::Script(Script::zero_arg(c)),
+                SpecialCommand::Script(s) => Argument::Script(s),
+            });
 
             peek(
                 i64_arg
@@ -89,14 +98,46 @@ fn get_argument_parser(lookback: i32) -> Parser<Argument> {
     )
 }
 
-pub fn command() -> Parser<Command> {
-    // TODO: check for a trailing `++` and do postincrement; same for `--`
-    // i.e., convert `f++` to `f (+ f 1)` and `whatever--` to `whatever (+ whatever -1)`
-    token().map(
+fn special_command() -> Parser<SpecialCommand> {
+    token().map(|s| {
+        let postfix = if s.ends_with("++") {
+            1
+        } else if s.ends_with("--") {
+            -1
+        } else {
+            0
+        };
+        if postfix != 0 {
+            let pre_postfix = &s[0..s.len() - 2];
+            if pre_postfix.len() == 0 {
+                // User may have overrode ++ or -- as a separate command;
+                // let that "fall through" to the default case of interpreting it as a command.
+            } else {
+                // This should be safe because pre_postfix.len() > 0;
+                // the only command parse error is if the string is just whitespace.
+                let command = Command::from_str(&pre_postfix).unwrap();
+                // User put in something like `f++` which should be interpreted as `f (+ f 1)`.
+                return SpecialCommand::Script(Script {
+                    command: command.clone(),
+                    arguments: vec![Argument::Script(Script {
+                        command: Command::Sum,
+                        arguments: vec![
+                            Argument::Script(Script::zero_arg(command)),
+                            Argument::I64(postfix),
+                        ],
+                    })],
+                });
+            }
+        }
         // It's safe to unwrap this token here since token is non-whitespace
         // and the only command parse error is if the string is just whitespace.
-        |s| Command::from_str(&s).unwrap(),
-    )
+        SpecialCommand::Command(Command::from_str(&s).unwrap())
+    })
+}
+
+enum SpecialCommand {
+    Command(Command),
+    Script(Script),
 }
 
 pub fn identifier() -> Parser<String> {
@@ -373,6 +414,7 @@ pub fn tuple<O>(x: Parser<O>, y: Parser<O>) -> Parser<(O, O)> {
 mod test {
     use super::*;
     use crate::script::Serialize;
+    use crate::settings::*;
 
     #[test]
     fn test_paths() {
@@ -599,6 +641,89 @@ mod test {
 
         assert_eq!(rest, "");
         assert_eq!(format!("{}", Serialize::Script(&result)), start);
+    }
+
+    #[test]
+    fn test_script_can_do_postfix_increment() {
+        let p = Script::parser();
+
+        let (result, rest) = p.parse("f++").unwrap();
+
+        assert_eq!(rest, "");
+        assert_eq!(
+            result,
+            Script {
+                command: Command::I64Setting(I64Setting::FrameIndex),
+                arguments: vec![Argument::Script(Script {
+                    command: Command::Sum,
+                    arguments: vec![
+                        Argument::Script(Script::zero_arg(Command::I64Setting(
+                            I64Setting::FrameIndex
+                        ))),
+                        Argument::I64(1),
+                    ],
+                }),],
+            }
+        );
+    }
+
+    #[test]
+    fn test_script_can_do_postfix_increment_in_a_script() {
+        let p = Script::parser();
+
+        let (result, rest) = p.parse("+ f-width++ 123").unwrap();
+
+        assert_eq!(rest, "");
+        assert_eq!(
+            result,
+            Script {
+                command: Command::Sum,
+                arguments: vec![
+                    Argument::Script(Script {
+                        command: Command::I64Setting(I64Setting::FrameWidth),
+                        arguments: vec![Argument::Script(Script {
+                            command: Command::Sum,
+                            arguments: vec![
+                                Argument::Script(Script::zero_arg(Command::I64Setting(
+                                    I64Setting::FrameWidth
+                                ))),
+                                Argument::I64(1),
+                            ],
+                        }),],
+                    }),
+                    Argument::I64(123),
+                ],
+            }
+        );
+    }
+
+    #[test]
+    fn test_script_can_do_postfix_decrement_with_extraneous_argument() {
+        let p = Script::parser();
+
+        // Note this is probably garbage that won't be used by normal commands,
+        // but just in case it will be added as a second argument.
+        let (result, rest) = p.parse("foo-- 'asdf'").unwrap();
+
+        assert_eq!(rest, "");
+        assert_eq!(
+            result,
+            Script {
+                command: Command::Evaluate("foo".to_string()),
+                arguments: vec![
+                    Argument::Script(Script {
+                        command: Command::Sum,
+                        arguments: vec![
+                            Argument::Script(Script::zero_arg(Command::Evaluate(
+                                "foo".to_string()
+                            ))),
+                            Argument::I64(-1),
+                        ],
+                    }),
+                    Argument::String("asdf".to_string()),
+                ],
+            }
+        );
     }
 
     #[test]

@@ -103,6 +103,8 @@ pub enum Command {
     //      The other thing that's hard to do with this is if someone uses `Get/Execute "if" ...`
     //      for any of the primitive operations; we'd need to handle those specially.
     // GetVariable,
+    // TODO: we should define a way to evaluate something and put its value into a variable;
+    //       everything below is lazily evaluated.  e.g., `set-val 'my-var' (...)`
     /// Sets a variable with name $0 to the value at $1, allowing future changes.
     /// E.g., `:set 'my-mut' 123` will set `my-mut` to evaluate to 123.
     /// You can also define lambda functions with e.g., `:set 'my-fn' (fg $0)`
