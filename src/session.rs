@@ -14,7 +14,8 @@ use crate::palette::*;
 use crate::platform::{self, InputState, Key, KeyboardInput, LogicalSize, ModifiersState};
 use crate::script::{
     self, evaluate, get_or_swap_color, Argument, ArgumentResult, BrushMode, Command, Evaluate,
-    I64Result, Quit, Script, ScriptRunner, Serialize, StringResult, Variables,
+    I64Result, Quit, Script, ScriptRunner, Serialize, StringSetting, Variables,
+    VoidResult,
 };
 use crate::script_runner;
 use crate::util;
@@ -31,6 +32,7 @@ use crate::view::{
 };
 
 use arrayvec::ArrayVec;
+use claim::assert_ok;
 
 use directories as dirs;
 use nonempty::NonEmpty;
@@ -1081,9 +1083,16 @@ impl Session {
             "scale%" => {
                 let mut new_percentage = new.to_u64();
                 if new_percentage < 100 || new_percentage > 400 {
-                    self.message(format!("ui/scale% should be between 100 and 400, got {}", new_percentage), MessageType::Error);
+                    self.message(
+                        format!(
+                            "ui/scale% should be between 100 and 400, got {}",
+                            new_percentage
+                        ),
+                        MessageType::Error,
+                    );
                     new_percentage = 100;
-                    self.settings.set("scale%", Value::U32(new_percentage as u32));
+                    assert_ok!(self.settings
+                        .set("scale%", Value::U32(new_percentage as u32)));
                 }
                 // TODO: We need to recompute the cursor position here
                 // from the window coordinates. Currently, cursor position
@@ -3048,15 +3057,21 @@ impl Session {
         Ok(Argument::Color(color))
     }
 
-    fn get_or_swap_mode(&mut self, mode_string: String) -> StringResult {
-        let old_mode = self.mode.to_string();
-        if mode_string.is_empty() {
-            return Ok(old_mode);
+    fn get_string_setting(&self, setting: StringSetting) -> String {
+        match setting {
+            StringSetting::Mode => self.mode.to_string(),
         }
-        let mode =
-            Mode::from_str(&mode_string).map_err(|_| format!("invalid mode: `{}`", mode_string))?;
-        self.switch_mode(mode);
-        Ok(old_mode)
+    }
+
+    fn set_string_setting(&mut self, setting: StringSetting, value: String) -> VoidResult {
+        match setting {
+            StringSetting::Mode => {
+                let mode =
+                    Mode::from_str(&value).map_err(|_| format!("invalid mode: `{}`", value))?;
+                self.switch_mode(mode);
+            }
+        }
+        Ok(())
     }
 
     fn get_or_swap_animate(&mut self, value: Option<i64>) -> I64Result {
@@ -3076,14 +3091,21 @@ impl Session {
             None => return Ok(old_percentage),
         };
         if new_percentage < 100 || new_percentage > 400 {
-            return Err(format!("ui/scale% should be between 100 and 400, got {}", new_percentage));
+            return Err(format!(
+                "ui/scale% should be between 100 and 400, got {}",
+                new_percentage
+            ));
         }
-        self.settings.set("scale%", Value::U32(new_percentage as u32))?;
+        self.settings
+            .set("scale%", Value::U32(new_percentage as u32))?;
         // TODO: We need to recompute the cursor position here
         // from the window coordinates. Currently, cursor position
         // is stored only in `SessionCoords`, which would have
         // to change.
-        self.rescale((old_percentage as f64) / 100.0, (new_percentage as f64) / 100.0);
+        self.rescale(
+            (old_percentage as f64) / 100.0,
+            (new_percentage as f64) / 100.0,
+        );
         Ok(old_percentage)
     }
 

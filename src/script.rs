@@ -116,8 +116,8 @@ pub enum Command {
     CreateAlias,
 
     // TODO: Map: uses mode $0, with keybinding at $1, to evaluate command at $2.  optional command at $3 for release
-    /// Returns the current mode, changing it to what's in $0 if present and valid.
-    Mode,
+    /// Getter/swapper for various settings that are strings.
+    StringSetting(StringSetting),
 
     /// Getter/swapper for whether we animate the frames.
     Animate,
@@ -174,7 +174,6 @@ pub enum Command {
     /// argument for the angle (in degrees) to snap to when drawing a line; 0 for no snapping.
     BrushMode(BrushMode),
     // TODO: BrushReset,
-
     /// Versions of quit, see enum `Quit`.
     Quit(Quit),
 }
@@ -194,6 +193,9 @@ impl Command {
 
 impl fmt::Display for Command {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // TODO: don't use `/` for commands; we'll want to interpret those as
+        // directory separators and automatically convert identifiers with them
+        // into strings.  maybe `push.pop` or `run-all`
         match self {
             Command::Help => write!(f, "?"),
             Command::Echo => write!(f, "echo"),
@@ -210,7 +212,7 @@ impl fmt::Display for Command {
             Command::SetVariable => write!(f, "set"),
             Command::ConstVariable => write!(f, "const"),
             Command::CreateAlias => write!(f, "alias"),
-            Command::Mode => write!(f, "mode"),
+            Command::StringSetting(StringSetting::Mode) => write!(f, "mode"),
             Command::Animate => write!(f, "a"),
             Command::UiScale => write!(f, "ui/scale%"),
             Command::FrameResize => write!(f, "f/resize"),
@@ -255,7 +257,8 @@ impl FromStr for Command {
             "set" => Ok(Command::SetVariable),
             "const" => Ok(Command::ConstVariable),
             "alias" => Ok(Command::CreateAlias),
-            "mode" => Ok(Command::Mode),
+            "mode" => Ok(Command::StringSetting(StringSetting::Mode)),
+            // TODO: "cwd" => Ok(Command::StringSetting(StringSetting::Cwd)),
             "a" => Ok(Command::Animate),
             "ui/scale%" => Ok(Command::UiScale),
             "f/resize" => Ok(Command::FrameResize),
@@ -311,6 +314,12 @@ pub enum BrushMode {
     XRay,
     /// Confine line angles to multiples of this value.
     Line,
+}
+
+#[derive(PartialEq, Debug, Clone, Copy)]
+pub enum StringSetting {
+    /// Returns the current mode, changing it to what's in $0 if present and valid.
+    Mode,
 }
 
 #[derive(PartialEq, Debug, Clone, Copy)]
@@ -424,11 +433,10 @@ impl Argument {
         }
     }
 
-    pub fn get_string(&self, what_for: &str) -> StringResult {
-        // TODO: we probably can coerce integers, etc., to strings
+    pub fn get_optional_string(&self, what_for: &str) -> OptionalStringResult {
         match self {
-            Argument::Null => Ok("".to_string()),
-            Argument::String(value) => Ok(value.clone()),
+            Argument::Null => Ok(None),
+            Argument::String(value) => Ok(Some(value.clone())),
             result => Err(format!("invalid string {}: {}", what_for, result)),
         }
     }
@@ -478,8 +486,10 @@ pub struct Use {
     pub lookback: i32,
 }
 
+pub type VoidResult = Result<(), String>;
 pub type OptionalI64Result = Result<Option<i64>, String>;
 pub type I64Result = Result<i64, String>;
+pub type OptionalStringResult = Result<Option<String>, String>;
 pub type StringResult = Result<String, String>;
 pub type ScriptResult = Result<Script, String>;
 
@@ -740,11 +750,16 @@ macro_rules! script_runner {
                     Command::SetVariable => self.variables.set_from_script(&script),
                     Command::ConstVariable => self.variables.set_from_script(&script),
                     Command::CreateAlias => self.variables.set_from_script(&script),
-                    Command::Mode => {
-                        let value = self
+                    Command::StringSetting(setting) => {
+                        let argument = self
                             .script_evaluate(&script_stack, Evaluate::Index(0))?
-                            .get_string("for mode")?;
-                        Ok(Argument::String(self.get_or_swap_mode(value)?))
+                            .get_optional_string("for string setting")?;
+                        let old_value = self.get_string_setting(setting);
+                        match argument {
+                            None => {},
+                            Some(new_value) => self.set_string_setting(setting, new_value)?,
+                        }
+                        Ok(Argument::String(old_value))
                     }
                     Command::Animate => {
                         let value = self
@@ -1037,10 +1052,9 @@ impl Variables {
     }
 
     fn add_built_in(&mut self, command: Command, description: &str) {
-        assert_ok!(self.set(
-            format!("{}", command),
-            Variable::BuiltIn(description.to_string()),
-        ));
+        let command_name = format!("{}", command);
+        let command_description = description.replace("$$", &command_name);
+        assert_ok!(self.set(command_name, Variable::BuiltIn(command_description),));
     }
 
     pub fn describe(&self, command: Command) -> String {
@@ -1133,9 +1147,9 @@ impl Variables {
             e.g., `alias 'fgc' 'fg'` to add `fgc` as an alias for `fg`",
         );
         variables.add_built_in(
-            Command::Mode,
+            Command::StringSetting(StringSetting::Mode),
             "getter/swapper for the current mode if $0 is null/present, \
-            e.g., `mode 'normal'` to go to normal mode",
+            e.g., `$$ 'normal'` to go to normal mode",
         );
         variables.add_built_in(
             Command::Animate,
@@ -1575,10 +1589,14 @@ mod test {
             Ok(Argument::Color(Self::PAINT_RETURN_COLOR))
         }
 
-        fn get_or_swap_mode(&mut self, mode: String) -> StringResult {
+        fn get_string_setting(&self, _setting: StringSetting) -> String {
+            "asdf".to_string()
+        }
+
+        fn set_string_setting(&mut self, setting: StringSetting, value: String) -> VoidResult {
             self.test_what_ran
-                .push(WhatRan::Mocked(format!("mode {}", mode)));
-            Ok(mode)
+                .push(WhatRan::Mocked(format!("set{:?}({})", setting, value)));
+            Ok(())
         }
 
         fn get_or_swap_animate(&mut self, value: Option<i64>) -> I64Result {
@@ -2049,7 +2067,11 @@ mod test {
                 Argument::Script(Script::zero_arg(Command::Error)),
                 Argument::Script(Script {
                     command: Command::RunAll,
-                    arguments: vec![Argument::Null, Argument::String("xyz".to_string()), Argument::I64(456)],
+                    arguments: vec![
+                        Argument::Null,
+                        Argument::String("xyz".to_string()),
+                        Argument::I64(456),
+                    ],
                 }),
                 Argument::Script(Script {
                     command: Command::Error,
@@ -2098,11 +2120,9 @@ mod test {
             ])
         );
         let message = "123 'jkl;' (error) 456 (error `123 null #ff0000`) #ffffff".to_string();
+        assert_eq!(result, Ok(Argument::String(message.clone())));
         assert_eq!(
-            result,
-            Ok(Argument::String(message.clone()))
-        );
-        assert_eq!(test_runner.message, 
+            test_runner.message,
             Message {
                 string: message,
                 message_type: MessageType::Echo,
@@ -2808,6 +2828,21 @@ mod test {
                 string: "-- if $0 evaluates to truthy, evaluates $1, otherwise $2, \
                         e.g., `if 'hi' 'world' 3` returns 'world'"
                     .to_string(),
+                message_type: MessageType::Info,
+            }
+        );
+        assert_eq!(result, Ok(Argument::Null));
+
+        let result = Script {
+            command: Command::Help,
+            arguments: vec![Argument::Script(Script::zero_arg(Command::StringSetting(StringSetting::Mode)))],
+        }
+        .run(&mut test_runner);
+        assert_eq!(
+            test_runner.message,
+            Message {
+                string: "-- getter/swapper for the current mode if $0 is null/present, \
+                        e.g., `mode 'normal'` to go to normal mode".to_string(),
                 message_type: MessageType::Info,
             }
         );
