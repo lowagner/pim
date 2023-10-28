@@ -31,6 +31,8 @@ luminance = "0.43.2"
 luminance-gl = "0.16.1"
 luminance-derive = "0.6.3"
 gl = "0.14"
+strum_macros = "0.25.0"
+strum = "0.25.0"
 
 [dev-dependencies]
 lazy_static = "1.3"

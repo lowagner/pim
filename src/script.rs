@@ -1,5 +1,6 @@
 use crate::gfx::Rgba8;
 use crate::palette::Palette;
+use crate::settings::*;
 
 use claim::assert_ok;
 
@@ -270,44 +271,6 @@ impl FromStr for Command {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct EmptyCommandParseError;
-
-#[derive(PartialEq, Debug, Clone, Copy)]
-pub enum StringSetting {
-    /// Current mode (e.g., normal, command, etc.).
-    Mode,
-}
-
-#[derive(PartialEq, Debug, Clone, Copy)]
-pub enum I64Setting {
-    /// Animate the frames in the UI; boolean (0 or 1).
-    UiAnimate,
-    /// The interface scale (e.g., for palette boxes and command line), as a percentage (100 = 1x).
-    UiScalePercentage,
-    /// X-Ray mode to show the color of the pixel below your cursor; boolean (0 or 1)
-    CursorXRay,
-    /// Size of the brush, in pixels.
-    BrushSize,
-    /// Erase pixels with the brush; boolean (0 or 1).
-    BrushErase,
-    /// Draw on all frames at once; boolean (0 or 1).
-    BrushMultiFrame,
-    /// Pixel-perfect drawing mode; boolean (0 or 1).
-    BrushPixelPerfect,
-    /// Draw with X-Symmetry; boolean (0 or 1).
-    BrushXSymmetry,
-    /// Draw with Y-Symmetry; boolean (0 or 1).
-    BrushYSymmetry,
-    /// Confine line angles to multiples of this value, or 0 for no snapping.
-    BrushLineAngle,
-    /// The current frame index.
-    FrameIndex,
-    /// The width of each frame in the animation, in pixels.
-    FrameWidth,
-    /// The height of each frame in the animation, in pixels.
-    FrameHeight,
-}
-
-// TODO: can we do a `impl I64Setting { command() { Command::Int64(self) }` for convenience?
 
 #[derive(PartialEq, Debug, Clone, Copy)]
 pub enum Quit {

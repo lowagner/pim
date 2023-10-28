@@ -40,6 +40,7 @@ mod pixels;
 mod platform;
 mod renderer;
 mod script;
+mod settings;
 mod sprite;
 mod timer;
 mod view;

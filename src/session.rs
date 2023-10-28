@@ -12,10 +12,11 @@ use crate::hashmap;
 use crate::message::*;
 use crate::palette::*;
 use crate::platform::{self, InputState, Key, KeyboardInput, LogicalSize, ModifiersState};
+use crate::settings::{StringSetting, I64Setting};
 use crate::script::{
     self, evaluate, get_or_swap_color, Argument, ArgumentResult, Command, Evaluate,
-    Quit, Script, ScriptRunner, Serialize, StringSetting, Variables,
-    VoidResult, I64Setting
+    Quit, Script, ScriptRunner, Serialize,  Variables,
+    VoidResult, 
 };
 use crate::script_runner;
 use crate::util;
@@ -586,6 +587,7 @@ script_runner! {Session}
 impl Session {
     /// Maximum number of views in a session.
     pub const MAX_VIEWS: usize = 64;
+    // TODO: read from settings::Settings
     /// Default view width.
     pub const DEFAULT_VIEW_W: u32 = 128;
     /// Default view height.
@@ -1933,6 +1935,7 @@ impl Session {
                                 let brush = &mut self.brush;
                                 let mut p: ViewCoords<i32> = p.into();
 
+                                // TODO: i think this is backwards
                                 if brush.is_set(brush::BrushMode::Multi) {
                                     p.clamp(Rect::new(
                                         (brush.size / 2) as i32,
