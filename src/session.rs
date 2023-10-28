@@ -13,9 +13,9 @@ use crate::message::*;
 use crate::palette::*;
 use crate::platform::{self, InputState, Key, KeyboardInput, LogicalSize, ModifiersState};
 use crate::script::{
-    self, evaluate, get_or_swap_color, Argument, ArgumentResult, BrushMode, Command, Evaluate,
-    I64Result, Quit, Script, ScriptRunner, Serialize, StringSetting, Variables,
-    VoidResult,
+    self, evaluate, get_or_swap_color, Argument, ArgumentResult, Command, Evaluate,
+    Quit, Script, ScriptRunner, Serialize, StringSetting, Variables,
+    VoidResult, I64Setting
 };
 use crate::script_runner;
 use crate::util;
@@ -2338,10 +2338,10 @@ impl Session {
                 std::mem::swap(&mut self.fg, &mut self.bg);
             }
             Cmd::BrushSet(mode) => {
-                self.brush.set(mode);
+                self.brush.set(mode, 1);
             }
             Cmd::BrushUnset(mode) => {
-                self.brush.unset(mode);
+                self.brush.set(mode, 0);
             }
             // NOTE: not implemented in script.rs;
             // if you want to toggle, do `brush/abc (not brush/abc)`
@@ -3074,75 +3074,94 @@ impl Session {
         Ok(())
     }
 
-    fn get_or_swap_animate(&mut self, value: Option<i64>) -> I64Result {
-        let old_anim = self.settings["animation"].is_set() as i64;
-        let new_anim = match value {
-            Some(anim) => anim,
-            None => return Ok(old_anim),
-        };
-        self.settings.set("animation", Value::Bool(new_anim != 0))?;
-        Ok(old_anim)
-    }
-
-    fn get_or_swap_ui_scale(&mut self, value: Option<i64>) -> I64Result {
-        let old_percentage = self.settings["scale%"].to_u64() as i64;
-        let new_percentage = match value {
-            Some(percentage) => percentage,
-            None => return Ok(old_percentage),
-        };
-        if new_percentage < 100 || new_percentage > 400 {
-            return Err(format!(
-                "ui/scale% should be between 100 and 400, got {}",
-                new_percentage
-            ));
-        }
-        self.settings
-            .set("scale%", Value::U32(new_percentage as u32))?;
-        // TODO: We need to recompute the cursor position here
-        // from the window coordinates. Currently, cursor position
-        // is stored only in `SessionCoords`, which would have
-        // to change.
-        self.rescale(
-            (old_percentage as f64) / 100.0,
-            (new_percentage as f64) / 100.0,
-        );
-        Ok(old_percentage)
-    }
-
-    pub fn script_quit(&mut self, quit: Quit) {
-        match quit {
-            Quit::Safe => self.quit_view_safe(self.views.active_id),
-            Quit::AllSafe => {
-                let ids: Vec<ViewId> = self.views.ids().collect();
-                for id in ids {
-                    self.quit_view_safe(id);
+    fn get_i64_setting(&self, setting: I64Setting) -> i64 {
+        match setting {
+            I64Setting::UiAnimate => self.settings["animation"].is_set() as i64,
+            I64Setting::UiScalePercentage => self.settings["scale%"].to_u64() as i64,
+            I64Setting::CursorXRay => self.brush.is_set(brush::BrushMode::XRay) as i64,
+            I64Setting::BrushSize => self.brush.size as i64,
+            I64Setting::BrushErase => self.brush.is_set(brush::BrushMode::Erase) as i64,
+            I64Setting::BrushMultiFrame => self.brush.is_set(brush::BrushMode::Multi) as i64,
+            I64Setting::BrushPixelPerfect => self.brush.is_set(brush::BrushMode::Perfect) as i64,
+            I64Setting::BrushXSymmetry => self.brush.is_set(brush::BrushMode::XSym) as i64,
+            I64Setting::BrushYSymmetry => self.brush.is_set(brush::BrushMode::YSym) as i64,
+            I64Setting::BrushLineAngle => {
+                if let Some(brush::BrushMode::Line(current_line)) = self.brush.line_mode() {
+                    current_line.unwrap_or(0) as i64
+                } else {
+                    0
                 }
+            },
+            I64Setting::FrameIndex => {
+                // TODO: maybe simplify current_frame and get max_frames another way:
+                let (frame, _) = self.current_frame();
+                frame as i64
             }
-            Quit::Forced => self.quit_view(self.views.active_id),
-            Quit::AllForced => self.quit(ExitReason::Normal),
+            I64Setting::FrameWidth => self.active_view().fw as i64,
+            I64Setting::FrameHeight => self.active_view().fh as i64,
         }
     }
 
-    fn get_or_swap_frame_width(&mut self, value: Option<i64>) -> I64Result {
-        let v = self.active_view();
-        let old_width = v.fw as i64;
-        let new_width = match value {
-            None => return Ok(old_width),
-            Some(width) => width,
-        };
-        self.resize_frames(new_width, v.fh as i64)?;
-        Ok(old_width)
-    }
-
-    fn get_or_swap_frame_height(&mut self, value: Option<i64>) -> I64Result {
-        let v = self.active_view();
-        let old_height = v.fh as i64;
-        let new_height = match value {
-            None => return Ok(old_height),
-            Some(height) => height,
-        };
-        self.resize_frames(v.fw as i64, new_height)?;
-        Ok(old_height)
+    fn set_i64_setting(&mut self, setting: I64Setting, value: i64) -> VoidResult {
+        match setting {
+            I64Setting::UiAnimate => {
+                self.settings.set("animation", Value::Bool(value != 0))?;
+            }
+            I64Setting::UiScalePercentage => {
+                if value < 100 || value > 400 {
+                    return Err(format!(
+                        "ui scale % should be between 100 and 400, got {}",
+                       value 
+                    ));
+                }
+                let old_percentage = self.settings["scale%"].to_u64() as i64;
+                self.settings
+                    .set("scale%", Value::U32(value as u32))?;
+                // TODO: We need to recompute the cursor position here
+                // from the window coordinates. Currently, cursor position
+                // is stored only in `SessionCoords`, which would have
+                // to change.
+                // TODO: would be nice not to need to pass in old_percentage here
+                self.rescale(
+                    (old_percentage as f64) / 100.0,
+                    (value as f64) / 100.0,
+                );
+            }
+            I64Setting::CursorXRay => self.brush.set(brush::BrushMode::XRay, value),
+            I64Setting::BrushSize => {
+                if value < 1 || value > 1000 { return Err(format!("brush size of {} is invalid", value)); }
+                self.brush.size = value as usize
+            }
+            I64Setting::BrushErase => self.brush.set(brush::BrushMode::Erase, value),
+            I64Setting::BrushMultiFrame => self.brush.set(brush::BrushMode::Multi, value),
+            I64Setting::BrushPixelPerfect => self.brush.set(brush::BrushMode::Perfect, value),
+            I64Setting::BrushXSymmetry => self.brush.set(brush::BrushMode::XSym, value),
+            I64Setting::BrushYSymmetry => self.brush.set(brush::BrushMode::YSym, value),
+            I64Setting::BrushLineAngle => {
+                let snap = value as u32;
+                if snap == 0 {
+                    // TODO: clean up brush line mode, any line will do to remove:
+                    self.brush.set(brush::BrushMode::Line(None), 0);
+                } else if snap < 360 {
+                    self.brush.set(brush::BrushMode::Line(Some(snap)), 0);
+                } else {
+                    return Err(format!("brush line snap angle should be between 0 and 360, got {}", value));
+                }
+            },
+            I64Setting::FrameIndex => {
+                // TODO: maybe simplify current_frame and get max_frames another way:
+                let (_, max_frames) = self.current_frame();
+                let new_frame = value.rem_euclid(max_frames as i64);
+                self.center_active_view_frame(new_frame as usize);
+            }
+            I64Setting::FrameWidth => {
+                self.resize_frames(value, self.active_view().fh as i64)?;
+            }
+            I64Setting::FrameHeight => {
+                self.resize_frames(self.active_view().fw as i64, value)?;
+            }
+        }
+        Ok(())
     }
 
     fn resize_frames(&mut self, width: i64, height: i64) -> Result<(), String> {
@@ -3170,14 +3189,18 @@ impl Session {
         return Ok(());
     }
 
-    fn get_or_swap_frame_index(&mut self, value: Option<i64>) -> I64Result {
-        let (old_frame, max_frames) = self.current_frame();
-        let new_frame = match value {
-            None => return Ok(old_frame as i64),
-            Some(frame) => frame.rem_euclid(max_frames as i64),
-        };
-        self.center_active_view_frame(new_frame as usize);
-        Ok(old_frame as i64)
+    pub fn script_quit(&mut self, quit: Quit) {
+        match quit {
+            Quit::Safe => self.quit_view_safe(self.views.active_id),
+            Quit::AllSafe => {
+                let ids: Vec<ViewId> = self.views.ids().collect();
+                for id in ids {
+                    self.quit_view_safe(id);
+                }
+            }
+            Quit::Forced => self.quit_view(self.views.active_id),
+            Quit::AllForced => self.quit(ExitReason::Normal),
+        }
     }
 }
 

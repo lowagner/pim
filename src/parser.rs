@@ -90,6 +90,8 @@ fn get_argument_parser(lookback: i32) -> Parser<Argument> {
 }
 
 pub fn command() -> Parser<Command> {
+    // TODO: check for a trailing `++` and do postincrement; same for `--`
+    // i.e., convert `f++` to `f (+ f 1)` and `whatever--` to `whatever (+ whatever -1)`
     token().map(
         // It's safe to unwrap this token here since token is non-whitespace
         // and the only command parse error is if the string is just whitespace.

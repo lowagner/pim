@@ -118,26 +118,14 @@ pub enum Command {
     // TODO: Map: uses mode $0, with keybinding at $1, to evaluate command at $2.  optional command at $3 for release
     /// Getter/swapper for various settings that are strings.
     StringSetting(StringSetting),
-
-    /// Getter/swapper for whether we animate the frames.
-    Animate,
-    /// Getter/swapper for the UI Scale (e.g., palette boxes and command line), as a percentage.
-    UiScale,
+    /// Getter/swapper for various settings that are ints (or booleans).
+    I64Setting(I64Setting),
 
     /// Setter for the width x height of each frame, using $0 for width and $1 for height.
     /// If either $0 or $1 is null, it keeps that dimension the same; if both are null,
     /// it crops the frames to content.  Returns the number of pixels in one frame, i.e.,
     /// width * height, from *before* the operation.
     FrameResize,
-    /// Getter/swapper for the width of each frame.  If $0 is null, this returns the current width;
-    /// if $0 is an integer, sets the frame width to $0 and returns the old value.
-    FrameWidth,
-    /// Getter/swapper for the height of each frame.  Compare with FrameWidth.
-    FrameHeight,
-    /// Getter/swapper for the current frame index.  If $0 is null, returns the current frame;
-    /// if $0 is an integer, sets the current frame to that value and returns the old value.
-    /// Note that we mod by the number of frames, so `f -1` will go to the last frame.
-    FrameIndex,
     // TODO: FrameClone
     // TODO: FrameDelete
     // TODO: FrameSwap
@@ -164,15 +152,6 @@ pub enum Command {
     /// Note that an integer for the color also works as an index to the palette.
     Paint,
 
-    /// Getter/swapper for brush size.  If $0 is null, returns current brush size;
-    /// if $0 is an integer, sets the brush size to that and returns the old brush size.
-    BrushSize,
-    /// Getter/swapper for BrushMode.  E.g., without an argument, will return the current value;
-    /// with an argument, will set/unset the BrushMode if $0 is truthy/falsey.  In the latter case,
-    /// the command will return the old value.  For specific values, `b/erase` to get/swap erase
-    /// mode, `b/multi` to get/swap multi-frame drawing, etc.  Note that `b/line` can take an integer
-    /// argument for the angle (in degrees) to snap to when drawing a line; 0 for no snapping.
-    BrushMode(BrushMode),
     // TODO: BrushReset,
     /// Versions of quit, see enum `Quit`.
     Quit(Quit),
@@ -193,15 +172,12 @@ impl Command {
 
 impl fmt::Display for Command {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // TODO: don't use `/` for commands; we'll want to interpret those as
-        // directory separators and automatically convert identifiers with them
-        // into strings.  maybe `push.pop` or `run-all`
         match self {
             Command::Help => write!(f, "?"),
             Command::Echo => write!(f, "echo"),
             Command::Error => write!(f, "error"),
-            Command::PushPop => write!(f, "push/pop"),
-            Command::RunAll => write!(f, "run/all"),
+            Command::PushPop => write!(f, "push-pop"),
+            Command::RunAll => write!(f, "run-all"),
             Command::Not => write!(f, "not"),
             Command::If => write!(f, "if"),
             Command::Even => write!(f, "even"),
@@ -213,23 +189,24 @@ impl fmt::Display for Command {
             Command::ConstVariable => write!(f, "const"),
             Command::CreateAlias => write!(f, "alias"),
             Command::StringSetting(StringSetting::Mode) => write!(f, "mode"),
-            Command::Animate => write!(f, "a"),
-            Command::UiScale => write!(f, "ui/scale%"),
-            Command::FrameResize => write!(f, "f/resize"),
-            Command::FrameWidth => write!(f, "f/width"),
-            Command::FrameHeight => write!(f, "f/height"),
-            Command::FrameIndex => write!(f, "f"),
+            Command::I64Setting(I64Setting::UiAnimate) => write!(f, "ui-a"),
+            Command::I64Setting(I64Setting::UiScalePercentage) => write!(f, "ui-scale%"),
+            Command::I64Setting(I64Setting::CursorXRay) => write!(f, "c-xray"),
+            Command::I64Setting(I64Setting::BrushSize) => write!(f, "b-size"),
+            Command::I64Setting(I64Setting::BrushErase) => write!(f, "b-erase"),
+            Command::I64Setting(I64Setting::BrushMultiFrame) => write!(f, "b-multi"),
+            Command::I64Setting(I64Setting::BrushPixelPerfect) => write!(f, "b-perfect"),
+            Command::I64Setting(I64Setting::BrushXSymmetry) => write!(f, "b-xsym"),
+            Command::I64Setting(I64Setting::BrushYSymmetry) => write!(f, "b-ysym"),
+            Command::I64Setting(I64Setting::BrushLineAngle) => write!(f, "b-line"),
+            Command::I64Setting(I64Setting::FrameIndex) => write!(f, "f"),
+            Command::I64Setting(I64Setting::FrameWidth) => write!(f, "f-width"),
+            Command::I64Setting(I64Setting::FrameHeight) => write!(f, "f-height"),
+            Command::FrameResize => write!(f, "f-resize"),
+            // TODO: move fg/bg to color getter/setters (ColorSetting)
             Command::ForegroundColor => write!(f, "fg"),
             Command::BackgroundColor => write!(f, "bg"),
             Command::Paint => write!(f, "p"),
-            Command::BrushSize => write!(f, "b/size"),
-            Command::BrushMode(BrushMode::Erase) => write!(f, "b/erase"),
-            Command::BrushMode(BrushMode::Multi) => write!(f, "b/multi"),
-            Command::BrushMode(BrushMode::Perfect) => write!(f, "b/perfect"),
-            Command::BrushMode(BrushMode::XSym) => write!(f, "b/xsym"),
-            Command::BrushMode(BrushMode::YSym) => write!(f, "b/ysym"),
-            Command::BrushMode(BrushMode::XRay) => write!(f, "b/xray"),
-            Command::BrushMode(BrushMode::Line) => write!(f, "b/line"),
             Command::Quit(Quit::Safe) => write!(f, "q"),
             Command::Quit(Quit::AllSafe) => write!(f, "qa"),
             Command::Quit(Quit::Forced) => write!(f, "q!"),
@@ -246,8 +223,8 @@ impl FromStr for Command {
             "?" => Ok(Command::Help),
             "echo" => Ok(Command::Echo),
             "error" => Ok(Command::Error),
-            "push/pop" => Ok(Command::PushPop),
-            "run/all" => Ok(Command::RunAll),
+            "push-pop" => Ok(Command::PushPop),
+            "run-all" => Ok(Command::RunAll),
             "not" => Ok(Command::Not),
             "if" => Ok(Command::If),
             "even" => Ok(Command::Even),
@@ -259,23 +236,23 @@ impl FromStr for Command {
             "alias" => Ok(Command::CreateAlias),
             "mode" => Ok(Command::StringSetting(StringSetting::Mode)),
             // TODO: "cwd" => Ok(Command::StringSetting(StringSetting::Cwd)),
-            "a" => Ok(Command::Animate),
-            "ui/scale%" => Ok(Command::UiScale),
-            "f/resize" => Ok(Command::FrameResize),
-            "f/width" => Ok(Command::FrameWidth),
-            "f/height" => Ok(Command::FrameHeight),
-            "f" => Ok(Command::FrameIndex),
+            "ui-a" => Ok(Command::I64Setting(I64Setting::UiAnimate)),
+            "ui-scale%" => Ok(Command::I64Setting(I64Setting::UiScalePercentage)),
+            "c-xray" => Ok(Command::I64Setting(I64Setting::CursorXRay)),
+            "b-size" => Ok(Command::I64Setting(I64Setting::BrushSize)),
+            "b-erase" => Ok(Command::I64Setting(I64Setting::BrushErase)),
+            "b-multi" => Ok(Command::I64Setting(I64Setting::BrushMultiFrame)),
+            "b-perfect" => Ok(Command::I64Setting(I64Setting::BrushPixelPerfect)),
+            "b-xsym" => Ok(Command::I64Setting(I64Setting::BrushXSymmetry)),
+            "b-ysym" => Ok(Command::I64Setting(I64Setting::BrushYSymmetry)),
+            "b-line" => Ok(Command::I64Setting(I64Setting::BrushLineAngle)),
+            "f" => Ok(Command::I64Setting(I64Setting::FrameIndex)),
+            "f-width" => Ok(Command::I64Setting(I64Setting::FrameWidth)),
+            "f-height" => Ok(Command::I64Setting(I64Setting::FrameHeight)),
+            "f-resize" => Ok(Command::FrameResize),
             "fg" => Ok(Command::ForegroundColor),
             "bg" => Ok(Command::BackgroundColor),
             "p" => Ok(Command::Paint),
-            "b/size" => Ok(Command::BrushSize),
-            "b/erase" => Ok(Command::BrushMode(BrushMode::Erase)),
-            "b/multi" => Ok(Command::BrushMode(BrushMode::Multi)),
-            "b/perfect" => Ok(Command::BrushMode(BrushMode::Perfect)),
-            "b/xsym" => Ok(Command::BrushMode(BrushMode::XSym)),
-            "b/ysym" => Ok(Command::BrushMode(BrushMode::YSym)),
-            "b/xray" => Ok(Command::BrushMode(BrushMode::XRay)),
-            "b/line" => Ok(Command::BrushMode(BrushMode::Line)),
             "q" => Ok(Command::Quit(Quit::Safe)),
             "qa" => Ok(Command::Quit(Quit::AllSafe)),
             "q!" => Ok(Command::Quit(Quit::Forced)),
@@ -294,33 +271,43 @@ impl FromStr for Command {
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct EmptyCommandParseError;
 
-// TODO: rename BrushMode to BrushOption
-/// Brush mode. Any number of these modes can be active at once.
-// TODO: update `brush.rs` to these values once `script.rs` takes over `cmd.rs`;\
-// move the argument on `brush::BrushMode::Line` into the Brush class instance itself.
-#[derive(PartialEq, Eq, PartialOrd, Ord, Copy, Clone, Debug)]
-pub enum BrushMode {
-    /// Erase pixels.
-    Erase,
-    /// Draw on all frames at once.
-    Multi,
-    /// Pixel-perfect mode.
-    Perfect,
-    /// X-Symmetry mode.
-    XSym,
-    /// Y-Symmetry mode.
-    YSym,
-    /// X-Ray mode.
-    XRay,
-    /// Confine line angles to multiples of this value.
-    Line,
+#[derive(PartialEq, Debug, Clone, Copy)]
+pub enum StringSetting {
+    /// Current mode (e.g., normal, command, etc.).
+    Mode,
 }
 
 #[derive(PartialEq, Debug, Clone, Copy)]
-pub enum StringSetting {
-    /// Returns the current mode, changing it to what's in $0 if present and valid.
-    Mode,
+pub enum I64Setting {
+    /// Animate the frames in the UI; boolean (0 or 1).
+    UiAnimate,
+    /// The interface scale (e.g., for palette boxes and command line), as a percentage (100 = 1x).
+    UiScalePercentage,
+    /// X-Ray mode to show the color of the pixel below your cursor; boolean (0 or 1)
+    CursorXRay,
+    /// Size of the brush, in pixels.
+    BrushSize,
+    /// Erase pixels with the brush; boolean (0 or 1).
+    BrushErase,
+    /// Draw on all frames at once; boolean (0 or 1).
+    BrushMultiFrame,
+    /// Pixel-perfect drawing mode; boolean (0 or 1).
+    BrushPixelPerfect,
+    /// Draw with X-Symmetry; boolean (0 or 1).
+    BrushXSymmetry,
+    /// Draw with Y-Symmetry; boolean (0 or 1).
+    BrushYSymmetry,
+    /// Confine line angles to multiples of this value, or 0 for no snapping.
+    BrushLineAngle,
+    /// The current frame index.
+    FrameIndex,
+    /// The width of each frame in the animation, in pixels.
+    FrameWidth,
+    /// The height of each frame in the animation, in pixels.
+    FrameHeight,
 }
+
+// TODO: can we do a `impl I64Setting { command() { Command::Int64(self) }` for convenience?
 
 #[derive(PartialEq, Debug, Clone, Copy)]
 pub enum Quit {
@@ -761,17 +748,16 @@ macro_rules! script_runner {
                         }
                         Ok(Argument::String(old_value))
                     }
-                    Command::Animate => {
-                        let value = self
+                    Command::I64Setting(setting) => {
+                        let argument = self
                             .script_evaluate(&script_stack, Evaluate::Index(0))?
-                            .get_optional_i64("for animate")?;
-                        Ok(Argument::I64(self.get_or_swap_animate(value)?))
-                    }
-                    Command::UiScale => {
-                        let value = self
-                            .script_evaluate(&script_stack, Evaluate::Index(0))?
-                            .get_optional_i64("for scale%")?;
-                        Ok(Argument::I64(self.get_or_swap_ui_scale(value)?))
+                            .get_optional_i64("for i64 setting")?;
+                        let old_value = self.get_i64_setting(setting);
+                        match argument {
+                            None => {},
+                            Some(new_value) => self.set_i64_setting(setting, new_value)?,
+                        }
+                        Ok(Argument::I64(old_value))
                     }
                     Command::FrameResize => {
                         let optional_width = self
@@ -780,8 +766,8 @@ macro_rules! script_runner {
                         let optional_height = self
                             .script_evaluate(&script_stack, Evaluate::Index(1))?
                             .get_optional_i64("for frame height")?;
-                        let old_width = self.get_or_swap_frame_width(None)?;
-                        let old_height = self.get_or_swap_frame_height(None)?;
+                        let old_width = self.get_i64_setting(I64Setting::FrameWidth);
+                        let old_height = self.get_i64_setting(I64Setting::FrameHeight);
                         if optional_width.is_some() && optional_height.is_some() {
                             self.resize_frames(optional_width.unwrap(), optional_height.unwrap())?;
                         } else if optional_width.is_some() {
@@ -793,24 +779,6 @@ macro_rules! script_runner {
                             return Err("`f/resize` without arguments is not yet implemented".to_string());
                         }
                         Ok(Argument::I64(old_width * old_height))
-                    }
-                    Command::FrameWidth => {
-                        let value = self
-                            .script_evaluate(&script_stack, Evaluate::Index(0))?
-                            .get_optional_i64("for frame width")?;
-                        Ok(Argument::I64(self.get_or_swap_frame_width(value)?))
-                    }
-                    Command::FrameHeight => {
-                        let value = self
-                            .script_evaluate(&script_stack, Evaluate::Index(0))?
-                            .get_optional_i64("for frame height")?;
-                        Ok(Argument::I64(self.get_or_swap_frame_height(value)?))
-                    }
-                    Command::FrameIndex => {
-                        let value = self
-                            .script_evaluate(&script_stack, Evaluate::Index(0))?
-                            .get_optional_i64("for frame")?;
-                        Ok(Argument::I64(self.get_or_swap_frame_index(value)?))
                     }
                     Command::ForegroundColor => {
                         let color_arg = self.script_evaluate(&script_stack, Evaluate::Index(0))?;
@@ -833,52 +801,6 @@ macro_rules! script_runner {
                         get_or_swap_color(&mut color, &self.palette, color_arg)?;
 
                         self.script_paint(x, y, color)
-                    }
-                    Command::BrushSize => {
-                        let optional = self
-                            .script_evaluate(&script_stack, Evaluate::Index(0))?
-                            .get_optional_i64("for brush size")?;
-                        let old_size = self.brush.size as i64;
-                        let new_size = match optional {
-                            None => return Ok(Argument::I64(old_size)),
-                            Some(value) => value,
-                        };
-                        self.brush.size = new_size.max(1) as usize;
-                        Ok(Argument::I64(old_size))
-                    }
-                    Command::BrushMode(mode) => {
-                        let argument = self
-                            .script_evaluate(&script_stack, Evaluate::Index(0))?
-                            .get_optional_i64("for brush mode")?;
-                        // TODO: clean up when script::BrushMode folds into BrushMode
-                        let mut maybe_result = None;
-                        let brush_mode = match mode {
-                            BrushMode::Erase => brush::BrushMode::Erase,
-                            BrushMode::Multi => brush::BrushMode::Multi,
-                            BrushMode::Perfect => brush::BrushMode::Perfect,
-                            BrushMode::XSym => brush::BrushMode::XSym,
-                            BrushMode::YSym => brush::BrushMode::YSym,
-                            BrushMode::XRay => brush::BrushMode::XRay,
-                            BrushMode::Line => {
-                                maybe_result = Some(
-                                    if let Some(brush::BrushMode::Line(snap)) = self.brush.line_mode() {
-                                        snap.unwrap_or(0) as i64
-                                    } else {
-                                        0
-                                    },
-                                );
-                                brush::BrushMode::Line(Some(argument.unwrap_or(0) as u32))
-                            }
-                        };
-                        let result = maybe_result.unwrap_or(self.brush.is_set(brush_mode) as i64);
-                        if let Some(value) = argument {
-                            if value == 0 {
-                                self.brush.unset(brush_mode);
-                            } else {
-                                self.brush.set(brush_mode);
-                            }
-                        }
-                        Ok(Argument::I64(result))
                     }
                     Command::Quit(q) => {
                         self.script_quit(q);
@@ -1074,77 +996,77 @@ impl Variables {
         variables.add_built_in(
             Command::Help,
             "explains what $0 does without evaluating it, \
-            e.g., `? paint` to explain what the `paint` command does",
+            e.g., `$$ paint` to explain what the `paint` command does",
         );
         // TODO: consider serializing strings without '', at least for echo/error.
         // we need them when serializing a script.
         variables.add_built_in(
             Command::Echo,
             "evaluates all arguments, joining them into a string to print, \
-            e.g., `echo 'oh no' fg` will show a message of `'oh no' {foreground-color}`",
+            e.g., `$$ 'oh no' fg` will show a message of `'oh no' {foreground-color}`",
         );
         variables.add_built_in(
             Command::Error,
             "evaluates all arguments, joining them into an error string, \
-            e.g., `error 'oh no' fg` will return an error of `'oh no' {foreground-color}`",
+            e.g., `$$ 'oh no' fg` will return an error of `'oh no' {foreground-color}`",
         );
         variables.add_built_in(
             Command::PushPop,
             "first argument should be a script that swaps in a value to a variable, \
             all other arguments will be evaluated,
             and afterwards the variable will be reset; \
-            e.g., `push/pop (fg #123456) (paint 3 4)` to set `fg` temporarily",
+            e.g., `$$ (fg #123456) (paint 3 4)` to set `fg` temporarily",
         );
         variables.add_built_in(
             Command::RunAll,
             "evaluates all arguments until any error, \
             returning the last evaluated argument; \
-            e.g., `run/all 'take me' (fg #123456)` returns the previous foreground color",
+            e.g., `$$ 'take me' (fg #123456)` returns the previous foreground color",
         );
         variables.add_built_in(
             Command::Not,
             "if $0 evaluates to truthy, returns 0, otherwise 1, \
-            e.g., `not 3` returns 0 and `not 0` returns 1",
+            e.g., `$$ 3` returns 0 and `not 0` returns 1",
         );
         variables.add_built_in(
             Command::If,
             "if $0 evaluates to truthy, evaluates $1, otherwise $2, \
-            e.g., `if 'hi' 'world' 3` returns 'world'",
+            e.g., `$$ 'hi' 'world' 3` returns 'world'",
         );
         variables.add_built_in(
             Command::Even,
             "if $0 evaluates to even, returns 1, otherwise 0, \
-            e.g., `even 23` returns 0",
+            e.g., `$$ 23` returns 0",
         );
         variables.add_built_in(
             Command::Odd,
             "if $0 evaluates to odd, returns 1, otherwise 0, \
-            e.g., `odd 23` returns 1",
+            e.g., `$$ 23` returns 1",
         );
         variables.add_built_in(
             Command::Sum,
             "adds all evaluated arguments together into the type of $0, \
-            e.g., `+ 1 2 3 4` to return 10",
+            e.g., `$$ 1 2 3 4` to return 10",
         );
         variables.add_built_in(
             Command::Product,
             "multiplies all evaluated arguments together, \
-            e.g., `* -1 2 3 4` to return -24",
+            e.g., `$$ -1 2 3 4` to return -24",
         );
         variables.add_built_in(
             Command::SetVariable,
             "creates/updates a mutable variable with name $0 to the value of $1, unevaluated, \
-            e.g., `set 'paint5' (paint $0 $1 5)` to create a lambda",
+            e.g., `$$ 'paint5' (paint $0 $1 5)` to create a lambda",
         );
         variables.add_built_in(
             Command::ConstVariable,
             "creates an immutable variable with name $0 and value $1, unevaluated, \
-            e.g., `const 'greet' (echo 'hello, world')` to create a lambda",
+            e.g., `$$ 'greet' (echo 'hello, world')` to create a lambda",
         );
         variables.add_built_in(
             Command::CreateAlias,
             "creates an alias with name $0 that evaluates name $1 when called, \
-            e.g., `alias 'fgc' 'fg'` to add `fgc` as an alias for `fg`",
+            e.g., `$$ 'fgc' 'fg'` to add `fgc` as an alias for `fg`",
         );
         variables.add_built_in(
             Command::StringSetting(StringSetting::Mode),
@@ -1152,90 +1074,90 @@ impl Variables {
             e.g., `$$ 'normal'` to go to normal mode",
         );
         variables.add_built_in(
-            Command::Animate,
+            Command::I64Setting(I64Setting::UiAnimate),
             "getter/swapper for toggling animation if $0 is null/present, \
-            e.g., `a on` to turn on animation",
+            e.g., `$$ on` to turn on animation",
         );
         variables.add_built_in(
-            Command::UiScale,
+            Command::I64Setting(I64Setting::UiScalePercentage),
             "getter/swapper for current UI scale percentage if $0 is null/present, \
-            e.g., `ui/scale% 150` to set UI to 1.5x",
+            e.g., `$$ 150` to set UI to 1.5x",
+        );
+        variables.add_built_in(
+            Command::I64Setting(I64Setting::CursorXRay),
+            "getter/swapper for x-ray to see pixel under cursor if $0 is null/present, \
+            e.g., `$$ 1` to turn on",
+        );
+        variables.add_built_in(
+            Command::I64Setting(I64Setting::BrushSize),
+            "getter/swapper for brush size if $0 is null/present, \
+            e.g., `$$ 15` to set to 15",
+        );
+        variables.add_built_in(
+            Command::I64Setting(I64Setting::BrushErase),
+            "getter/swapper for erase brush option if $0 is null/present, \
+            e.g., `$$ on` to turn on",
+        );
+        variables.add_built_in(
+            Command::I64Setting(I64Setting::BrushMultiFrame),
+            "getter/swapper for multi-frame brush option if $0 is null/present, \
+            e.g., `$$ off` to turn off",
+        );
+        variables.add_built_in(
+            Command::I64Setting(I64Setting::BrushPixelPerfect),
+            "getter/swapper for pixel-perfect brush option if $0 is null/present, \
+            e.g., `$$ 0` to turn off",
+        );
+        variables.add_built_in(
+            Command::I64Setting(I64Setting::BrushXSymmetry),
+            "getter/swapper for draw with x-symmetry brush option if $0 is null/present, \
+            e.g., `$$ false` to turn off",
+        );
+        variables.add_built_in(
+            Command::I64Setting(I64Setting::BrushYSymmetry),
+            "getter/swapper for draw with y-symmetry brush option if $0 is null/present, \
+            e.g., `$$ true` to turn on",
+        );
+        variables.add_built_in(
+            Command::I64Setting(I64Setting::BrushLineAngle),
+            "getter/swapper for line angle brush option if $0 is null/present, \
+            e.g., `$$ 30` to set to 30 degrees, `$$ 0` to turn off",
+        );
+        variables.add_built_in(
+            Command::I64Setting(I64Setting::FrameIndex),
+            "getter/swapper for the frame index if $0 is null/present, \
+            e.g., `$$ 3` to switch to the fourth frame (0-indexed), \
+            or `$$ -1` to switch to the last frame (wrap around)",
+        );
+        variables.add_built_in(
+            Command::I64Setting(I64Setting::FrameWidth),
+            "getter/swapper for the frame width if $0 is null/present, \
+            e.g., `$$ 123` to set to 123 pixels wide",
+        );
+        variables.add_built_in(
+            Command::I64Setting(I64Setting::FrameHeight),
+            "getter/swapper for the frame height if $0 is null/present, \
+            e.g., `$$ 456` to set to 456 pixels high",
         );
         variables.add_built_in(
             Command::FrameResize,
             "sets frame size, or crops to content if no arguments, \
-            e.g., `f/resize 12 34` to set to 12 pixels wide and 34 pixels high",
-        );
-        variables.add_built_in(
-            Command::FrameWidth,
-            "getter/swapper for the frame width if $0 is null/present, \
-            e.g., `f/width 123` to set to 123 pixels wide",
-        );
-        variables.add_built_in(
-            Command::FrameHeight,
-            "getter/swapper for the frame height if $0 is null/present, \
-            e.g., `f/height 456` to set to 456 pixels high",
-        );
-        variables.add_built_in(
-            Command::FrameIndex,
-            "getter/swapper for the frame index if $0 is null/present, \
-            e.g., `f 3` to switch to the fourth frame (0-indexed), \
-            or `f -1` to switch to the last frame (wrap around)",
+            e.g., `$$ 12 34` to set to 12 pixels wide and 34 pixels high",
         );
         variables.add_built_in(
             Command::ForegroundColor,
             "getter/swapper for foreground color if $0 is null/present, \
-            e.g., `fg 3` to set foreground color to palette 3",
+            e.g., `$$ 3` to set foreground color to palette 3",
         );
         variables.add_built_in(
             Command::BackgroundColor,
             "getter/swapper for background color if $0 is null/present, \
-            e.g., `bg #123456` to set background color to #123456",
+            e.g., `$$ #123456` to set background color to #123456",
         );
         variables.add_built_in(
             Command::Paint,
             "paints coordinates ($0, $1) with color $2, defaulting to foreground, \
-            e.g., `p 3 4 #765432`",
-        );
-        variables.add_built_in(
-            Command::BrushSize,
-            "getter/swapper for brush size if $0 is null/present, \
-            e.g., `b/size 15` to set to 15",
-        );
-        variables.add_built_in(
-            Command::BrushMode(BrushMode::Erase),
-            "getter/swapper for erase brush option if $0 is null/present, \
-            e.g., `b/erase on` to turn on",
-        );
-        variables.add_built_in(
-            Command::BrushMode(BrushMode::Multi),
-            "getter/swapper for multi-frame brush option if $0 is null/present, \
-            e.g., `b/multi off` to turn off",
-        );
-        variables.add_built_in(
-            Command::BrushMode(BrushMode::Perfect),
-            "getter/swapper for pixel-perfect brush option if $0 is null/present, \
-            e.g., `b/perfect 0` to turn off",
-        );
-        variables.add_built_in(
-            Command::BrushMode(BrushMode::XSym),
-            "getter/swapper for draw with x-symmetry brush option if $0 is null/present, \
-            e.g., `b/xsym false` to turn off",
-        );
-        variables.add_built_in(
-            Command::BrushMode(BrushMode::YSym),
-            "getter/swapper for draw with y-symmetry brush option if $0 is null/present, \
-            e.g., `b/ysym true` to turn on",
-        );
-        variables.add_built_in(
-            Command::BrushMode(BrushMode::XRay),
-            "getter/swapper for x-ray (see underlying pixel) brush option if $0 is null/present, \
-            e.g., `b/xray 1` to turn on",
-        );
-        variables.add_built_in(
-            Command::BrushMode(BrushMode::Line),
-            "getter/swapper for line angle brush option if $0 is null/present, \
-            e.g., `b/line 30` to set to 30 degrees, `b/line 0` to turn off",
+            e.g., `$$ 3 4 #765432`",
         );
         variables.add_built_in(
             Command::Quit(Quit::Safe),
@@ -1264,35 +1186,6 @@ impl Variables {
         // TODO: add `normal` as a Const variable to the string "normal",
         // same for other modes that you can set.
 
-        // Helpful scripts.
-        // TODO: make this a Script parser so we can use it for other things.
-        // e.g., `a/delay++` should do this same logic for `a/delay`:
-        assert_ok!(variables.set(
-            "f++".to_string(),
-            Variable::Const(Argument::Script(Script {
-                command: Command::FrameIndex,
-                arguments: vec![Argument::Script(Script {
-                    command: Command::Sum,
-                    arguments: vec![
-                        Argument::Script(Script::zero_arg(Command::FrameIndex)),
-                        Argument::I64(1),
-                    ],
-                })],
-            }))
-        ));
-        assert_ok!(variables.set(
-            "f--".to_string(),
-            Variable::Const(Argument::Script(Script {
-                command: Command::FrameIndex,
-                arguments: vec![Argument::Script(Script {
-                    command: Command::Sum,
-                    arguments: vec![
-                        Argument::Script(Script::zero_arg(Command::FrameIndex)),
-                        Argument::I64(-1),
-                    ],
-                })],
-            }))
-        ));
         assert_ok!(variables.set(
             "swap".to_string(),
             Variable::Const(Argument::Script(Script {
@@ -1310,13 +1203,13 @@ impl Variables {
         assert_ok!(variables.set("product".to_string(), Variable::Alias("*".to_string())));
         assert_ok!(variables.set("sum".to_string(), Variable::Alias("+".to_string())));
         assert_ok!(variables.set("paint".to_string(), Variable::Alias("p".to_string())));
-        assert_ok!(variables.set("f/index".to_string(), Variable::Alias("f".to_string())));
+        assert_ok!(variables.set("f-index".to_string(), Variable::Alias("f".to_string())));
         assert_ok!(variables.set("quit".to_string(), Variable::Alias("q".to_string())));
         assert_ok!(variables.set("quit!".to_string(), Variable::Alias("q!".to_string())));
         for c in [
             "size", "erase", "multi", "perfect", "xsym", "ysym", "xray", "line",
         ] {
-            assert_ok!(variables.set(format!("brush/{}", c), Variable::Alias(format!("b/{}", c))));
+            assert_ok!(variables.set(format!("brush-{}", c), Variable::Alias(format!("b-{}", c))));
         }
         variables
     }
@@ -1431,7 +1324,6 @@ impl Variables {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::brush::{self, Brush};
     use crate::message::*;
 
     #[test]
@@ -1479,7 +1371,6 @@ mod test {
     struct TestRunner {
         test_what_ran: Vec<WhatRan>,
         variables: Variables,
-        brush: Brush,
         fg: Rgba8,
         bg: Rgba8,
         palette: Palette,
@@ -1554,7 +1445,6 @@ mod test {
             palette.add(Rgba8::WHITE);
             Self {
                 palette,
-                brush: Brush::default(),
                 test_what_ran: Vec::new(),
                 variables: Variables::with_built_ins(),
                 fg: Rgba8::WHITE,
@@ -1599,40 +1489,20 @@ mod test {
             Ok(())
         }
 
-        fn get_or_swap_animate(&mut self, value: Option<i64>) -> I64Result {
-            self.test_what_ran
-                .push(WhatRan::Mocked(format!("a {:?}", value)));
-            Ok(1)
+        fn get_i64_setting(&self, _setting: I64Setting) -> i64 {
+            1234567890
         }
 
-        fn get_or_swap_ui_scale(&mut self, value: Option<i64>) -> I64Result {
+        fn set_i64_setting(&mut self, setting: I64Setting, value: i64) -> VoidResult {
             self.test_what_ran
-                .push(WhatRan::Mocked(format!("ui/scale% {:?}", value)));
-            Ok(100)
+                .push(WhatRan::Mocked(format!("set{:?}({})", setting, value)));
+            Ok(())
         }
 
         fn resize_frames(&mut self, width: i64, height: i64) -> Result<(), String> {
             self.test_what_ran
                 .push(WhatRan::Mocked(format!("f/resize {} {}", width, height)));
             Ok(())
-        }
-
-        fn get_or_swap_frame_width(&mut self, value: Option<i64>) -> I64Result {
-            self.test_what_ran
-                .push(WhatRan::Mocked(format!("f/width {:?}", value)));
-            Ok(987)
-        }
-
-        fn get_or_swap_frame_height(&mut self, value: Option<i64>) -> I64Result {
-            self.test_what_ran
-                .push(WhatRan::Mocked(format!("f/height {:?}", value)));
-            Ok(321)
-        }
-
-        fn get_or_swap_frame_index(&mut self, value: Option<i64>) -> I64Result {
-            self.test_what_ran
-                .push(WhatRan::Mocked(format!("f {:?}", value)));
-            Ok(404)
         }
 
         fn script_quit(&mut self, quit: Quit) {
@@ -2596,176 +2466,6 @@ mod test {
     }
 
     #[test]
-    fn test_evaluate_brush_erase_via_getter() {
-        let mut test_runner = TestRunner::new();
-
-        test_runner.brush.set(brush::BrushMode::Erase);
-        assert_eq!(
-            Script {
-                command: Command::BrushMode(BrushMode::Erase),
-                arguments: vec![]
-            }
-            .run(&mut test_runner),
-            Ok(Argument::I64(1))
-        );
-        assert_eq!(test_runner.brush.is_set(brush::BrushMode::Erase), true); // doesn't change it
-
-        test_runner.brush.unset(brush::BrushMode::Erase);
-        assert_eq!(
-            Script {
-                command: Command::BrushMode(BrushMode::Erase),
-                arguments: vec![Argument::Null]
-            }
-            .run(&mut test_runner),
-            Ok(Argument::I64(0))
-        );
-        assert_eq!(test_runner.brush.is_set(brush::BrushMode::Erase), false); // doesn't change it
-    }
-
-    #[test]
-    fn test_evaluate_brush_erase_via_swapper() {
-        let mut test_runner = TestRunner::new();
-
-        test_runner.brush.set(brush::BrushMode::Erase);
-        assert_eq!(
-            Script {
-                command: Command::BrushMode(BrushMode::Erase),
-                arguments: vec![Argument::I64(0)]
-            }
-            .run(&mut test_runner),
-            Ok(Argument::I64(1)) // returns old value
-        );
-        assert_eq!(test_runner.brush.is_set(brush::BrushMode::Erase), false); // does change it
-
-        test_runner.brush.unset(brush::BrushMode::Erase);
-        assert_eq!(
-            Script {
-                command: Command::BrushMode(BrushMode::Erase),
-                arguments: vec![Argument::I64(1)]
-            }
-            .run(&mut test_runner),
-            Ok(Argument::I64(0)) // returns old value
-        );
-        assert_eq!(test_runner.brush.is_set(brush::BrushMode::Erase), true); // does change it
-    }
-
-    // TODO: Other BrushMode tests
-
-    #[test]
-    fn test_evaluate_brush_line_via_getter() {
-        let mut test_runner = TestRunner::new();
-
-        test_runner.brush.set(brush::BrushMode::Line(Some(15)));
-        assert_eq!(
-            Script {
-                command: Command::BrushMode(BrushMode::Line),
-                arguments: vec![Argument::Null]
-            }
-            .run(&mut test_runner),
-            Ok(Argument::I64(15))
-        );
-        assert_eq!(
-            test_runner.brush.line_mode(),
-            Some(brush::BrushMode::Line(Some(15)))
-        ); // doesn't change it
-
-        test_runner.brush.unset(brush::BrushMode::Line(None));
-        assert_eq!(
-            Script {
-                command: Command::BrushMode(BrushMode::Line),
-                arguments: vec![]
-            }
-            .run(&mut test_runner),
-            Ok(Argument::I64(0))
-        );
-        assert_eq!(test_runner.brush.line_mode(), None); // doesn't change it
-    }
-
-    #[test]
-    fn test_evaluate_brush_line_via_swapper() {
-        let mut test_runner = TestRunner::new();
-
-        test_runner.brush.set(brush::BrushMode::Line(Some(15)));
-        assert_eq!(
-            Script {
-                command: Command::BrushMode(BrushMode::Line),
-                arguments: vec![Argument::I64(77)]
-            }
-            .run(&mut test_runner),
-            Ok(Argument::I64(15))
-        );
-        assert_eq!(
-            test_runner.brush.line_mode(),
-            Some(brush::BrushMode::Line(Some(77)))
-        ); // changes it
-
-        assert_eq!(
-            Script {
-                command: Command::BrushMode(BrushMode::Line),
-                arguments: vec![Argument::I64(0)]
-            }
-            .run(&mut test_runner),
-            Ok(Argument::I64(77)) // was 77
-        );
-        assert_eq!(test_runner.brush.line_mode(), None); // changes change it
-    }
-
-    #[test]
-    fn test_evaluate_brush_size_via_getter() {
-        let mut test_runner = TestRunner::new();
-
-        test_runner.brush.size = 123456;
-        assert_eq!(
-            Script {
-                command: Command::BrushSize,
-                arguments: vec![]
-            }
-            .run(&mut test_runner),
-            Ok(Argument::I64(123456))
-        );
-        assert_eq!(test_runner.brush.size, 123456); // doesn't change it
-
-        test_runner.brush.size = 1234567;
-        assert_eq!(
-            Script {
-                command: Command::BrushSize,
-                arguments: vec![Argument::Null]
-            }
-            .run(&mut test_runner),
-            Ok(Argument::I64(1234567))
-        );
-        assert_eq!(test_runner.brush.size, 1234567); // doesn't change it
-    }
-
-    #[test]
-    fn test_evaluate_brush_size_via_swapper() {
-        let mut test_runner = TestRunner::new();
-
-        test_runner.brush.size = 123;
-        assert_eq!(
-            Script {
-                command: Command::BrushSize,
-                arguments: vec![Argument::I64(777)]
-            }
-            .run(&mut test_runner),
-            Ok(Argument::I64(123)) // returns old value
-        );
-        assert_eq!(test_runner.brush.size, 777); // sets new value
-
-        // Can't go below 1
-        test_runner.brush.size = 1234;
-        assert_eq!(
-            Script {
-                command: Command::BrushSize,
-                arguments: vec![Argument::I64(0)]
-            }
-            .run(&mut test_runner),
-            Ok(Argument::I64(1234)) // returns old value
-        );
-        assert_eq!(test_runner.brush.size, 1); // sets new value
-    }
-
-    #[test]
     fn test_evaluate_errors_when_use_lookback_is_invalid() {
         let script = Script {
             command: Command::If,
@@ -2951,24 +2651,6 @@ mod test {
         assert_eq!(
             format!("{}", Serialize::Script(&swap)),
             "fg (bg fg)".to_string()
-        );
-
-        let next_frame = variables
-            .get("f++".to_string())
-            .get_script("for test")
-            .unwrap();
-        assert_eq!(
-            format!("{}", Serialize::Script(&next_frame)),
-            "f (+ f 1)".to_string()
-        );
-
-        let previous_frame = variables
-            .get("f--".to_string())
-            .get_script("for test")
-            .unwrap();
-        assert_eq!(
-            format!("{}", Serialize::Script(&previous_frame)),
-            "f (+ f -1)".to_string()
         );
     }
 
@@ -3352,8 +3034,8 @@ mod test {
     #[test]
     fn test_command_parsing() {
         assert_eq!(Command::from_str("?"), Ok(Command::Help));
-        assert_eq!(Command::from_str("push/pop"), Ok(Command::PushPop));
-        assert_eq!(Command::from_str("run/all"), Ok(Command::RunAll));
+        assert_eq!(Command::from_str("push-pop"), Ok(Command::PushPop));
+        assert_eq!(Command::from_str("run-all"), Ok(Command::RunAll));
         assert_eq!(Command::from_str("not"), Ok(Command::Not));
         assert_eq!(Command::from_str("if"), Ok(Command::If));
         assert_eq!(Command::from_str("even"), Ok(Command::Even));

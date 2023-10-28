@@ -108,18 +108,26 @@ impl Brush {
     }
 
     /// Activate the given brush mode.
-    pub fn set(&mut self, m: BrushMode) -> bool {
+    pub fn set(&mut self, m: BrushMode, value: i64) {
+        if value != 0 {
+            self.turn_on(m);
+        } else {
+            self.turn_off(m);
+        }
+    }
+
+    fn turn_on(&mut self, m: BrushMode) -> bool {
         if let BrushMode::Line(_) = m {
             // only one line sub-mode may be active at a time
             if let Some(line_mode) = self.line_mode() {
-                self.unset(line_mode);
+                self.turn_off(line_mode);
             }
         }
         self.modes.insert(m)
     }
 
     /// De-activate the given brush mode.
-    pub fn unset(&mut self, m: BrushMode) -> bool {
+    fn turn_off(&mut self, m: BrushMode) -> bool {
         match self.line_mode() {
             Some(line_mode) if matches!(m, BrushMode::Line(_)) => self.modes.remove(&line_mode),
             _ => self.modes.remove(&m),
@@ -129,9 +137,9 @@ impl Brush {
     /// Toggle the given brush mode.
     pub fn toggle(&mut self, m: BrushMode) {
         if self.is_set(m) {
-            self.unset(m);
+            self.turn_off(m);
         } else {
-            self.set(m);
+            self.turn_on(m);
         }
     }
 
