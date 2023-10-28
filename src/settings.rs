@@ -1,6 +1,9 @@
-use std::collections::HashMap;
-
+use claim::assert_ok;
+use directories;
 use strum_macros::EnumIter;
+
+use std::collections::HashMap;
+use std::io;
 
 #[derive(Eq, Hash, PartialEq, Debug, Clone, Copy, EnumIter)]
 pub enum StringSetting {
@@ -8,6 +11,8 @@ pub enum StringSetting {
     Mode,
     /// Current working directory
     Cwd,
+    /// Configuration directory, e.g., /home/.config/pim
+    ConfigDirectory,
 }
 
 #[derive(Eq, Hash, PartialEq, Debug, Clone, Copy, EnumIter)]
@@ -68,6 +73,12 @@ impl Settings {
         string_map.insert(
             StringSetting::Cwd,
             std::env::current_dir().map_or("".to_string(), |cwd| cwd.display().to_string()),
+        );
+        let project_dirs = assert_ok!(directories::ProjectDirs::from("com", "patchsoul", "pim")
+            .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "config directory not found")));
+        string_map.insert(
+            StringSetting::ConfigDirectory,
+            project_dirs.config_dir().display().to_string(),
         );
 
         Self {

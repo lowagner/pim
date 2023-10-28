@@ -3066,6 +3066,7 @@ impl Session {
             StringSetting::Cwd => {
                 std::env::current_dir().map_or("".to_string(), |cwd| cwd.display().to_string())
             }
+            StringSetting::ConfigDirectory => self.proj_dirs.config_dir().display().to_string(),
         }
     }
 
@@ -3080,6 +3081,10 @@ impl Session {
                 if std::env::set_current_dir(&value).is_err() {
                     return Err(format!("could not change directory to `{}`", value));
                 }
+            }
+            StringSetting::ConfigDirectory => {
+                // TODO: implement something here, maybe read a config file from new directory
+                return Err("cannot set config directory yet".to_string());
             }
         }
         Ok(())

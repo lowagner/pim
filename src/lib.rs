@@ -125,6 +125,7 @@ pub fn init<P: AsRef<Path>>(paths: &[P], options: Options<'_>) -> std::io::Resul
     info!("scale factor: {}", scale_factor);
 
     let assets = data::Assets::new(options.glyphs);
+    // TODO: remove proj_dirs from here & Session, take from Settings
     let proj_dirs = dirs::ProjectDirs::from("com", "patchsoul", "pim")
         .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "config directory not found"))?;
     let base_dirs = dirs::BaseDirs::new()

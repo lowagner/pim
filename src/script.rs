@@ -193,6 +193,7 @@ impl fmt::Display for Command {
             Command::CreateAlias => write!(f, "alias"),
             Command::StringSetting(StringSetting::Mode) => write!(f, "mode"),
             Command::StringSetting(StringSetting::Cwd) => write!(f, "cwd"),
+            Command::StringSetting(StringSetting::ConfigDirectory) => write!(f, "config-dir"),
             Command::I64Setting(I64Setting::UiAnimate) => write!(f, "ui-a"),
             Command::I64Setting(I64Setting::UiScalePercentage) => write!(f, "ui-scale%"),
             Command::I64Setting(I64Setting::CursorXRay) => write!(f, "c-xray"),
@@ -240,6 +241,7 @@ impl FromStr for Command {
             "alias" => Ok(Command::CreateAlias),
             "mode" => Ok(Command::StringSetting(StringSetting::Mode)),
             "cwd" => Ok(Command::StringSetting(StringSetting::Cwd)),
+            "config-dir" => Ok(Command::StringSetting(StringSetting::ConfigDirectory)),
             "ui-a" => Ok(Command::I64Setting(I64Setting::UiAnimate)),
             "ui-scale%" => Ok(Command::I64Setting(I64Setting::UiScalePercentage)),
             "c-xray" => Ok(Command::I64Setting(I64Setting::CursorXRay)),
@@ -1042,6 +1044,11 @@ impl Variables {
         variables.add_built_in(
             Command::StringSetting(StringSetting::Cwd),
             "getter/swapper for the current working directory if $0 is null/present, \
+            e.g., `$$ '/home/whatever'` to change directories",
+        );
+        variables.add_built_in(
+            Command::StringSetting(StringSetting::ConfigDirectory),
+            "getter/swapper for the config file directory if $0 is null/present, \
             e.g., `$$ '/home/whatever'` to change directories",
         );
         variables.add_built_in(
