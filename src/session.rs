@@ -12,13 +12,12 @@ use crate::hashmap;
 use crate::message::*;
 use crate::palette::*;
 use crate::platform::{self, InputState, Key, KeyboardInput, LogicalSize, ModifiersState};
-use crate::settings::{StringSetting, I64Setting};
 use crate::script::{
-    self, evaluate, get_or_swap_color, Argument, ArgumentResult, Command, Evaluate,
-    Quit, Script, ScriptRunner, Serialize,  Variables,
-    VoidResult, 
+    self, evaluate, get_or_swap_color, Argument, ArgumentResult, Command, Evaluate, Quit, Script,
+    ScriptRunner, Serialize, Variables, VoidResult,
 };
 use crate::script_runner;
+use crate::settings::{I64Setting, StringSetting};
 use crate::util;
 
 use crate::gfx::math::*;
@@ -1093,7 +1092,8 @@ impl Session {
                         MessageType::Error,
                     );
                     new_percentage = 100;
-                    assert_ok!(self.settings
+                    assert_ok!(self
+                        .settings
                         .set("scale%", Value::U32(new_percentage as u32)));
                 }
                 // TODO: We need to recompute the cursor position here
@@ -3094,7 +3094,7 @@ impl Session {
                 } else {
                     0
                 }
-            },
+            }
             I64Setting::FrameIndex => {
                 // TODO: maybe simplify current_frame and get max_frames another way:
                 let (frame, _) = self.current_frame();
@@ -3114,25 +3114,23 @@ impl Session {
                 if value < 100 || value > 400 {
                     return Err(format!(
                         "ui scale % should be between 100 and 400, got {}",
-                       value 
+                        value
                     ));
                 }
                 let old_percentage = self.settings["scale%"].to_u64() as i64;
-                self.settings
-                    .set("scale%", Value::U32(value as u32))?;
+                self.settings.set("scale%", Value::U32(value as u32))?;
                 // TODO: We need to recompute the cursor position here
                 // from the window coordinates. Currently, cursor position
                 // is stored only in `SessionCoords`, which would have
                 // to change.
                 // TODO: would be nice not to need to pass in old_percentage here
-                self.rescale(
-                    (old_percentage as f64) / 100.0,
-                    (value as f64) / 100.0,
-                );
+                self.rescale((old_percentage as f64) / 100.0, (value as f64) / 100.0);
             }
             I64Setting::CursorXRay => self.brush.set(brush::BrushMode::XRay, value),
             I64Setting::BrushSize => {
-                if value < 1 || value > 1000 { return Err(format!("brush size of {} is invalid", value)); }
+                if value < 1 || value > 1000 {
+                    return Err(format!("brush size of {} is invalid", value));
+                }
                 self.brush.size = value as usize
             }
             I64Setting::BrushErase => self.brush.set(brush::BrushMode::Erase, value),
@@ -3148,9 +3146,12 @@ impl Session {
                 } else if snap < 360 {
                     self.brush.set(brush::BrushMode::Line(Some(snap)), 0);
                 } else {
-                    return Err(format!("brush line snap angle should be between 0 and 360, got {}", value));
+                    return Err(format!(
+                        "brush line snap angle should be between 0 and 360, got {}",
+                        value
+                    ));
                 }
-            },
+            }
             I64Setting::FrameIndex => {
                 // TODO: maybe simplify current_frame and get max_frames another way:
                 let (_, max_frames) = self.current_frame();

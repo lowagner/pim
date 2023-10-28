@@ -51,7 +51,7 @@ impl Settings {
         i64_map.insert(I64Setting::UiScalePercentage, 100);
         i64_map.insert(I64Setting::CursorXRay, 1);
         i64_map.insert(I64Setting::BrushSize, 1);
-        i64_map.insert(I64Setting::BrushErase,0);
+        i64_map.insert(I64Setting::BrushErase, 0);
         i64_map.insert(I64Setting::BrushMultiFrame, 1);
         i64_map.insert(I64Setting::BrushPixelPerfect, 1);
         i64_map.insert(I64Setting::BrushXSymmetry, 0);

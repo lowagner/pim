@@ -2498,14 +2498,17 @@ mod test {
 
         let result = Script {
             command: Command::Help,
-            arguments: vec![Argument::Script(Script::zero_arg(Command::StringSetting(StringSetting::Mode)))],
+            arguments: vec![Argument::Script(Script::zero_arg(Command::StringSetting(
+                StringSetting::Mode,
+            )))],
         }
         .run(&mut test_runner);
         assert_eq!(
             test_runner.message,
             Message {
                 string: "-- getter/swapper for the current mode if $0 is null/present, \
-                        e.g., `mode 'normal'` to go to normal mode".to_string(),
+                        e.g., `mode 'normal'` to go to normal mode"
+                    .to_string(),
                 message_type: MessageType::Info,
             }
         );
