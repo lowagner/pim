@@ -21,6 +21,10 @@ pub enum I64Setting {
     UiAnimate,
     /// The interface scale (e.g., for palette boxes and command line), as a percentage (100 = 1x).
     UiScalePercentage,
+    /// Offset for the UI, x coordinate.
+    UiOffsetX,
+    /// Offset for the UI, y coordinate.
+    UiOffsetY,
     /// X-Ray mode to show the color of the pixel below your cursor; boolean (0 or 1)
     CursorXRay,
     /// Size of the brush, in pixels.
@@ -56,6 +60,8 @@ impl Settings {
         let mut i64_map = HashMap::new();
         i64_map.insert(I64Setting::UiAnimate, 1);
         i64_map.insert(I64Setting::UiScalePercentage, 100);
+        i64_map.insert(I64Setting::UiOffsetX, 0);
+        i64_map.insert(I64Setting::UiOffsetY, 0);
         i64_map.insert(I64Setting::CursorXRay, 1);
         i64_map.insert(I64Setting::BrushSize, 1);
         i64_map.insert(I64Setting::BrushErase, 0);

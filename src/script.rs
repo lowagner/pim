@@ -196,6 +196,8 @@ impl fmt::Display for Command {
             Command::StringSetting(StringSetting::ConfigDirectory) => write!(f, "config-dir"),
             Command::I64Setting(I64Setting::UiAnimate) => write!(f, "ui-a"),
             Command::I64Setting(I64Setting::UiScalePercentage) => write!(f, "ui-scale%"),
+            Command::I64Setting(I64Setting::UiOffsetX) => write!(f, "ui-x"),
+            Command::I64Setting(I64Setting::UiOffsetY) => write!(f, "ui-y"),
             Command::I64Setting(I64Setting::CursorXRay) => write!(f, "c-xray"),
             Command::I64Setting(I64Setting::BrushSize) => write!(f, "b-size"),
             Command::I64Setting(I64Setting::BrushErase) => write!(f, "b-erase"),
@@ -244,6 +246,8 @@ impl FromStr for Command {
             "config-dir" => Ok(Command::StringSetting(StringSetting::ConfigDirectory)),
             "ui-a" => Ok(Command::I64Setting(I64Setting::UiAnimate)),
             "ui-scale%" => Ok(Command::I64Setting(I64Setting::UiScalePercentage)),
+            "ui-x" => Ok(Command::I64Setting(I64Setting::UiOffsetX)),
+            "ui-y" => Ok(Command::I64Setting(I64Setting::UiOffsetY)),
             "c-xray" => Ok(Command::I64Setting(I64Setting::CursorXRay)),
             "b-size" => Ok(Command::I64Setting(I64Setting::BrushSize)),
             "b-erase" => Ok(Command::I64Setting(I64Setting::BrushErase)),
@@ -1060,6 +1064,16 @@ impl Variables {
             Command::I64Setting(I64Setting::UiScalePercentage),
             "getter/swapper for current UI scale percentage if $0 is null/present, \
             e.g., `$$ 150` to set UI to 1.5x",
+        );
+        variables.add_built_in(
+            Command::I64Setting(I64Setting::UiOffsetX),
+            "getter/swapper for current UI x offset if $0 is null/present, \
+            e.g., `$$ 32` to set x pixel offset to 32",
+        );
+        variables.add_built_in(
+            Command::I64Setting(I64Setting::UiOffsetY),
+            "getter/swapper for current UI y offset if $0 is null/present, \
+            e.g., `$$ 45` to set y pixel offset to 45",
         );
         variables.add_built_in(
             Command::I64Setting(I64Setting::CursorXRay),

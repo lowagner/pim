@@ -3094,6 +3094,8 @@ impl Session {
         match setting {
             I64Setting::UiAnimate => self.settings["animation"].is_set() as i64,
             I64Setting::UiScalePercentage => self.settings["scale%"].to_u64() as i64,
+            I64Setting::UiOffsetX => self.offset.x as i64,
+            I64Setting::UiOffsetY => self.offset.y as i64,
             I64Setting::CursorXRay => self.brush.is_set(brush::BrushMode::XRay) as i64,
             I64Setting::BrushSize => self.brush.size as i64,
             I64Setting::BrushErase => self.brush.is_set(brush::BrushMode::Erase) as i64,
@@ -3139,6 +3141,12 @@ impl Session {
                 // TODO: would be nice not to need to pass in old_percentage here
                 self.rescale((old_percentage as f64) / 100.0, (value as f64) / 100.0);
             }
+            I64Setting::UiOffsetX => {
+                self.offset.x = value as f32;
+            },
+            I64Setting::UiOffsetY => {
+                self.offset.y = value as f32;
+            },
             I64Setting::CursorXRay => self.brush.set(brush::BrushMode::XRay, value),
             I64Setting::BrushSize => {
                 if value < 1 || value > 1000 {
