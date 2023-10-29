@@ -3143,10 +3143,10 @@ impl Session {
             }
             I64Setting::UiOffsetX => {
                 self.offset.x = value as f32;
-            },
+            }
             I64Setting::UiOffsetY => {
                 self.offset.y = value as f32;
-            },
+            }
             I64Setting::CursorXRay => self.brush.set(brush::BrushMode::XRay, value),
             I64Setting::BrushSize => {
                 if value < 1 || value > 1000 {
