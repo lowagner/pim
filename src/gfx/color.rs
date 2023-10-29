@@ -1,6 +1,8 @@
 use std::fmt;
 use std::str::FromStr;
 
+use libm;
+
 ///////////////////////////////////////////////////////////////////////////
 // Rgba8
 ///////////////////////////////////////////////////////////////////////////
@@ -275,6 +277,69 @@ impl From<Rgba8> for Rgba {
     }
 }
 
+/// Following OkLab but swapping order of the hue-related fields (b <-> y, a <-> z).
+/// https://bottosson.github.io/posts/oklab/
+#[derive(Copy, Clone, PartialEq, Debug, Default)]
+pub struct Lyza {
+    /// Lightness, 0 to 1.
+    pub l: f32,
+    /// Yellow minus blue, roughly -1 to 1.
+    pub y: f32,
+    /// Red minus green, roughly -1 to 1.  Pronounce z as "zed" to rhyme with red.
+    pub z: f32,
+    /// Alpha, 0 to 1.
+    pub a: f32,
+}
+
+impl Lyza {
+    /// How bright the color is (white is 1, black is 0).
+    pub fn lightness(&self) -> f32 {
+        self.l
+    }
+
+    /// Returns the "chroma" or how thick the color is.
+    pub fn saturation(&self) -> f32 {
+        let chroma2 = self.y.powf(2.0) + self.z.powf(2.0);
+        chroma2.powf(0.5)
+    }
+
+    /// Returns the hue, roughly from 0 (red + to orange) to 1 (red - to purple).
+    pub fn hue(&self) -> f32 {
+        let normalized_angle = libm::atan2f(self.y, self.z) / (2.0 * std::f32::consts::PI);
+        if normalized_angle < 0.0 {
+            normalized_angle + 1.0
+        } else {
+            normalized_angle
+        }
+    }
+
+    // TODO: add set_hue, set_saturation, set_lightness
+}
+
+impl From<Rgba8> for Lyza {
+    fn from(c: Rgba8) -> Self {
+        let r = c.r as f32 / 255.0;
+        let g = c.g as f32 / 255.0;
+        let b = c.b as f32 / 255.0;
+        let a = c.a as f32 / 255.0;
+
+        let l_full: f32 = 0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b;
+        let m_full: f32 = 0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b;
+        let s_full: f32 = 0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b;
+
+        let l = l_full.powf(1.0 / 3.0);
+        let m = m_full.powf(1.0 / 3.0);
+        let s = s_full.powf(1.0 / 3.0);
+
+        Self {
+            l: 0.2104542553 * l + 0.7936177850 * m - 0.0040720468 * s,
+            y: 0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s,
+            z: 1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * s,
+            a,
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -452,5 +517,80 @@ mod test {
             Rgba8::from_str("#1234563g"), // long, bad alpha
             Err("invalid a: `3g`".to_string())
         );
+    }
+
+    #[test]
+    fn test_lyza_converts_correctly() {
+        let black = Lyza::from(Rgba8 {
+            r: 0,
+            g: 0,
+            b: 0,
+            a: 0,
+        });
+        assert_eq!(
+            black,
+            Lyza {
+                l: 0.0,
+                y: 0.0,
+                z: 0.0,
+                a: 0.0
+            }
+        );
+        assert_eq!(black.hue(), 0.0);
+        assert_eq!(black.saturation(), 0.0);
+
+        let white = Lyza::from(Rgba8 {
+            r: 255,
+            g: 255,
+            b: 255,
+            a: 255,
+        });
+        assert_eq!(
+            white,
+            Lyza {
+                l: 1.0,
+                y: 5.9604645e-8, // smol
+                z: 0.0,
+                a: 1.0
+            }
+        );
+        assert_eq!(white.hue(), 0.25); // doesn't really matter
+        assert_eq!(white.saturation(), 5.9604645e-8);
+
+        let red = Lyza::from(Rgba8 {
+            r: 255,
+            g: 0,
+            b: 0,
+            a: 255,
+        });
+        assert_eq!(
+            red,
+            Lyza {
+                l: 0.6279554,
+                y: 0.1258463,
+                z: 0.22486293,
+                a: 1.0
+            }
+        );
+        assert_eq!(red.hue(), 0.08120527);
+        assert_eq!(red.saturation(), 0.2576832);
+
+        let yellow = Lyza::from(Rgba8 {
+            r: 255,
+            g: 255,
+            b: 0,
+            a: 128,
+        });
+        assert_eq!(
+            yellow,
+            Lyza {
+                l: 0.9679827,
+                y: 0.19856972,
+                z: -0.07136908,
+                a: 0.5019608
+            }
+        );
+        assert_eq!(yellow.hue(), 0.30491453);
+        assert_eq!(yellow.saturation(), 0.21100587);
     }
 }

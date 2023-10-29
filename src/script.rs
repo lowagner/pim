@@ -162,6 +162,7 @@ pub enum Command {
     /// Uses $0 for the palette index, and $1 as an optional color to update the palette at that index.
     /// Returns the original color in the palette.
     PaletteColor,
+    // TODO: PaletteAddGradient,
     /// Uses $0 for x, $1 for y, and $2 as an optional color (defaults to foreground color).
     /// E.g., `paint 5 10` to paint the pixel at (5, 10) with the foreground color,
     /// and `paint 11 12 #123456` to paint the pixel at (11, 12) with #123456.
