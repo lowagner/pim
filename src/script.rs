@@ -5,6 +5,7 @@ use crate::settings::*;
 use claim::assert_ok;
 
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::fmt;
 use std::mem;
 use std::str::FromStr;
@@ -153,6 +154,10 @@ pub enum Command {
     /// Adds a new color to the palette if present in $0.  Returns the index of this color.
     /// Will check the current palette before adding a new entry, in case this color is already present.
     PaletteAddColor,
+    /// Removes colors specified by arguments if non-null (specified by index or color);
+    /// if no arguments are given (or all are null), clears the entire palette.
+    /// Returns the number of palette entries deleted.
+    PaletteClear,
     // TODO: PaletteRepaint: $0 is palette index, $1 is new color to change *everywhere* in image.
     /// Uses $0 for the palette index, and $1 as an optional color to update the palette at that index.
     /// Returns the original color in the palette.
@@ -223,6 +228,7 @@ impl fmt::Display for Command {
             Command::BackgroundColor => write!(f, "bg"),
             Command::PaletteColor => write!(f, "pc"),
             Command::PaletteAddColor => write!(f, "p-add"),
+            Command::PaletteClear => write!(f, "p-clear"),
             Command::Paint => write!(f, "p"),
             Command::Quit(Quit::Safe) => write!(f, "q"),
             Command::Quit(Quit::AllSafe) => write!(f, "qa"),
@@ -274,6 +280,7 @@ impl FromStr for Command {
             "bg" => Ok(Command::BackgroundColor),
             "pc" => Ok(Command::PaletteColor),
             "p-add" => Ok(Command::PaletteAddColor),
+            "p-clear" => Ok(Command::PaletteClear),
             "p" => Ok(Command::Paint),
             "q" => Ok(Command::Quit(Quit::Safe)),
             "qa" => Ok(Command::Quit(Quit::AllSafe)),
@@ -431,6 +438,7 @@ impl Argument {
                 }
             }
             Argument::Color(color) => Ok(*color),
+            // TODO: maybe parse strings like 'red' or 'orange'
             arg => Err(format!("invalid argument cannot convert to color: {}", arg)),
         }
     }
@@ -807,10 +815,36 @@ macro_rules! script_runner {
                         let color = self.script_evaluate(&script_stack, Evaluate::Index(0))?.get_color(&self.palette)?;
                         Ok(Argument::I64(self.palette.add(color) as i64))
                     }
+                    Command::PaletteClear => {
+                        let mut remove_colors = HashSet::new();
+                        // Since we're removing colors from the palette, if we see any palette indices,
+                        // we need to resolve those colors before deleting them (since erasing entries
+                        // on the fly could shift later indices).
+                        for i in 0..script.arguments.len() {
+                            match self.script_evaluate(
+                                &script_stack,
+                                Evaluate::Index(i as u32),
+                            )?.get_optional_color(&self.palette)? {
+                                Some(color) => {remove_colors.insert(color);},
+                                None => {}, // ignore nulls
+                            }
+                        }
+                        let previous_count = self.palette.colors.len() as i64;
+                        if remove_colors.len() > 0 {
+                            self.palette.colors.retain(|c| !remove_colors.contains(c));
+                        } else {
+                            // If we had no arguments, then we clear the whole palette.
+                            self.palette.colors.clear();
+                        }
+                        let new_count = self.palette.colors.len() as i64;
+                        Ok(Argument::I64(previous_count - new_count))
+                    }
                     Command::PaletteColor => {
                         // TODO: pull out palette_index logic into a helper function
                         //       so we can re-use it for PaletteRepaint
-                        let palette_index = match self.script_evaluate(&script_stack, Evaluate::Index(0))?.get_optional_i64("for palette index")? {
+                        let palette_index = match self.script_evaluate(
+                            &script_stack, Evaluate::Index(0)
+                        )?.get_optional_i64("for palette index")? {
                             None => return Err(format!("{} needs $0 for an palette index", command)),
                             Some(i64_value) => {
                                 let index = i64_value as usize;
@@ -1199,6 +1233,12 @@ impl Variables {
             Command::PaletteAddColor,
             "adds color $0 to the palette if it's not already present, \
             e.g., `$$ #987654` to ensure #987654 is in the palette",
+        );
+        variables.add_built_in(
+            Command::PaletteClear,
+            "clears entire palette if no arguments, otherwise colors specified \
+            by the arguments (index or color), \
+            e.g., `$$ 1 #456` to remove palette entry 1 and #456 from palette",
         );
         variables.add_built_in(
             Command::Paint,
@@ -2714,6 +2754,99 @@ mod test {
     }
 
     #[test]
+    fn test_script_clear_palette_without_arguments() {
+        let mut test_runner = TestRunner::new();
+        let initial_palette_size = test_runner.palette.colors.len();
+
+        let result = Script {
+            command: Command::PaletteClear,
+            arguments: vec![],
+        }
+        .run(&mut test_runner);
+
+        assert_eq!(
+            test_runner.test_what_ran,
+            Vec::from([
+                WhatRan::Begin(Command::PaletteClear),
+                WhatRan::End(Command::PaletteClear),
+            ])
+        );
+        assert_eq!(result, Ok(Argument::I64(initial_palette_size as i64)));
+        assert_eq!(test_runner.palette.colors.len(), 0);
+    }
+
+    #[test]
+    fn test_script_clear_palette_with_null_arguments_still_clears_all() {
+        let mut test_runner = TestRunner::new();
+        let initial_palette_size = test_runner.palette.colors.len();
+
+        let result = Script {
+            command: Command::PaletteClear,
+            arguments: vec![Argument::Null],
+        }
+        .run(&mut test_runner);
+
+        assert_eq!(
+            test_runner.test_what_ran,
+            Vec::from([
+                WhatRan::Begin(Command::PaletteClear),
+                WhatRan::Evaluated(Ok(Argument::Null)),
+                WhatRan::End(Command::PaletteClear),
+            ])
+        );
+        assert_eq!(result, Ok(Argument::I64(initial_palette_size as i64)));
+        assert_eq!(test_runner.palette.colors.len(), 0);
+    }
+
+    #[test]
+    fn test_script_clear_palette_with_arguments() {
+        let mut test_runner = TestRunner::new();
+        let initial_palette_size = test_runner.palette.colors.len();
+        let remove_color_1 = test_runner.palette.colors[1];
+        let remove_color_2 = test_runner.palette.colors[2];
+        let unknown_color = Rgba8 {
+            r: 1,
+            g: 2,
+            b: 3,
+            a: 4,
+        };
+        assert_eq!(test_runner.palette.colors.contains(&remove_color_1), true);
+        assert_eq!(test_runner.palette.colors.contains(&remove_color_2), true);
+        assert_eq!(test_runner.palette.colors.contains(&unknown_color), false);
+
+        let result = Script {
+            command: Command::PaletteClear,
+            arguments: vec![
+                Argument::Null,
+                // Make sure we naively delete a color before an indexed color,
+                // so that we ensure that both are removed correctly.
+                Argument::Color(remove_color_1),
+                Argument::I64(2),
+                // This is a bogus color that's not present; but it shouldn't throw.
+                Argument::Color(unknown_color),
+            ],
+        }
+        .run(&mut test_runner);
+
+        assert_eq!(
+            test_runner.test_what_ran,
+            Vec::from([
+                WhatRan::Begin(Command::PaletteClear),
+                WhatRan::Evaluated(Ok(Argument::Null)),
+                WhatRan::Evaluated(Ok(Argument::Color(remove_color_1))),
+                WhatRan::Evaluated(Ok(Argument::I64(2))),
+                WhatRan::Evaluated(Ok(Argument::Color(unknown_color))),
+                WhatRan::End(Command::PaletteClear),
+            ])
+        );
+        assert_eq!(test_runner.palette.colors.contains(&remove_color_1), false);
+        assert_eq!(test_runner.palette.colors.contains(&remove_color_2), false);
+        assert_eq!(test_runner.palette.colors.contains(&unknown_color), false);
+        assert_eq!(result, Ok(Argument::I64(2)));
+        assert_eq!(test_runner.palette.colors.len(), initial_palette_size - 2);
+    }
+
+    #[test]
     fn test_variables_set_cannot_overwrite_built_ins() {
         let mut variables = Variables::with_built_ins();
         assert_eq!(
@@ -3085,6 +3218,7 @@ mod test {
         assert_eq!(Command::from_str("bg"), Ok(Command::BackgroundColor));
         assert_eq!(Command::from_str("pc"), Ok(Command::PaletteColor));
         assert_eq!(Command::from_str("p-add"), Ok(Command::PaletteAddColor));
+        assert_eq!(Command::from_str("p-clear"), Ok(Command::PaletteClear));
         assert_eq!(Command::from_str("p"), Ok(Command::Paint));
         assert_eq!(Command::from_str("q"), Ok(Command::Quit(Quit::Safe)));
         assert_eq!(Command::from_str("qa"), Ok(Command::Quit(Quit::AllSafe)));
