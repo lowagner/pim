@@ -24,10 +24,16 @@ impl Palette {
         }
     }
 
-    pub fn add(&mut self, color: Rgba8) {
-        if !self.colors.contains(&color) {
-            self.colors.push(color);
+    /// Returns the palette color index, and avoids adding a new color
+    /// if already present in the palette.
+    pub fn add(&mut self, color: Rgba8) -> usize {
+        for i in 0..self.colors.len() {
+            if self.colors[i] == color {
+                return i;
+            }
         }
+        self.colors.push(color);
+        self.colors.len() - 1
     }
 
     pub fn gradient(&mut self, colorstart: Rgba8, colorend: Rgba8, number: usize) {

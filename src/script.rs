@@ -150,6 +150,9 @@ pub enum Command {
     ///     `bg #012345`    sets the background color to #012345
     ///     `bg`            just returns the background color without changing it
     BackgroundColor,
+    /// Adds a new color to the palette if present in $0.  Returns the index of this color.
+    /// Will check the current palette before adding a new entry, in case this color is already present.
+    PaletteAddColor,
     // TODO: PaletteRepaint: $0 is palette index, $1 is new color to change *everywhere* in image.
     /// Uses $0 for the palette index, and $1 as an optional color to update the palette at that index.
     /// Returns the original color in the palette.
@@ -219,6 +222,7 @@ impl fmt::Display for Command {
             Command::ForegroundColor => write!(f, "fg"),
             Command::BackgroundColor => write!(f, "bg"),
             Command::PaletteColor => write!(f, "pc"),
+            Command::PaletteAddColor => write!(f, "p-add"),
             Command::Paint => write!(f, "p"),
             Command::Quit(Quit::Safe) => write!(f, "q"),
             Command::Quit(Quit::AllSafe) => write!(f, "qa"),
@@ -269,6 +273,7 @@ impl FromStr for Command {
             "fg" => Ok(Command::ForegroundColor),
             "bg" => Ok(Command::BackgroundColor),
             "pc" => Ok(Command::PaletteColor),
+            "p-add" => Ok(Command::PaletteAddColor),
             "p" => Ok(Command::Paint),
             "q" => Ok(Command::Quit(Quit::Safe)),
             "qa" => Ok(Command::Quit(Quit::AllSafe)),
@@ -371,6 +376,10 @@ impl Argument {
         !matches!(self, Self::Script(_) | Self::Use(_))
     }
 
+    pub fn is_null(&self) -> bool {
+        !matches!(self, Self::Null)
+    }
+
     pub fn is_truthy(&self) -> bool {
         match self {
             Self::Null => false,
@@ -381,10 +390,11 @@ impl Argument {
         }
     }
 
+    // TODO: probably should have `to_X` versions where we consume this argument.
+    //       e.g., this is probably most important for String and Script.
     /// Returns an i64 if possible, coercing Null to 0.
     pub fn get_i64(&self, what_for: &str) -> I64Result {
         match self {
-            Argument::Null => Ok(0),
             Argument::I64(value) => Ok(*value),
             result => Err(format!("invalid i64 {}: {}", what_for, result)),
         }
@@ -394,8 +404,7 @@ impl Argument {
     pub fn get_optional_i64(&self, what_for: &str) -> OptionalI64Result {
         match self {
             Argument::Null => Ok(None),
-            Argument::I64(value) => Ok(Some(*value)),
-            result => Err(format!("invalid i64 {}: {}", what_for, result)),
+            arg => Ok(Some(arg.get_i64(what_for)?)),
         }
     }
 
@@ -408,25 +417,28 @@ impl Argument {
         }
     }
 
-    pub fn get_optional_color(&self, palette: &Palette) -> OptionalColorResult {
+    pub fn get_color(&self, palette: &Palette) -> ColorResult {
         match self {
-            Argument::Null => Ok(None),
             Argument::I64(value) => {
                 // Purposely underflow here for negative values;
                 // that will just become a very large positive number,
                 // and we'll check the palette size first.
                 let palette_index = *value as usize;
                 if palette_index < palette.size() {
-                    Ok(Some(palette.colors[palette_index]))
+                    Ok(palette.colors[palette_index])
                 } else {
                     Err(format!("no palette color with index {}", value))
                 }
             }
-            Argument::Color(color) => Ok(Some(*color)),
-            arg => Err(format!(
-                "invalid argument cannot convert to optional color: {}",
-                arg
-            )),
+            Argument::Color(color) => Ok(*color),
+            arg => Err(format!("invalid argument cannot convert to color: {}", arg)),
+        }
+    }
+
+    pub fn get_optional_color(&self, palette: &Palette) -> OptionalColorResult {
+        match self {
+            Argument::Null => Ok(None),
+            arg => Ok(Some(arg.get_color(palette)?)),
         }
     }
 
@@ -479,6 +491,7 @@ pub type VoidResult = Result<(), String>;
 pub type OptionalI64Result = Result<Option<i64>, String>;
 pub type I64Result = Result<i64, String>;
 pub type OptionalStringResult = Result<Option<String>, String>;
+pub type ColorResult = Result<Rgba8, String>;
 pub type OptionalColorResult = Result<Option<Rgba8>, String>;
 pub type StringResult = Result<String, String>;
 pub type ScriptResult = Result<Script, String>;
@@ -694,22 +707,21 @@ macro_rules! script_runner {
                         Ok(Argument::I64(if value % 2 == 1 { 1 } else { 0 }))
                     }
                     Command::Sum => {
-                        let starting_value =
+                        let mut value =
                             self.script_evaluate(&script_stack, Evaluate::Index(0))?;
                         let argument_count = script.arguments.len() as u32;
-                        match starting_value {
-                            Argument::I64(i64_value) => {
-                                let mut sum = i64_value;
-                                for index in 1..argument_count {
-                                    sum += self
-                                        .script_evaluate(&script_stack, Evaluate::Index(index))?
-                                        .get_i64("for sum")?;
-                                }
-                                Ok(Argument::I64(sum))
+                        for index in 1..argument_count {
+                            let next = self
+                                .script_evaluate(&script_stack, Evaluate::Index(index))?;
+                            value = match value {
+                                Argument::Null => next,
+                                Argument::I64(number) => Argument::I64(number +
+                                    next.get_optional_i64("for i64 sum")?.unwrap_or(0)),
+                                // TODO: implement some of these sums (i.e., for other value-like args)
+                                _ => return Err("sum for things besides i64 not implemented yet".to_string()),
                             }
-                            // TODO: implement some of these sums (i.e., for other value-like args)
-                            _ => Err("sum for things besides i64 not implemented yet".to_string()),
                         }
+                        Ok(value)
                     }
                     Command::Product => {
                         let mut product: i64 = 1;
@@ -791,6 +803,10 @@ macro_rules! script_runner {
                         let color_arg = self.script_evaluate(&script_stack, Evaluate::Index(0))?.get_optional_color(&self.palette)?;
                         Ok(Argument::Color(get_or_swap_color(&mut self.bg, color_arg)))
                     }
+                    Command::PaletteAddColor => {
+                        let color = self.script_evaluate(&script_stack, Evaluate::Index(0))?.get_color(&self.palette)?;
+                        Ok(Argument::I64(self.palette.add(color) as i64))
+                    }
                     Command::PaletteColor => {
                         // TODO: pull out palette_index logic into a helper function
                         //       so we can re-use it for PaletteRepaint
@@ -805,6 +821,8 @@ macro_rules! script_runner {
                             }
                         };
                         let color_arg = self.script_evaluate(&script_stack, Evaluate::Index(1))?.get_optional_color(&self.palette)?;
+                        // TODO: do something special after mutating the color, e.g., to check if
+                        // we already have that color somewhere else.
                         Ok(Argument::Color(get_or_swap_color(&mut self.palette.colors[palette_index], color_arg)))
                     }
                     Command::Paint => {
@@ -1176,6 +1194,11 @@ impl Variables {
             Command::PaletteColor,
             "getter/swapper for palette color $0 if $1 is null/present, \
             e.g., `$$ 7 #123456` to set palette color 7 to #123456",
+        );
+        variables.add_built_in(
+            Command::PaletteAddColor,
+            "adds color $0 to the palette if it's not already present, \
+            e.g., `$$ #987654` to ensure #987654 is in the palette",
         );
         variables.add_built_in(
             Command::Paint,
@@ -2633,6 +2656,63 @@ mod test {
     }
 
     #[test]
+    fn test_script_can_add_new_palette_color() {
+        let new_color = Rgba8 {
+            r: 5,
+            g: 225,
+            b: 75,
+            a: 33,
+        };
+        let mut test_runner = TestRunner::new();
+        let initial_palette_size = test_runner.palette.colors.len();
+
+        let result = Script {
+            command: Command::PaletteAddColor,
+            arguments: vec![Argument::Color(new_color)],
+        }
+        .run(&mut test_runner);
+
+        assert_eq!(
+            test_runner.test_what_ran,
+            Vec::from([
+                WhatRan::Begin(Command::PaletteAddColor),
+                WhatRan::Evaluated(Ok(Argument::Color(new_color))),
+                WhatRan::End(Command::PaletteAddColor),
+            ])
+        );
+        assert_eq!(
+            result,
+            Ok(Argument::I64(test_runner.palette.colors.len() as i64 - 1))
+        );
+        assert_eq!(test_runner.palette.colors.len(), initial_palette_size + 1);
+    }
+
+    #[test]
+    fn test_script_ignores_adding_already_present_palette_color() {
+        let mut test_runner = TestRunner::new();
+        let already_present_index = 3;
+        let already_present = test_runner.palette.colors[already_present_index];
+        let initial_palette_size = test_runner.palette.colors.len();
+
+        let result = Script {
+            command: Command::PaletteAddColor,
+            arguments: vec![Argument::Color(already_present)],
+        }
+        .run(&mut test_runner);
+
+        assert_eq!(
+            test_runner.test_what_ran,
+            Vec::from([
+                WhatRan::Begin(Command::PaletteAddColor),
+                WhatRan::Evaluated(Ok(Argument::Color(already_present))),
+                WhatRan::End(Command::PaletteAddColor),
+            ])
+        );
+        assert_eq!(result, Ok(Argument::I64(already_present_index as i64)));
+        assert_eq!(test_runner.palette.colors.len(), initial_palette_size);
+    }
+
+    #[test]
     fn test_variables_set_cannot_overwrite_built_ins() {
         let mut variables = Variables::with_built_ins();
         assert_eq!(
@@ -3003,6 +3083,7 @@ mod test {
         assert_eq!(Command::from_str("fg"), Ok(Command::ForegroundColor));
         assert_eq!(Command::from_str("bg"), Ok(Command::BackgroundColor));
         assert_eq!(Command::from_str("pc"), Ok(Command::PaletteColor));
+        assert_eq!(Command::from_str("p-add"), Ok(Command::PaletteAddColor));
         assert_eq!(Command::from_str("p"), Ok(Command::Paint));
         assert_eq!(Command::from_str("q"), Ok(Command::Quit(Quit::Safe)));
         assert_eq!(Command::from_str("qa"), Ok(Command::Quit(Quit::AllSafe)));
