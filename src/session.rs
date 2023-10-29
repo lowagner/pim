@@ -2622,6 +2622,7 @@ impl Session {
             Cmd::Noop => {
                 // Nothing happening!
             }
+            // TODO: this doesn't need to be implemented in script.rs
             Cmd::ChangeDir(dir) => {
                 let home = self.base_dirs.home_dir().to_path_buf();
                 let path = dir.map(|s| s.into()).unwrap_or(home);
@@ -3078,9 +3079,12 @@ impl Session {
                 self.switch_mode(mode);
             }
             StringSetting::Cwd => {
-                if std::env::set_current_dir(&value).is_err() {
+                let path = Path::new(&value).to_path_buf();
+                if std::env::set_current_dir(&path).is_err() {
                     return Err(format!("could not change directory to `{}`", value));
                 }
+                self.cwd = path.clone();
+                self.cmdline.set_cwd(path.as_path());
             }
             StringSetting::ConfigDirectory => {
                 // TODO: implement something here, maybe read a config file from new directory

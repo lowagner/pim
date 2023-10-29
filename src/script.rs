@@ -1231,6 +1231,7 @@ impl Variables {
         assert_ok!(variables.set("false".to_string(), Variable::Const(Argument::I64(0))));
         // TODO: add `normal` as a Const variable to the string "normal",
         // same for other modes that you can set.
+        // TODO: add `home` as a const variable to the home directory
 
         assert_ok!(variables.set(
             "swap".to_string(),
