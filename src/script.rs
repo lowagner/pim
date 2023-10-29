@@ -135,6 +135,7 @@ pub enum Command {
     // TODO: FrameShift, moves the animation over one to start one frame down
 
     // TODO: FitPixelWidth, FitPixelHeight; zoom to fit that many pixels within the screen based on available area
+    // TODO: convert fg and bg to ColorSetting settings.
     /// Uses $0 to set the foreground color, if not null, and returns the old value.
     /// If $0 is null, returns the current foreground color without changing it.
     /// If $1 is a valid color, e.g., a hex color (#123456) or a palette index (0),
@@ -149,6 +150,10 @@ pub enum Command {
     ///     `bg #012345`    sets the background color to #012345
     ///     `bg`            just returns the background color without changing it
     BackgroundColor,
+    // TODO: PaletteRepaint: $0 is palette index, $1 is new color to change *everywhere* in image.
+    /// Uses $0 for the palette index, and $1 as an optional color to update the palette at that index.
+    /// Returns the original color in the palette.
+    PaletteColor,
     /// Uses $0 for x, $1 for y, and $2 as an optional color (defaults to foreground color).
     /// E.g., `paint 5 10` to paint the pixel at (5, 10) with the foreground color,
     /// and `paint 11 12 #123456` to paint the pixel at (11, 12) with #123456.
@@ -213,6 +218,7 @@ impl fmt::Display for Command {
             // TODO: move fg/bg to color getter/setters (ColorSetting)
             Command::ForegroundColor => write!(f, "fg"),
             Command::BackgroundColor => write!(f, "bg"),
+            Command::PaletteColor => write!(f, "pc"),
             Command::Paint => write!(f, "p"),
             Command::Quit(Quit::Safe) => write!(f, "q"),
             Command::Quit(Quit::AllSafe) => write!(f, "qa"),
@@ -262,6 +268,7 @@ impl FromStr for Command {
             "f-resize" => Ok(Command::FrameResize),
             "fg" => Ok(Command::ForegroundColor),
             "bg" => Ok(Command::BackgroundColor),
+            "pc" => Ok(Command::PaletteColor),
             "p" => Ok(Command::Paint),
             "q" => Ok(Command::Quit(Quit::Safe)),
             "qa" => Ok(Command::Quit(Quit::AllSafe)),
@@ -772,7 +779,7 @@ macro_rules! script_runner {
                             self.resize_frames(old_width, optional_height.unwrap())?;
                         } else {
                             // TODO: Crop to content
-                            return Err("`f/resize` without arguments is not yet implemented".to_string());
+                            return Err(format!("{} without arguments is not yet implemented", command));
                         }
                         Ok(Argument::I64(old_width * old_height))
                     }
@@ -783,6 +790,22 @@ macro_rules! script_runner {
                     Command::BackgroundColor => {
                         let color_arg = self.script_evaluate(&script_stack, Evaluate::Index(0))?.get_optional_color(&self.palette)?;
                         Ok(Argument::Color(get_or_swap_color(&mut self.bg, color_arg)))
+                    }
+                    Command::PaletteColor => {
+                        // TODO: pull out palette_index logic into a helper function
+                        //       so we can re-use it for PaletteRepaint
+                        let palette_index = match self.script_evaluate(&script_stack, Evaluate::Index(0))?.get_optional_i64("for palette index")? {
+                            None => return Err(format!("{} needs $0 for an palette index", command)),
+                            Some(i64_value) => {
+                                let index = i64_value as usize;
+                                if index >= self.palette.colors.len() {
+                                    return Err(format!("{} needs $0 to be a valid palette index, got {}", command, i64_value));
+                                }
+                                index
+                            }
+                        };
+                        let color_arg = self.script_evaluate(&script_stack, Evaluate::Index(1))?.get_optional_color(&self.palette)?;
+                        Ok(Argument::Color(get_or_swap_color(&mut self.palette.colors[palette_index], color_arg)))
                     }
                     Command::Paint => {
                         let x = self
@@ -1148,6 +1171,11 @@ impl Variables {
             Command::BackgroundColor,
             "getter/swapper for background color if $0 is null/present, \
             e.g., `$$ #123456` to set background color to #123456",
+        );
+        variables.add_built_in(
+            Command::PaletteColor,
+            "getter/swapper for palette color $0 if $1 is null/present, \
+            e.g., `$$ 7 #123456` to set palette color 7 to #123456",
         );
         variables.add_built_in(
             Command::Paint,
@@ -2974,6 +3002,7 @@ mod test {
         assert_eq!(Command::from_str("alias"), Ok(Command::CreateAlias));
         assert_eq!(Command::from_str("fg"), Ok(Command::ForegroundColor));
         assert_eq!(Command::from_str("bg"), Ok(Command::BackgroundColor));
+        assert_eq!(Command::from_str("pc"), Ok(Command::PaletteColor));
         assert_eq!(Command::from_str("p"), Ok(Command::Paint));
         assert_eq!(Command::from_str("q"), Ok(Command::Quit(Quit::Safe)));
         assert_eq!(Command::from_str("qa"), Ok(Command::Quit(Quit::AllSafe)));
