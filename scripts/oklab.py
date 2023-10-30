@@ -15,12 +15,13 @@ def lyz(r, g, b):
         1.9779984951 * o - 2.4285922050 * m + 0.4505937099 * s,
     )
 
-class BestExtremum:
-    def __init__(self, key, value):
+class Extremum:
+    def __init__(self, name, value):
+        self.name = name
         self.min_value = value
         self.max_value = value
-        self.min_key = key
-        self.max_key = key 
+        self.min_key = None
+        self.max_key = None
 
     def check(self, key, value):
         if value > self.max_value:
@@ -31,10 +32,9 @@ class BestExtremum:
             self.min_value = value
 
     def __repr__(self):
-        return "%s -> %s, %s -> %s"%(self.min_key, self.min_value, self.max_key, self.max_value)
+        return "{%s min(%s -> %s), max(%s -> %s)}"%(self.name, self.min_key, self.min_value, self.max_key, self.max_value)
 
-extrema = [BestExtremum(None, 0.5), BestExtremum(None, 0), BestExtremum(None, 0)]
-print(extrema)
+extrema = [Extremum('l', 0.5), Extremum('y', 0), Extremum('z', 0), Extremum('s', 0.01)]
 
 for i in range(256):
     r = i / 255.0
@@ -47,5 +47,6 @@ for i in range(256):
             extrema[0].check(key, color[0])
             extrema[1].check(key, color[1])
             extrema[2].check(key, color[2])
+            extrema[3].check(key, (color[1]**2 + color[2]**2)**0.5)
 
 print(extrema)
