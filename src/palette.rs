@@ -36,12 +36,15 @@ impl Palette {
         self.colors.len() - 1
     }
 
-    pub fn gradient(&mut self, color_start: Rgba8, color_end: Rgba8, number: usize) {
+    pub fn gradient(&mut self, color_start: Rgba8, color_end: Rgba8, number: usize) -> usize {
         if number <= 1 {
-            return;
+            // No changes, not sure if we should add color_start or color_end.
+            // TODO: We could average them for number == 1.
+            return 0;
         }
         let start = Lyza::from(color_start);
         let end = Lyza::from(color_end);
+        let starting_count = self.colors.len();
 
         for i in 0..number {
             let t = (i as f32) / (number as f32 - 1.0);
@@ -51,8 +54,10 @@ impl Palette {
                 z: (1.0 - t) * start.z + t * end.z,
                 a: (1.0 - t) * start.a + t * end.a,
             });
-            self.colors.push(color);
+            self.add(color);
         }
+        let ending_count = self.colors.len();
+        ending_count - starting_count
     }
 
     pub fn clear(&mut self) {

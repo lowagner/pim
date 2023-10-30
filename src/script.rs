@@ -151,18 +151,21 @@ pub enum Command {
     ///     `bg #012345`    sets the background color to #012345
     ///     `bg`            just returns the background color without changing it
     BackgroundColor,
+    /// Uses $0 for the palette index, and $1 as an optional color to update the palette at that index.
+    /// Returns the original color in the palette.
+    PaletteColor,
     /// Adds a new color to the palette if present in $0.  Returns the index of this color.
     /// Will check the current palette before adding a new entry, in case this color is already present.
     PaletteAddColor,
+    /// Uses $0 for the first color, $1 for the second, and $2 as an optional number of
+    /// colors to add, defaulting to 5.  Returns the number of added colors; can be
+    /// different than $2 if a color in the gradient was already in the palette.
+    PaletteAddGradient,
     /// Removes colors specified by arguments if non-null (specified by index or color);
     /// if no arguments are given (or all are null), clears the entire palette.
     /// Returns the number of palette entries deleted.
     PaletteClear,
     // TODO: PaletteRepaint: $0 is palette index, $1 is new color to change *everywhere* in image.
-    /// Uses $0 for the palette index, and $1 as an optional color to update the palette at that index.
-    /// Returns the original color in the palette.
-    PaletteColor,
-    // TODO: PaletteAddGradient,
     /// Uses $0 for x, $1 for y, and $2 as an optional color (defaults to foreground color).
     /// E.g., `paint 5 10` to paint the pixel at (5, 10) with the foreground color,
     /// and `paint 11 12 #123456` to paint the pixel at (11, 12) with #123456.
@@ -229,6 +232,7 @@ impl fmt::Display for Command {
             Command::BackgroundColor => write!(f, "bg"),
             Command::PaletteColor => write!(f, "pc"),
             Command::PaletteAddColor => write!(f, "p-add"),
+            Command::PaletteAddGradient => write!(f, "p-gradient"),
             Command::PaletteClear => write!(f, "p-clear"),
             Command::Paint => write!(f, "p"),
             Command::Quit(Quit::Safe) => write!(f, "q"),
@@ -281,6 +285,7 @@ impl FromStr for Command {
             "bg" => Ok(Command::BackgroundColor),
             "pc" => Ok(Command::PaletteColor),
             "p-add" => Ok(Command::PaletteAddColor),
+            "p-gradient" => Ok(Command::PaletteAddGradient),
             "p-clear" => Ok(Command::PaletteClear),
             "p" => Ok(Command::Paint),
             "q" => Ok(Command::Quit(Quit::Safe)),
@@ -812,9 +817,38 @@ macro_rules! script_runner {
                         let color_arg = self.script_evaluate(&script_stack, Evaluate::Index(0))?.get_optional_color(&self.palette)?;
                         Ok(Argument::Color(get_or_swap_color(&mut self.bg, color_arg)))
                     }
+                    Command::PaletteColor => {
+                        // TODO: pull out palette_index logic into a helper function
+                        //       so we can re-use it for PaletteRepaint
+                        let palette_index = match self.script_evaluate(
+                            &script_stack, Evaluate::Index(0)
+                        )?.get_optional_i64("for palette index")? {
+                            None => return Err(format!("{} needs $0 for an palette index", command)),
+                            Some(i64_value) => {
+                                let index = i64_value as usize;
+                                if index >= self.palette.colors.len() {
+                                    return Err(format!("{} needs $0 to be a valid palette index, got {}", command, i64_value));
+                                }
+                                index
+                            }
+                        };
+                        let color_arg = self.script_evaluate(&script_stack, Evaluate::Index(1))?.get_optional_color(&self.palette)?;
+                        // TODO: do something special after mutating the color, e.g., to check if
+                        // we already have that color somewhere else.
+                        Ok(Argument::Color(get_or_swap_color(&mut self.palette.colors[palette_index], color_arg)))
+                    }
                     Command::PaletteAddColor => {
                         let color = self.script_evaluate(&script_stack, Evaluate::Index(0))?.get_color(&self.palette)?;
                         Ok(Argument::I64(self.palette.add(color) as i64))
+                    }
+                    Command::PaletteAddGradient => {
+                        let color_start = self.script_evaluate(&script_stack, Evaluate::Index(0))?.get_color(&self.palette)?;
+                        let color_end = self.script_evaluate(&script_stack, Evaluate::Index(1))?.get_color(&self.palette)?;
+                        let gradient_count = self.script_evaluate(&script_stack, Evaluate::Index(2))?.get_optional_i64("for gradient count")?.unwrap_or(5);
+                        if gradient_count < 0 {
+                            return Err(format!("gradient count should be >= 0, got {}", gradient_count));
+                        }
+                        Ok(Argument::I64(self.palette.gradient(color_start, color_end, gradient_count as usize) as i64))
                     }
                     Command::PaletteClear => {
                         let mut remove_colors = HashSet::new();
@@ -839,26 +873,6 @@ macro_rules! script_runner {
                         }
                         let new_count = self.palette.colors.len() as i64;
                         Ok(Argument::I64(previous_count - new_count))
-                    }
-                    Command::PaletteColor => {
-                        // TODO: pull out palette_index logic into a helper function
-                        //       so we can re-use it for PaletteRepaint
-                        let palette_index = match self.script_evaluate(
-                            &script_stack, Evaluate::Index(0)
-                        )?.get_optional_i64("for palette index")? {
-                            None => return Err(format!("{} needs $0 for an palette index", command)),
-                            Some(i64_value) => {
-                                let index = i64_value as usize;
-                                if index >= self.palette.colors.len() {
-                                    return Err(format!("{} needs $0 to be a valid palette index, got {}", command, i64_value));
-                                }
-                                index
-                            }
-                        };
-                        let color_arg = self.script_evaluate(&script_stack, Evaluate::Index(1))?.get_optional_color(&self.palette)?;
-                        // TODO: do something special after mutating the color, e.g., to check if
-                        // we already have that color somewhere else.
-                        Ok(Argument::Color(get_or_swap_color(&mut self.palette.colors[palette_index], color_arg)))
                     }
                     Command::Paint => {
                         let x = self
@@ -1234,6 +1248,12 @@ impl Variables {
             Command::PaletteAddColor,
             "adds color $0 to the palette if it's not already present, \
             e.g., `$$ #987654` to ensure #987654 is in the palette",
+        );
+        variables.add_built_in(
+            Command::PaletteAddGradient,
+            "palette gradient from color $0 to color $1, with an \
+            optional $2 (defaulting to 5) added colors\
+            e.g., `$$ #404 #00aa33` to add 5 colors to the palette",
         );
         variables.add_built_in(
             Command::PaletteClear,
@@ -2752,6 +2772,136 @@ mod test {
         );
         assert_eq!(result, Ok(Argument::I64(already_present_index as i64)));
         assert_eq!(test_runner.palette.colors.len(), initial_palette_size);
+    }
+
+    #[test]
+    fn test_script_can_add_gradient_using_existing_palette_color_and_new_color() {
+        let new_color = Rgba8 {
+            r: 5,
+            g: 225,
+            b: 75,
+            a: 100,
+        };
+        let mut test_runner = TestRunner::new();
+        let initial_palette_size = test_runner.palette.colors.len();
+
+        let result = Script {
+            command: Command::PaletteAddGradient,
+            arguments: vec![
+                Argument::Color(new_color),
+                Argument::I64(3), // existing palette color
+                                  // Use the default "Null" number of gradient colors to add
+            ],
+        }
+        .run(&mut test_runner);
+
+        assert_eq!(
+            test_runner.test_what_ran,
+            Vec::from([
+                WhatRan::Begin(Command::PaletteAddGradient),
+                WhatRan::Evaluated(Ok(Argument::Color(new_color))),
+                WhatRan::Evaluated(Ok(Argument::I64(3))),
+                WhatRan::Evaluated(Ok(Argument::Null)), // number of colors
+                WhatRan::End(Command::PaletteAddGradient),
+            ])
+        );
+        assert_eq!(
+            result,
+            // Only adds 4 new palette entries since color 3 was already present.
+            Ok(Argument::I64(4))
+        );
+        assert_eq!(test_runner.palette.colors.len(), initial_palette_size + 4);
+        assert_eq!(
+            test_runner.palette.colors[initial_palette_size..initial_palette_size + 4],
+            vec![
+                Rgba8 {
+                    r: 5,
+                    g: 225,
+                    b: 75,
+                    a: 100
+                },
+                Rgba8 {
+                    r: 20,
+                    g: 157,
+                    b: 65,
+                    a: 139
+                },
+                Rgba8 {
+                    r: 30,
+                    g: 104,
+                    b: 55,
+                    a: 178
+                },
+                Rgba8 {
+                    r: 33,
+                    g: 64,
+                    b: 46,
+                    a: 216
+                }
+            ]
+        );
+    }
+
+    #[test]
+    fn test_script_can_add_gradient_with_specified_color_count() {
+        let new_color = Rgba8 {
+            r: 200,
+            g: 0,
+            b: 100,
+            a: 0,
+        };
+        let mut test_runner = TestRunner::new();
+        let initial_palette_size = test_runner.palette.colors.len();
+
+        let result = Script {
+            command: Command::PaletteAddGradient,
+            arguments: vec![
+                Argument::I64(5), // existing palette color
+                Argument::Color(new_color),
+                Argument::I64(4),
+            ],
+        }
+        .run(&mut test_runner);
+
+        assert_eq!(
+            test_runner.test_what_ran,
+            Vec::from([
+                WhatRan::Begin(Command::PaletteAddGradient),
+                WhatRan::Evaluated(Ok(Argument::I64(5))),
+                WhatRan::Evaluated(Ok(Argument::Color(new_color))),
+                WhatRan::Evaluated(Ok(Argument::I64(4))), // number of colors
+                WhatRan::End(Command::PaletteAddGradient),
+            ])
+        );
+        assert_eq!(
+            result,
+            // Only adds 3 new palette entries since color 5 was already present.
+            Ok(Argument::I64(3))
+        );
+        assert_eq!(test_runner.palette.colors.len(), initial_palette_size + 3);
+        assert_eq!(
+            test_runner.palette.colors[initial_palette_size..initial_palette_size + 3],
+            vec![
+                Rgba8 {
+                    r: 99,
+                    g: 38,
+                    b: 69,
+                    a: 170
+                },
+                Rgba8 {
+                    r: 147,
+                    g: 20,
+                    b: 84,
+                    a: 85
+                },
+                Rgba8 {
+                    r: 200,
+                    g: 0,
+                    b: 100,
+                    a: 0
+                }
+            ]
+        );
     }
 
     #[test]
