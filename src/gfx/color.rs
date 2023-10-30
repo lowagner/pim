@@ -304,6 +304,7 @@ impl Lyza {
 
     /// Returns the "chroma" or how thick the color is.
     /// Roughly from 0 to 1, but can go a little above 1.
+    /// Highest value is magenta #ff00ff with 1.0351907.
     pub fn saturation(&self) -> f32 {
         let chroma2 = self.y.powf(2.0) + self.z.powf(2.0);
         chroma2.powf(0.5)
