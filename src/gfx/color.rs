@@ -567,12 +567,13 @@ mod test {
 
     #[test]
     fn test_lyza_converts_correctly() {
-        let black = Lyza::from(Rgba8 {
+        let black8 = Rgba8 {
             r: 0,
             g: 0,
             b: 0,
             a: 0,
-        });
+        };
+        let black = Lyza::from(black8);
         assert_eq!(
             black,
             Lyza {
@@ -584,22 +585,30 @@ mod test {
         );
         assert_eq!(black.hue(), 0.0);
         assert_eq!(black.saturation(), 0.0);
-        assert_eq!(
-            Rgba8::from(black),
-            Rgba8 {
-                r: 0,
-                g: 0,
-                b: 0,
-                a: 0
-            }
-        );
+        assert_eq!(Rgba8::from(black), black8);
 
-        let white = Lyza::from(Rgba8 {
+        let gray8 = Rgba8 {
+            r: 120,
+            g: 120,
+            b: 120,
+            a: 120,
+        };
+        let gray = Lyza::from(gray8);
+        assert_eq!(
+            gray,
+            Lyza { l: 0.7778222, y: 0.0, z: 5.7398967e-7, a: 0.47058824 }
+        );
+        assert_eq!(gray.hue(), 0.0);
+        assert_eq!(gray.saturation(), 5.7398967e-7);
+        assert_eq!(Rgba8::from(gray), gray8);
+
+        let white8 = Rgba8 {
             r: 255,
             g: 255,
             b: 255,
             a: 255,
-        });
+        };
+        let white = Lyza::from(white8);
         assert_eq!(
             white,
             Lyza {
@@ -611,22 +620,15 @@ mod test {
         );
         assert_eq!(white.hue(), 0.25); // doesn't really matter
         assert_eq!(white.saturation(), 1.9132989e-7);
-        assert_eq!(
-            Rgba8::from(white),
-            Rgba8 {
-                r: 255,
-                g: 255,
-                b: 255,
-                a: 255
-            }
-        );
+        assert_eq!(Rgba8::from(white), white8);
 
-        let red = Lyza::from(Rgba8 {
+        let red8 = Rgba8 {
             r: 255,
             g: 0,
             b: 0,
             a: 255,
-        });
+        };
+        let red = Lyza::from(red8);
         assert_eq!(
             red,
             Lyza {
@@ -638,22 +640,15 @@ mod test {
         );
         assert_eq!(red.hue(), 0.08120527);
         assert_eq!(red.saturation(), 0.82715863);
-        assert_eq!(
-            Rgba8::from(red),
-            Rgba8 {
-                r: 255,
-                g: 0,
-                b: 0,
-                a: 255
-            }
-        );
+        assert_eq!(Rgba8::from(red), red8);
 
-        let yellow = Lyza::from(Rgba8 {
+        let yellow8 = Rgba8 {
             r: 255,
             g: 255,
             b: 0,
             a: 128,
-        });
+        };
+        let yellow = Lyza::from(yellow8);
         assert_eq!(
             yellow,
             Lyza {
@@ -665,22 +660,15 @@ mod test {
         );
         assert_eq!(yellow.hue(), 0.30491453);
         assert_eq!(yellow.saturation(), 0.67732525);
-        assert_eq!(
-            Rgba8::from(yellow),
-            Rgba8 {
-                r: 255,
-                g: 255,
-                b: 0,
-                a: 128
-            }
-        );
+        assert_eq!(Rgba8::from(yellow), yellow8);
 
-        let green = Lyza::from(Rgba8 {
+        let green8 = Rgba8 {
             r: 0,
             g: 255,
             b: 0,
             a: 50,
-        });
+        };
+        let green = Lyza::from(green8);
         assert_eq!(
             green,
             Lyza {
@@ -692,22 +680,15 @@ mod test {
         );
         assert_eq!(green.hue(), 0.3958203);
         assert_eq!(green.saturation(), 0.94639);
-        assert_eq!(
-            Rgba8::from(green),
-            Rgba8 {
-                r: 0,
-                g: 255,
-                b: 0,
-                a: 50
-            }
-        );
+        assert_eq!(Rgba8::from(green), green8);
 
-        let cyan = Lyza::from(Rgba8 {
+        let cyan8 = Rgba8 {
             r: 0,
             g: 255,
             b: 255,
             a: 100,
-        });
+        };
+        let cyan = Lyza::from(cyan8);
         assert_eq!(
             cyan,
             Lyza {
@@ -719,22 +700,15 @@ mod test {
         );
         assert_eq!(cyan.hue(), 0.5410248);
         assert_eq!(cyan.saturation(), 0.49610272);
-        assert_eq!(
-            Rgba8::from(cyan),
-            Rgba8 {
-                r: 0,
-                g: 255,
-                b: 255,
-                a: 100
-            }
-        );
+        assert_eq!(Rgba8::from(cyan), cyan8);
 
-        let blue = Lyza::from(Rgba8 {
+        let blue8 = Rgba8 {
             r: 0,
             g: 0,
             b: 255,
             a: 255,
-        });
+        };
+        let blue = Lyza::from(blue8);
         assert_eq!(
             blue,
             Lyza {
@@ -746,22 +720,15 @@ mod test {
         );
         assert_eq!(blue.hue(), 0.73347783);
         assert_eq!(blue.saturation(), 1.0054128);
-        assert_eq!(
-            Rgba8::from(blue),
-            Rgba8 {
-                r: 0,
-                g: 0,
-                b: 255,
-                a: 255
-            }
-        );
+        assert_eq!(Rgba8::from(blue), blue8);
 
-        let magenta = Lyza::from(Rgba8 {
+        let magenta8 = Rgba8 {
             r: 255,
             g: 0,
             b: 255,
             a: 0,
-        });
+        };
+        let magenta = Lyza::from(magenta8);
         assert_eq!(
             magenta,
             Lyza {
@@ -773,15 +740,7 @@ mod test {
         );
         assert_eq!(magenta.hue(), 0.9121206);
         assert_eq!(magenta.saturation(), 1.0351907);
-        assert_eq!(
-            Rgba8::from(magenta),
-            Rgba8 {
-                r: 255,
-                g: 0,
-                b: 255,
-                a: 0
-            }
-        );
+        assert_eq!(Rgba8::from(magenta), magenta8);
     }
 
     #[test]
