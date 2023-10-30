@@ -2,6 +2,7 @@ use std::fmt;
 use std::str::FromStr;
 
 use libm;
+use num;
 
 ///////////////////////////////////////////////////////////////////////////
 // Rgba8
@@ -329,7 +330,7 @@ impl From<Rgba8> for Lyza {
         let a = c.a as f32 / 255.0;
 
         let o3: f32 = 0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b;
-        let m3: f32 = 0.2119034982 * r + 0.6806995452 * g + 0.1073969566 * b; // changed g's last digit to 2 from 1
+        let m3: f32 = 0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b;
         let s3: f32 = 0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b;
 
         let o = o3.powf(1.0 / 3.0);
@@ -351,6 +352,35 @@ impl From<Rgba8> for Lyza {
             // properties stay the same with OkLab.
             z: oklab_z * 3.209982813603,
             a,
+        }
+    }
+}
+
+impl From<Lyza> for Rgba8 {
+    fn from(c: Lyza) -> Self {
+        // Get pre-normalization out of the way:
+        let oklab_l = c.l * 0.999999993474; // * 1.0 / 1.000000006526
+        let oklab_y = c.y * 0.311528147678; // * 1.0 / 3.209982813603
+        let oklab_z = c.z * 0.311528147678;
+
+        let o = oklab_l + 0.3963377774 * oklab_z + 0.2158037573 * oklab_y;
+        let m = oklab_l - 0.1055613458 * oklab_z - 0.0638541728 * oklab_y;
+        let s = oklab_l - 0.0894841775 * oklab_z - 1.2914855480 * oklab_y;
+
+        let o3 = o * o * o;
+        let m3 = m * m * m;
+        let s3 = s * s * s;
+
+        let r = 4.0767416621 * o3 - 3.3077115913 * m3 + 0.2309699292 * s3;
+        let g = -1.2684380046 * o3 + 2.6097574011 * m3 - 0.3413193965 * s3;
+        let b = -0.0041960863 * o3 - 0.7034186147 * m3 + 1.7076147010 * s3;
+        let a = c.a;
+
+        Self {
+            r: num::clamp((r * 255.0).round(), 0.0, 255.0) as u8,
+            g: num::clamp((g * 255.0).round(), 0.0, 255.0) as u8,
+            b: num::clamp((b * 255.0).round(), 0.0, 255.0) as u8,
+            a: num::clamp((a * 255.0).round(), 0.0, 255.0) as u8,
         }
     }
 }
@@ -553,6 +583,15 @@ mod test {
         );
         assert_eq!(black.hue(), 0.0);
         assert_eq!(black.saturation(), 0.0);
+        assert_eq!(
+            Rgba8::from(black),
+            Rgba8 {
+                r: 0,
+                g: 0,
+                b: 0,
+                a: 0
+            }
+        );
 
         let white = Lyza::from(Rgba8 {
             r: 255,
@@ -571,6 +610,15 @@ mod test {
         );
         assert_eq!(white.hue(), 0.25); // doesn't really matter
         assert_eq!(white.saturation(), 1.9132989e-7);
+        assert_eq!(
+            Rgba8::from(white),
+            Rgba8 {
+                r: 255,
+                g: 255,
+                b: 255,
+                a: 255
+            }
+        );
 
         let red = Lyza::from(Rgba8 {
             r: 255,
@@ -589,6 +637,15 @@ mod test {
         );
         assert_eq!(red.hue(), 0.08120527);
         assert_eq!(red.saturation(), 0.82715863);
+        assert_eq!(
+            Rgba8::from(red),
+            Rgba8 {
+                r: 255,
+                g: 0,
+                b: 0,
+                a: 255
+            }
+        );
 
         let yellow = Lyza::from(Rgba8 {
             r: 255,
@@ -607,6 +664,15 @@ mod test {
         );
         assert_eq!(yellow.hue(), 0.30491453);
         assert_eq!(yellow.saturation(), 0.67732525);
+        assert_eq!(
+            Rgba8::from(yellow),
+            Rgba8 {
+                r: 255,
+                g: 255,
+                b: 0,
+                a: 128
+            }
+        );
 
         let green = Lyza::from(Rgba8 {
             r: 0,
@@ -625,6 +691,15 @@ mod test {
         );
         assert_eq!(green.hue(), 0.3958203);
         assert_eq!(green.saturation(), 0.94639);
+        assert_eq!(
+            Rgba8::from(green),
+            Rgba8 {
+                r: 0,
+                g: 255,
+                b: 0,
+                a: 50
+            }
+        );
 
         let cyan = Lyza::from(Rgba8 {
             r: 0,
@@ -643,6 +718,15 @@ mod test {
         );
         assert_eq!(cyan.hue(), 0.5410248);
         assert_eq!(cyan.saturation(), 0.49610272);
+        assert_eq!(
+            Rgba8::from(cyan),
+            Rgba8 {
+                r: 0,
+                g: 255,
+                b: 255,
+                a: 100
+            }
+        );
 
         let blue = Lyza::from(Rgba8 {
             r: 0,
@@ -661,6 +745,15 @@ mod test {
         );
         assert_eq!(blue.hue(), 0.73347783);
         assert_eq!(blue.saturation(), 1.0054128);
+        assert_eq!(
+            Rgba8::from(blue),
+            Rgba8 {
+                r: 0,
+                g: 0,
+                b: 255,
+                a: 255
+            }
+        );
 
         let magenta = Lyza::from(Rgba8 {
             r: 255,
@@ -679,5 +772,74 @@ mod test {
         );
         assert_eq!(magenta.hue(), 0.9121206);
         assert_eq!(magenta.saturation(), 1.0351907);
+        assert_eq!(
+            Rgba8::from(magenta),
+            Rgba8 {
+                r: 255,
+                g: 0,
+                b: 255,
+                a: 0
+            }
+        );
+    }
+
+    #[test]
+    fn test_lyza_converts_out_of_bounds_correctly() {
+        assert_eq!(
+            Rgba8::from(Lyza {
+                l: 1.5,
+                y: -2.0,
+                z: 1.3,
+                a: 4.5
+            }),
+            Rgba8 {
+                r: 255,
+                g: 67,
+                b: 255,
+                a: 255
+            }
+        );
+        assert_eq!(
+            Rgba8::from(Lyza {
+                l: -1.0,
+                y: 2.0,
+                z: -1.0,
+                a: -0.5
+            }),
+            Rgba8 {
+                r: 0,
+                g: 122,
+                b: 0,
+                a: 0
+            }
+        );
+        assert_eq!(
+            Rgba8::from(Lyza {
+                l: 0.5,
+                y: -2.0,
+                z: -1.0,
+                a: 0.51
+            }),
+            Rgba8 {
+                r: 0,
+                g: 0,
+                b: 255,
+                a: 130
+            }
+        );
+        assert_eq!(
+            Rgba8::from(Lyza {
+                l: 0.9,
+                y: -0.0,
+                z: -3.0,
+                a: 0.0
+            }),
+            Rgba8 {
+                r: 0,
+                g: 255,
+                b: 236,
+                a: 0
+            }
+        );
     }
 }

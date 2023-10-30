@@ -34,6 +34,7 @@ gl = "0.14"
 strum_macros = "0.25.0"
 strum = "0.25.0"
 libm = "0.2.8"
+num = "0.4.1"
 
 [dev-dependencies]
 lazy_static = "1.3"
