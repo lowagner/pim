@@ -1,6 +1,6 @@
 use crate::session::SessionCoords;
 
-use crate::gfx::{Rgba8, Lyza};
+use crate::gfx::{Lyza, Rgba8};
 use arrayvec::ArrayVec;
 
 pub struct Palette {
@@ -37,7 +37,9 @@ impl Palette {
     }
 
     pub fn gradient(&mut self, color_start: Rgba8, color_end: Rgba8, number: usize) {
-        if number <= 1 { return; }
+        if number <= 1 {
+            return;
+        }
         let start = Lyza::from(color_start);
         let end = Lyza::from(color_end);
 
