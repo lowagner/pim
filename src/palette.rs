@@ -1,6 +1,6 @@
 use crate::session::SessionCoords;
 
-use crate::gfx::Rgba8;
+use crate::gfx::{Rgba8, Lyza};
 use arrayvec::ArrayVec;
 
 pub struct Palette {
@@ -36,21 +36,19 @@ impl Palette {
         self.colors.len() - 1
     }
 
-    pub fn gradient(&mut self, colorstart: Rgba8, colorend: Rgba8, number: usize) {
-        fn blend_component(start: u8, end: u8, coef: f32) -> u8 {
-            (start as f32 * (1.0 - coef) + end as f32 * coef).round() as u8
-        }
+    pub fn gradient(&mut self, color_start: Rgba8, color_end: Rgba8, number: usize) {
+        if number <= 1 { return; }
+        let start = Lyza::from(color_start);
+        let end = Lyza::from(color_end);
 
-        let step: f32 = 1.0 / ((number - 1) as f32);
         for i in 0..number {
-            let coef = i as f32 * step;
-            let color: Rgba8 = Rgba8 {
-                r: blend_component(colorstart.r, colorend.r, coef),
-                g: blend_component(colorstart.g, colorend.g, coef),
-                b: blend_component(colorstart.b, colorend.b, coef),
-                a: blend_component(colorstart.a, colorend.a, coef),
-            };
-
+            let t = (i as f32) / (number as f32 - 1.0);
+            let color = Rgba8::from(Lyza {
+                l: (1.0 - t) * start.l + t * end.l,
+                y: (1.0 - t) * start.y + t * end.y,
+                z: (1.0 - t) * start.z + t * end.z,
+                a: (1.0 - t) * start.a + t * end.a,
+            });
             self.colors.push(color);
         }
     }
