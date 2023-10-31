@@ -2436,13 +2436,7 @@ impl Session {
                 self.center_palette();
             }
             Cmd::PaletteSort => {
-                // TODO: bucket sort by hue, then luminosity, then saturation
-                // Sort by total luminosity. This is pretty lame, but it's
-                // something to work with.
-                self.palette.colors.sort_by(|a, b| {
-                    (a.r as u32 + a.g as u32 + a.b as u32)
-                        .cmp(&(b.r as u32 + b.g as u32 + b.b as u32))
-                });
+                self.palette.sort();
             }
             Cmd::PaletteSample => {
                 {
