@@ -338,7 +338,7 @@ impl From<Rgba8> for Lyza {
         let m = m3.powf(1.0 / 3.0);
         let s = s3.powf(1.0 / 3.0);
 
-        // OkLab extrema values for (r, g, b) -- per scripts/oklab.py:
+        // OkLab extrema values for (r, g, b) -- per scripts/oklab_extrema.py:
         // l min/max: (0.0, 0.0, 0.0) -> 0.0, (1.0, 1.0, 1.0) -> 0.9999999934735462
         // y min/max: (0.0, 0.0, 1.0) -> -0.3115281476783751, (1.0, 1.0, 0.0) -> 0.19856975465179516
         // z min/max: (0.0, 1.0, 0.0) -> -0.23388757418790818, (1.0, 0.0, 0.7411764705882353) -> 0.27621675349252356

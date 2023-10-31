@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+# oklab -> lyz with unnormalized weights
 def lyz(r, g, b):
     o3 = 0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b
     m3 = 0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b
@@ -15,38 +16,3 @@ def lyz(r, g, b):
         1.9779984951 * o - 2.4285922050 * m + 0.4505937099 * s,
     )
 
-class Extremum:
-    def __init__(self, name, value):
-        self.name = name
-        self.min_value = value
-        self.max_value = value
-        self.min_key = None
-        self.max_key = None
-
-    def check(self, key, value):
-        if value > self.max_value:
-            self.max_key = key
-            self.max_value = value
-        if value < self.min_value:
-            self.min_key = key
-            self.min_value = value
-
-    def __repr__(self):
-        return "{%s min(%s -> %s), max(%s -> %s)}"%(self.name, self.min_key, self.min_value, self.max_key, self.max_value)
-
-extrema = [Extremum('l', 0.5), Extremum('y', 0), Extremum('z', 0), Extremum('s', 0.01)]
-
-for i in range(256):
-    r = i / 255.0
-    for j in range(256):
-        g = j / 255.0
-        for k in range(256):
-            b = k / 255.0
-            color = lyz(r, g, b)
-            key = (r, g, b)
-            extrema[0].check(key, color[0])
-            extrema[1].check(key, color[1])
-            extrema[2].check(key, color[2])
-            extrema[3].check(key, (color[1]**2 + color[2]**2)**0.5)
-
-print(extrema)
