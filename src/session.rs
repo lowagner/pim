@@ -23,7 +23,7 @@ use crate::util;
 use crate::gfx::math::*;
 use crate::gfx::rect::Rect;
 use crate::gfx::shape2d::{Fill, Rotation, Shape, Stroke};
-use crate::gfx::{Point, Rgb8, Rgba8, ZDepth};
+use crate::gfx::{Point, Rgb8, Rgba8, ZDepth, Lyza};
 use crate::view::path;
 use crate::view::resource::ViewResource;
 use crate::view::{
@@ -2399,6 +2399,26 @@ impl Session {
             Cmd::ForceQuitAll => self.quit(ExitReason::Normal),
             Cmd::Echo(ref v) => {
                 let result = match v {
+                    Value::U32(u) => {
+                        let i = *u as usize;
+                        if i >= self.palette.size() {
+                            Err(format!("invalid palette index: {}", i))
+                        } else {
+                            let lyza = Lyza::from(self.palette.colors[i]);
+                            Ok(Value::Str(format!("{:?}", lyza)))
+                        }
+                    }
+                    Value::U32Tuple(u1, u2) => {
+                        let i1 = *u1 as usize;
+                        let i2 = *u2 as usize;
+                        if i1 >= self.palette.size() || i2 >= self.palette.size() {
+                            Err(format!("one or two invalid palette indices: {} {}", i1, i2))
+                        } else {
+                            let lyza1 = Lyza::from(self.palette.colors[i1]);
+                            let lyza2 = Lyza::from(self.palette.colors[i2]);
+                            Ok(Value::Str(format!("{:?} {:?} {:?}", lyza1, lyza1.compare(&lyza2), lyza2)))
+                        }
+                    }
                     Value::Str(s) => Ok(Value::Str(s.clone())),
                     Value::Ident(s) => match s.as_str() {
                         "config/dir" => Ok(Value::Str(format!(

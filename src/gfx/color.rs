@@ -323,49 +323,29 @@ impl Lyza {
 
     // TODO: add set_hue, set_saturation, set_luminosity
 
-    // TODO: fix this up and add tests, not quite happy with it yet
-    pub fn compare(&self, other: &Lyza) -> Ordering {
-        let self_saturation = self.saturation();
-        let other_saturation = other.saturation();
+    fn comparator(&self) -> i64 {
+        // roughly 0 to 10:
+        let saturation_bucket = (self.saturation() * 10.0).round() as i64;
+        // roughly 0 to 10:
+        let hue_bucket = (self.hue() * 10.0).round() as i64;
+        // roughly 0 to 500:
+        let luminosity_bucket = (self.l * 500.0).round() as i64;
 
-        if self_saturation + other_saturation < 0.01 {
-            // things are pretty gray here, compare by luminosity
-            return compare_floats(self.l, other.l);
+        if saturation_bucket == 0 {
+            // Gray colors shouldn't be compared by hue at all;
+            // white has a hue of 0.25 (maybe due to rounding issues).
+            luminosity_bucket
+        } else {
+            // We'll give a spacing of approximately x2 between each bucket.
+            // Luminosity will contribute up to 500, saturation will start at 1000
+            // and contribute up to 10_000; and hue will contribute from 20_000
+            // to 200_000.
+            (hue_bucket + 1) * 20000 + saturation_bucket * 1000 + luminosity_bucket
         }
-
-        // Gray colors come first.
-        if self_saturation < 0.001 {
-            return Ordering::Less;
-        } else if other_saturation < 0.001 {
-            return Ordering::Greater;
-        }
-
-        let self_hue = self.hue();
-        let other_hue = other.hue();
-
-        if self_hue < other_hue - 0.1 {
-            return Ordering::Less;
-        } else if self_hue > other_hue + 0.1 {
-            return Ordering::Greater;
-        }
-
-        if self_saturation < other_saturation - 0.1 {
-            return Ordering::Less;
-        } else if self_saturation > other_saturation + 0.1 {
-            return Ordering::Greater;
-        }
-
-        return compare_floats(self.l, other.l);
     }
-}
 
-fn compare_floats(a: f32, b: f32) -> Ordering {
-    if a == b {
-        Ordering::Equal
-    } else if a < b {
-        Ordering::Less
-    } else {
-        Ordering::Greater
+    pub fn compare(&self, other: &Lyza) -> Ordering {
+        self.comparator().cmp(&other.comparator())
     }
 }
 
@@ -632,6 +612,7 @@ mod test {
         assert_eq!(black.hue(), 0.0);
         assert_eq!(black.saturation(), 0.0);
         assert_eq!(Rgba8::from(black), black8);
+        assert_eq!(black.comparator(), 0);
 
         let gray8 = Rgba8 {
             r: 120,
@@ -652,6 +633,7 @@ mod test {
         assert_eq!(gray.hue(), 0.0);
         assert_eq!(gray.saturation(), 5.7398967e-7);
         assert_eq!(Rgba8::from(gray), gray8);
+        assert_eq!(gray.comparator(), 389);
 
         let white8 = Rgba8 {
             r: 255,
@@ -672,6 +654,7 @@ mod test {
         assert_eq!(white.hue(), 0.25); // doesn't really matter
         assert_eq!(white.saturation(), 1.9132989e-7);
         assert_eq!(Rgba8::from(white), white8);
+        assert_eq!(white.comparator(), 500);
 
         let red8 = Rgba8 {
             r: 255,
@@ -692,6 +675,7 @@ mod test {
         assert_eq!(red.hue(), 0.08120527);
         assert_eq!(red.saturation(), 0.82715863);
         assert_eq!(Rgba8::from(red), red8);
+        assert_eq!(red.comparator(), 48314);
 
         let yellow8 = Rgba8 {
             r: 255,
@@ -712,6 +696,7 @@ mod test {
         assert_eq!(yellow.hue(), 0.30491453);
         assert_eq!(yellow.saturation(), 0.67732525);
         assert_eq!(Rgba8::from(yellow), yellow8);
+        assert_eq!(yellow.comparator(), 87484);
 
         let green8 = Rgba8 {
             r: 0,
@@ -732,6 +717,7 @@ mod test {
         assert_eq!(green.hue(), 0.3958203);
         assert_eq!(green.saturation(), 0.94639);
         assert_eq!(Rgba8::from(green), green8);
+        assert_eq!(green.comparator(), 109433);
 
         let cyan8 = Rgba8 {
             r: 0,
@@ -752,6 +738,7 @@ mod test {
         assert_eq!(cyan.hue(), 0.5410248);
         assert_eq!(cyan.saturation(), 0.49610272);
         assert_eq!(Rgba8::from(cyan), cyan8);
+        assert_eq!(cyan.comparator(), 125453);
 
         let blue8 = Rgba8 {
             r: 0,
@@ -772,6 +759,7 @@ mod test {
         assert_eq!(blue.hue(), 0.73347783);
         assert_eq!(blue.saturation(), 1.0054128);
         assert_eq!(Rgba8::from(blue), blue8);
+        assert_eq!(blue.comparator(), 170226);
 
         let magenta8 = Rgba8 {
             r: 255,
@@ -792,6 +780,7 @@ mod test {
         assert_eq!(magenta.hue(), 0.9121206);
         assert_eq!(magenta.saturation(), 1.0351907);
         assert_eq!(Rgba8::from(magenta), magenta8);
+        assert_eq!(magenta.comparator(), 210351);
     }
 
     #[test]
