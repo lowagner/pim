@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+from math import *
+
 # oklab -> lyz with unnormalized weights
 def lyz(r, g, b):
     o3 = 0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b
@@ -16,3 +18,6 @@ def lyz(r, g, b):
         1.9779984951 * o - 2.4285922050 * m + 0.4505937099 * s,
     )
 
+def hue(l, y, z):
+    normalized = atan2(y, z) / (2 * pi)
+    return normalized if normalized >= 0 else normalized + 1
