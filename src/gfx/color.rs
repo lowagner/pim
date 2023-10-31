@@ -1,3 +1,4 @@
+use std::cmp::Ordering;
 use std::fmt;
 use std::str::FromStr;
 
@@ -298,7 +299,7 @@ pub struct Lyza {
 
 impl Lyza {
     /// How bright the color is (white is 1, black is 0).
-    pub fn lightness(&self) -> f32 {
+    pub fn luminosity(&self) -> f32 {
         self.l
     }
 
@@ -320,7 +321,52 @@ impl Lyza {
         }
     }
 
-    // TODO: add set_hue, set_saturation, set_lightness
+    // TODO: add set_hue, set_saturation, set_luminosity
+
+    // TODO: fix this up and add tests, not quite happy with it yet
+    pub fn compare(&self, other: &Lyza) -> Ordering {
+        let self_saturation = self.saturation();
+        let other_saturation = other.saturation();
+
+        if self_saturation + other_saturation < 0.01 {
+            // things are pretty gray here, compare by luminosity
+            return compare_floats(self.l, other.l);
+        }
+
+        // Gray colors come first.
+        if self_saturation < 0.001 {
+            return Ordering::Less;
+        } else if other_saturation < 0.001 {
+            return Ordering::Greater;
+        }
+
+        let self_hue = self.hue();
+        let other_hue = other.hue();
+
+        if self_hue < other_hue - 0.1 {
+            return Ordering::Less;
+        } else if self_hue > other_hue + 0.1 {
+            return Ordering::Greater;
+        }
+
+        if self_saturation < other_saturation - 0.1 {
+            return Ordering::Less;
+        } else if self_saturation > other_saturation + 0.1 {
+            return Ordering::Greater;
+        }
+
+        return compare_floats(self.l, other.l);
+    }
+}
+
+fn compare_floats(a: f32, b: f32) -> Ordering {
+    if a == b {
+        Ordering::Equal
+    } else if a < b {
+        Ordering::Less
+    } else {
+        Ordering::Greater
+    }
 }
 
 impl From<Rgba8> for Lyza {
@@ -596,7 +642,12 @@ mod test {
         let gray = Lyza::from(gray8);
         assert_eq!(
             gray,
-            Lyza { l: 0.7778222, y: 0.0, z: 5.7398967e-7, a: 0.47058824 }
+            Lyza {
+                l: 0.7778222,
+                y: 0.0,
+                z: 5.7398967e-7,
+                a: 0.47058824
+            }
         );
         assert_eq!(gray.hue(), 0.0);
         assert_eq!(gray.saturation(), 5.7398967e-7);
