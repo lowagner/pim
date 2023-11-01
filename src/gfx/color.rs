@@ -339,7 +339,7 @@ impl Lyza {
             // We'll give a spacing of approximately x2 between each bucket.
             // Luminosity will contribute up to 500, saturation will start at 1000
             // and contribute up to 10_000; and hue will contribute from 20_000
-            // to 200_000.
+            // to 220_000.
             (hue_bucket + 1) * 20000 + saturation_bucket * 1000 + luminosity_bucket
         }
     }

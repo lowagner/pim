@@ -75,14 +75,14 @@ pub enum Command {
     /// Note that $1 and $2 are optional.
     // TODO: if $2 is missing, return I64(0); if $1 is missing, return I64(1)
     If,
-    /// Returns 1 if $0 is even, otherwise 0.  This is an error if $0 does
-    /// not evaluate to an integer.
-    // TODO: evaluate all arguments as a sum, initialize to 0
+    /// Returns 1 if the sum of all arguments is even, otherwise 0.
     Even,
-    /// Returns 1 if $0 is odd, otherwise 0.  This is an error if $0 does
-    /// not evaluate to an integer.
-    // TODO: evaluate all arguments as a sum, initialize to 0
+    /// Returns 1 if the sum of all arguments is odd, otherwise 0.
     Odd,
+    // TODO: LessThan: evaluates $0, ensures that it's less than $1 (defaults to 0).
+    // if there are more arguments: ensures that $1 is less than $2.
+    // etc. for $n less than ${n+1}, returning false early if any
+    // later is greater.
 
     /// Sums all arguments, using $0 as the type to return.
     /// E.g., if $0 is an integer, then $1, $2, etc. will be cast to integers.
@@ -573,7 +573,7 @@ pub trait ScriptRunner {
 macro_rules! script_runner {
     ( $name:ident ) => {
         impl $name {
-            // TODO: could add other common methods.
+            // Can add other common methods for ScriptRunner here.
 
             /// Display a message to the user. Also logs.
             pub fn message<D: fmt::Display>(&mut self, msg: D, t: MessageType) {
@@ -585,6 +585,30 @@ macro_rules! script_runner {
 
             fn message_clear(&mut self) {
                 self.message = Message::default();
+            }
+
+            /// Sums the top of the script stack's arguments together.
+            /// Converts a Null sum to 0.
+            fn sum(&mut self, script_stack: &Vec<&Script>) -> ArgumentResult {
+                let mut value =
+                    self.script_evaluate(&script_stack, Evaluate::Index(0))?;
+                let script: &Script = &script_stack[script_stack.len() - 1];
+                let argument_count = script.arguments.len() as u32;
+                for index in 1..argument_count {
+                    let next = self
+                        .script_evaluate(&script_stack, Evaluate::Index(index))?;
+                    value = match value {
+                        Argument::Null => next,
+                        Argument::I64(number) => Argument::I64(number +
+                            next.get_optional_i64("for i64 sum")?.unwrap_or(0)),
+                        // TODO: implement some of these sums (i.e., for other value-like args)
+                        _ => return Err("sum for things besides i64 not implemented yet".to_string()),
+                    }
+                }
+                match value {
+                    Argument::Null => Ok(Argument::I64(0)),
+                    arg => Ok(arg),
+                }
             }
         }
 
@@ -709,34 +733,14 @@ macro_rules! script_runner {
                         }
                     }
                     Command::Even => {
-                        let value = self
-                            .script_evaluate(&script_stack, Evaluate::Index(0))?
-                            .get_i64("for even")?;
+                        let value = self.sum(&script_stack)?.get_i64("for even")?;
                         Ok(Argument::I64(if value % 2 == 0 { 1 } else { 0 }))
                     }
                     Command::Odd => {
-                        let value = self
-                            .script_evaluate(&script_stack, Evaluate::Index(0))?
-                            .get_i64("for odd")?;
+                        let value = self.sum(&script_stack)?.get_i64("for odd")?;
                         Ok(Argument::I64(if value % 2 == 1 { 1 } else { 0 }))
                     }
-                    Command::Sum => {
-                        let mut value =
-                            self.script_evaluate(&script_stack, Evaluate::Index(0))?;
-                        let argument_count = script.arguments.len() as u32;
-                        for index in 1..argument_count {
-                            let next = self
-                                .script_evaluate(&script_stack, Evaluate::Index(index))?;
-                            value = match value {
-                                Argument::Null => next,
-                                Argument::I64(number) => Argument::I64(number +
-                                    next.get_optional_i64("for i64 sum")?.unwrap_or(0)),
-                                // TODO: implement some of these sums (i.e., for other value-like args)
-                                _ => return Err("sum for things besides i64 not implemented yet".to_string()),
-                            }
-                        }
-                        Ok(value)
-                    }
+                    Command::Sum => self.sum(&script_stack),
                     Command::Product => {
                         let mut product: i64 = 1;
                         for i in 0..script.arguments.len() {
@@ -1100,13 +1104,13 @@ impl Variables {
         );
         variables.add_built_in(
             Command::Even,
-            "if $0 evaluates to even, returns 1, otherwise 0, \
-            e.g., `$$ 23` returns 0",
+            "if the sum of all evaluated arguments is even, returns 1, otherwise 0, \
+            e.g., `$$ 22 3 4` returns 0",
         );
         variables.add_built_in(
             Command::Odd,
-            "if $0 evaluates to odd, returns 1, otherwise 0, \
-            e.g., `$$ 23` returns 1",
+            "if the sum of all evaluated arguments is odd, returns 1, otherwise 0, \
+            e.g., `$$ 20 10 7` returns 1",
         );
         variables.add_built_in(
             Command::Sum,
@@ -2178,29 +2182,26 @@ mod test {
     }
 
     #[test]
-    fn test_script_can_look_back_multiple_script_arguments() {
+    fn test_script_even_sums_and_can_look_back_multiple_script_arguments() {
         let mut test_runner = TestRunner::new();
         let function = Script {
             command: Command::If,
             arguments: vec![
                 Argument::Script(Script {
                     command: Command::Even,
-                    arguments: vec![Argument::Script(Script {
-                        command: Command::Sum,
-                        arguments: vec![
-                            Argument::Use(Use {
-                                index: 0,
-                                lookback: -3,
-                            }),
-                            // Put a null in here to ensure we don't stop the sum at null:
-                            Argument::Null,
-                            Argument::I64(0),
-                            Argument::Use(Use {
-                                index: 1,
-                                lookback: -3,
-                            }),
-                        ],
-                    })],
+                    arguments: vec![
+                        Argument::Use(Use {
+                            index: 0,
+                            lookback: -2,
+                        }),
+                        // Put a null in here to ensure we don't stop the even sum at null:
+                        Argument::Null,
+                        Argument::I64(0),
+                        Argument::Use(Use {
+                            index: 1,
+                            lookback: -2,
+                        }),
+                    ],
                 }),
                 Argument::Color(Rgba8::BLUE),
                 Argument::Color(Rgba8::GREEN),
@@ -2224,14 +2225,10 @@ mod test {
                 WhatRan::Begin(Command::Evaluate(checkerboard.clone())),
                 WhatRan::Begin(Command::If),
                 WhatRan::Begin(Command::Even),
-                WhatRan::Begin(Command::Sum),
                 WhatRan::Evaluated(Ok(Argument::I64(3))),
                 WhatRan::Evaluated(Ok(Argument::Null)),
                 WhatRan::Evaluated(Ok(Argument::I64(0))),
                 WhatRan::Evaluated(Ok(Argument::I64(5))),
-                // result of the sum:
-                WhatRan::End(Command::Sum),
-                WhatRan::Evaluated(Ok(Argument::I64(8))),
                 // result of even
                 WhatRan::End(Command::Even),
                 WhatRan::Evaluated(Ok(Argument::I64(1))),
@@ -2243,6 +2240,53 @@ mod test {
         );
         assert!(result.is_ok());
         assert_eq!(result.ok(), Some(Argument::Color(Rgba8::BLUE)));
+    }
+
+    #[test]
+    fn test_script_odd_sums_and_evaluates_all_arguments() {
+        let mut test_runner = TestRunner::new();
+
+        let result = Script {
+            command: Command::Odd,
+            arguments: vec![
+                // Put a null in here to ensure we don't stop the odd sum at null:
+                Argument::Null,
+                Argument::Script(Script::zero_arg(Command::Sum)), // should be 0
+                Argument::Script(Script::zero_arg(Command::Product)), // should be 1
+                Argument::Script(Script {
+                    command: Command::Product,
+                    arguments: vec![
+                        Argument::I64(3),
+                        Argument::I64(4),
+                        Argument::I64(5),
+                    ],
+                }),
+            ],
+        }.run(&mut test_runner);
+
+        assert_eq!(
+            test_runner.test_what_ran,
+            vec![
+                WhatRan::Begin(Command::Odd),
+                WhatRan::Evaluated(Ok(Argument::Null)),
+                WhatRan::Begin(Command::Sum),
+                WhatRan::Evaluated(Ok(Argument::Null)),
+                WhatRan::End(Command::Sum),
+                WhatRan::Evaluated(Ok(Argument::I64(0))), // null sum is 0
+                WhatRan::Begin(Command::Product),
+                WhatRan::End(Command::Product),
+                WhatRan::Evaluated(Ok(Argument::I64(1))), // empty product is 1
+                WhatRan::Begin(Command::Product),
+                WhatRan::Evaluated(Ok(Argument::I64(3))),
+                WhatRan::Evaluated(Ok(Argument::I64(4))),
+                WhatRan::Evaluated(Ok(Argument::I64(5))),
+                WhatRan::End(Command::Product),
+                WhatRan::Evaluated(Ok(Argument::I64(60))),
+                WhatRan::End(Command::Odd),
+            ]
+        );
+        assert!(result.is_ok());
+        assert_eq!(result.ok(), Some(Argument::I64(1))); // 0 + 1 + 60 should be odd
     }
 
     #[test]
@@ -2328,8 +2372,6 @@ mod test {
             ]
         );
     }
-
-    // TODO: add test for Odd
 
     #[test]
     fn test_script_allows_variable_arguments() {
