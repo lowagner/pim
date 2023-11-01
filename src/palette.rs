@@ -70,36 +70,34 @@ impl Palette {
 
     pub fn handle_cursor_moved(&mut self, p: SessionCoords) {
         let (x, y) = (p.x, p.y);
-        let mut x = x as i32 - self.x as i32;
-        let mut y = y as i32 - self.y as i32;
-        let cellsize = self.cellsize as i32;
-        let size = self.size() as i32;
-        let height = self.height as i32;
-        let columns = (self.size() as f32 / self.height as f32).ceil() as i32;
+        let relative_x = x as i32 - self.x as i32;
+        let relative_y = y as i32 - self.y as i32;
+        let cell_size_in_pixels = self.cellsize as i32;
+        let color_count = self.size() as i32;
+        let cells_per_column = self.height as i32;
+        let column_count = (color_count as f32 / cells_per_column as f32).ceil() as i32;
 
-        let width = if size > height {
-            cellsize * columns
-        } else {
-            cellsize
-        };
-        let height = i32::min(size, height) * cellsize;
+        let width_in_pixels = column_count * cell_size_in_pixels;
+        let height_in_pixels = i32::min(color_count, cells_per_column) * cell_size_in_pixels;
 
-        if x >= width || y >= height || x < 0 || y < 0 {
+        if relative_x >= width_in_pixels
+            || relative_y >= height_in_pixels
+            || relative_x < 0
+            || relative_y < 0
+        {
             self.hover = None;
             return;
         }
 
-        x /= cellsize;
-        y /= cellsize;
+        // Convert the cursor position into which cell the cursor is in.
+        let cell_x = relative_x / cell_size_in_pixels;
+        let cell_y = relative_y / cell_size_in_pixels;
 
-        let index = y + x * (height / cellsize);
+        // Larger y is going up, but we index the palette going down.
+        let index = (cells_per_column - cell_y - 1) + cell_x * cells_per_column;
 
-        self.hover = if index < size {
-            // We index from the back because the palette is reversed
-            // before it is displayed, due to the Y axis pointing up,
-            // where as the palette is created starting at the top
-            // and going down.
-            Some(self.colors[self.size() - index as usize - 1])
+        self.hover = if index < color_count {
+            Some(self.colors[index as usize])
         } else {
             None
         };
