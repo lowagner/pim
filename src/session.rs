@@ -23,7 +23,7 @@ use crate::util;
 use crate::gfx::math::*;
 use crate::gfx::rect::Rect;
 use crate::gfx::shape2d::{Fill, Rotation, Shape, Stroke};
-use crate::gfx::{Point, Rgb8, Rgba8, ZDepth, Lyza};
+use crate::gfx::{Lyza, Point, Rgb8, Rgba8, ZDepth};
 use crate::view::path;
 use crate::view::resource::ViewResource;
 use crate::view::{
@@ -2416,7 +2416,12 @@ impl Session {
                         } else {
                             let lyza1 = Lyza::from(self.palette.colors[i1]);
                             let lyza2 = Lyza::from(self.palette.colors[i2]);
-                            Ok(Value::Str(format!("{:?} {:?} {:?}", lyza1, lyza1.compare(&lyza2), lyza2)))
+                            Ok(Value::Str(format!(
+                                "{:?} {:?} {:?}",
+                                lyza1,
+                                lyza1.compare(&lyza2),
+                                lyza2
+                            )))
                         }
                     }
                     Value::Str(s) => Ok(Value::Str(s.clone())),

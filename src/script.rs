@@ -83,7 +83,6 @@ pub enum Command {
     // if there are more arguments: ensures that $1 is less than $2.
     // etc. for $n less than ${n+1}, returning false early if any
     // later is greater.
-
     /// Sums all arguments, using $0 as the type to return.
     /// E.g., if $0 is an integer, then $1, $2, etc. will be cast to integers.
     Sum,
@@ -2255,14 +2254,11 @@ mod test {
                 Argument::Script(Script::zero_arg(Command::Product)), // should be 1
                 Argument::Script(Script {
                     command: Command::Product,
-                    arguments: vec![
-                        Argument::I64(3),
-                        Argument::I64(4),
-                        Argument::I64(5),
-                    ],
+                    arguments: vec![Argument::I64(3), Argument::I64(4), Argument::I64(5)],
                 }),
             ],
-        }.run(&mut test_runner);
+        }
+        .run(&mut test_runner);
 
         assert_eq!(
             test_runner.test_what_ran,
