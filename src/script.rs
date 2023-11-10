@@ -162,6 +162,10 @@ pub enum Command {
     PaletteAddGradient,
     /// Sorts the palette roughly by hue and lightness.
     PaletteSort,
+    /// Adds colors from the current view into the palette.
+    // TODO: we could add an integer argument for the number of colors we'll allow in;
+    //      and try to find the most common colors, etc.
+    PaletteAddViewColors,
     /// Removes colors specified by arguments if non-null (specified by index or color);
     /// if no arguments are given (or all are null), clears the entire palette.
     /// Returns the number of palette entries deleted.
@@ -235,6 +239,7 @@ impl fmt::Display for Command {
             Command::PaletteAddColor => write!(f, "p-add"),
             Command::PaletteAddGradient => write!(f, "p-gradient"),
             Command::PaletteSort => write!(f, "p-sort"),
+            Command::PaletteAddViewColors => write!(f, "p-view"),
             Command::PaletteClear => write!(f, "p-clear"),
             Command::Paint => write!(f, "p"),
             Command::Quit(Quit::Safe) => write!(f, "q"),
@@ -289,6 +294,7 @@ impl FromStr for Command {
             "p-add" => Ok(Command::PaletteAddColor),
             "p-gradient" => Ok(Command::PaletteAddGradient),
             "p-sort" => Ok(Command::PaletteSort),
+            "p-view" => Ok(Command::PaletteAddViewColors),
             "p-clear" => Ok(Command::PaletteClear),
             "p" => Ok(Command::Paint),
             "q" => Ok(Command::Quit(Quit::Safe)),
@@ -861,6 +867,12 @@ macro_rules! script_runner {
                         self.palette.sort();
                         Ok(Argument::Null)
                     }
+                    Command::PaletteAddViewColors => {
+                        let before = self.palette.colors.len() as i64;
+                        self.add_view_colors();
+                        let after = self.palette.colors.len() as i64;
+                        Ok(Argument::I64(after - before))
+                    }
                     Command::PaletteClear => {
                         let mut remove_colors = HashSet::new();
                         // Since we're removing colors from the palette, if we see any palette indices,
@@ -1272,6 +1284,11 @@ impl Variables {
             e.g., `$$` and all arguments are ignored",
         );
         variables.add_built_in(
+            Command::PaletteAddViewColors,
+            "adds colors from the current view into the palette \
+            e.g., `$$` and all arguments are ignored",
+        );
+        variables.add_built_in(
             Command::PaletteClear,
             "clears entire palette if no arguments, otherwise colors specified \
             by the arguments (index or color), \
@@ -1602,6 +1619,11 @@ mod test {
                 .push(WhatRan::Mocked(format!("p {} {} {}", x, y, color)));
             // In the implementation, return the color that was under the cursor.
             Ok(Argument::Color(Self::PAINT_RETURN_COLOR))
+        }
+
+        fn add_view_colors(&mut self) {
+            self.test_what_ran
+                .push(WhatRan::Mocked("p-view".to_string()));
         }
 
         fn get_string_setting(&self, _setting: StringSetting) -> String {

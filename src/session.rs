@@ -2464,23 +2464,8 @@ impl Session {
                 self.palette.sort();
             }
             Cmd::PaletteSample => {
-                {
-                    let v = self.active_view();
-                    let (_, pixels) = self
-                        .views
-                        .get(v.id)
-                        .expect(&format!("view #{} must exist", v.id))
-                        .layer
-                        .current_snapshot();
-
-                    for pixel in pixels.iter().cloned() {
-                        if pixel != Rgba8::TRANSPARENT {
-                            self.palette.add(pixel);
-                        }
-                    }
-                }
+                self.add_view_colors();
                 self.command(Cmd::PaletteSort);
-                self.center_palette();
             }
             Cmd::PaletteWrite(path) => match File::create(&path) {
                 Ok(mut f) => {
@@ -3079,6 +3064,23 @@ impl Session {
         // TODO: there's probably something better to return here, e.g., the pixel
         // color that was under the cursor.
         Ok(Argument::Color(color))
+    }
+
+    pub fn add_view_colors(&mut self) {
+        let v = self.active_view();
+        let (_, pixels) = self
+            .views
+            .get(v.id)
+            .expect(&format!("view #{} must exist", v.id))
+            .layer
+            .current_snapshot();
+
+        for pixel in pixels.iter().cloned() {
+            if pixel != Rgba8::TRANSPARENT {
+                self.palette.add(pixel);
+            }
+        }
+        self.center_palette();
     }
 
     fn get_string_setting(&self, setting: StringSetting) -> String {
