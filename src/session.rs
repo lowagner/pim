@@ -2467,23 +2467,9 @@ impl Session {
                 self.add_view_colors();
                 self.command(Cmd::PaletteSort);
             }
-            Cmd::PaletteWrite(path) => match File::create(&path) {
-                Ok(mut f) => {
-                    for color in self.palette.colors.iter() {
-                        writeln!(&mut f, "{}", color).ok();
-                    }
-                    self.message(
-                        format!(
-                            "Palette written to {} ({} colors)",
-                            path,
-                            self.palette.size()
-                        ),
-                        MessageType::Info,
-                    );
-                }
-                Err(err) => {
-                    self.message(format!("Error: `{}`: {}", path, err), MessageType::Error);
-                }
+            Cmd::PaletteWrite(path) => match self.palette.write(path) {
+                Ok(text) => self.message(text, MessageType::Info),
+                Err(err) => self.message(err, MessageType::Error),
             },
             Cmd::Zoom(op) => {
                 let center = if let Some(s) = self.selection {

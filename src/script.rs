@@ -166,6 +166,8 @@ pub enum Command {
     // TODO: we could add an integer argument for the number of colors we'll allow in;
     //      and try to find the most common colors, etc.
     PaletteAddViewColors,
+    /// Writes palette colors to a file specified in $0.
+    PaletteWriteToFile,
     /// Removes colors specified by arguments if non-null (specified by index or color);
     /// if no arguments are given (or all are null), clears the entire palette.
     /// Returns the number of palette entries deleted.
@@ -240,6 +242,7 @@ impl fmt::Display for Command {
             Command::PaletteAddGradient => write!(f, "p-gradient"),
             Command::PaletteSort => write!(f, "p-sort"),
             Command::PaletteAddViewColors => write!(f, "p-view"),
+            Command::PaletteWriteToFile => write!(f, "p-w"),
             Command::PaletteClear => write!(f, "p-clear"),
             Command::Paint => write!(f, "p"),
             Command::Quit(Quit::Safe) => write!(f, "q"),
@@ -295,6 +298,7 @@ impl FromStr for Command {
             "p-gradient" => Ok(Command::PaletteAddGradient),
             "p-sort" => Ok(Command::PaletteSort),
             "p-view" => Ok(Command::PaletteAddViewColors),
+            "p-w" => Ok(Command::PaletteWriteToFile),
             "p-clear" => Ok(Command::PaletteClear),
             "p" => Ok(Command::Paint),
             "q" => Ok(Command::Quit(Quit::Safe)),
@@ -430,11 +434,16 @@ impl Argument {
         }
     }
 
-    // TODO: remove what_for now that we're merging settings, in all getters
     pub fn get_optional_string(&self, what_for: &str) -> OptionalStringResult {
         match self {
             Argument::Null => Ok(None),
-            Argument::String(value) => Ok(Some(value.clone())),
+            arg => Ok(Some(arg.get_string(what_for)?)),
+        }
+    }
+
+    pub fn get_string(&self, what_for: &str) -> StringResult {
+        match self {
+            Argument::String(value) => Ok(value.clone()),
             result => Err(format!("invalid string {}: {}", what_for, result)),
         }
     }
@@ -873,6 +882,30 @@ macro_rules! script_runner {
                         let after = self.palette.colors.len() as i64;
                         Ok(Argument::I64(after - before))
                     }
+                    Command::PaletteWriteToFile => {
+                        // TODO: consider *not* evaluating; create a method on Argument that
+                        //      returns the string in a Command::Evaluate(String) *or* the
+                        //      a string if someone wrote 'filepath'
+                        //      we could have a "ForceEvaluate" command that nests the evaluate
+                        //      e.g., `p-write (identity (whatever-you-want-here))` so that
+                        //      you could still have an evaluated result here.
+                        let path = self.script_evaluate(
+                            &script_stack,
+                            Evaluate::Index(0),
+                        )?.get_string("for palette file path")?;
+                        match self.palette.write(path) {
+                            Ok(text) => {
+                                self.message(text, MessageType::Info);
+                                Ok(Argument::Null)
+                            }
+                            Err(err) => {
+                                // TODO: make sure we call something like this
+                                //      on a bad command evaluation
+                                // self.message(err, MessageType::Error);
+                                Err(err)
+                            }
+                        }
+                    }
                     Command::PaletteClear => {
                         let mut remove_colors = HashSet::new();
                         // Since we're removing colors from the palette, if we see any palette indices,
@@ -1287,6 +1320,11 @@ impl Variables {
             Command::PaletteAddViewColors,
             "adds colors from the current view into the palette \
             e.g., `$$` and all arguments are ignored",
+        );
+        variables.add_built_in(
+            Command::PaletteWriteToFile,
+            "writes palette to file specified by $0 \
+            e.g., `$$ 'warm.palette'` to write to the file warm.palette",
         );
         variables.add_built_in(
             Command::PaletteClear,

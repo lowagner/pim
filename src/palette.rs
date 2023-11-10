@@ -3,6 +3,9 @@ use crate::session::SessionCoords;
 use crate::gfx::{Lyza, Rgba8};
 use arrayvec::ArrayVec;
 
+use std::fs::File;
+use std::io::Write;
+
 pub struct Palette {
     pub colors: ArrayVec<[Rgba8; 256]>,
     pub hover: Option<Rgba8>,
@@ -106,5 +109,20 @@ impl Palette {
     pub fn sort(&mut self) {
         self.colors
             .sort_by(|a, b| Lyza::from(*a).compare(&Lyza::from(*b)))
+    }
+
+    pub fn write(&self, path: String) -> Result<String, String> {
+        let mut f = File::create(&path)
+            .map_err(|err| format!("Error creating palette file `{}`: {}", path, err))?;
+        for color in self.colors.iter() {
+            // TODO: use `p-add` after we switch to script.rs from cmd.rs
+            writeln!(f, "{}", color)
+                .map_err(|err| format!("Error writing to palette file `{}`: {}", path, err))?;
+        }
+        Ok(format!(
+            "palette written to {} ({} colors)",
+            path,
+            self.colors.len()
+        ))
     }
 }
