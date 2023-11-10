@@ -160,6 +160,8 @@ pub enum Command {
     /// colors to add, defaulting to 5.  Returns the number of added colors; can be
     /// different than $2 if a color in the gradient was already in the palette.
     PaletteAddGradient,
+    /// Sorts the palette roughly by hue and lightness.
+    PaletteSort,
     /// Removes colors specified by arguments if non-null (specified by index or color);
     /// if no arguments are given (or all are null), clears the entire palette.
     /// Returns the number of palette entries deleted.
@@ -232,6 +234,7 @@ impl fmt::Display for Command {
             Command::PaletteColor => write!(f, "pc"),
             Command::PaletteAddColor => write!(f, "p-add"),
             Command::PaletteAddGradient => write!(f, "p-gradient"),
+            Command::PaletteSort => write!(f, "p-sort"),
             Command::PaletteClear => write!(f, "p-clear"),
             Command::Paint => write!(f, "p"),
             Command::Quit(Quit::Safe) => write!(f, "q"),
@@ -285,6 +288,7 @@ impl FromStr for Command {
             "pc" => Ok(Command::PaletteColor),
             "p-add" => Ok(Command::PaletteAddColor),
             "p-gradient" => Ok(Command::PaletteAddGradient),
+            "p-sort" => Ok(Command::PaletteSort),
             "p-clear" => Ok(Command::PaletteClear),
             "p" => Ok(Command::Paint),
             "q" => Ok(Command::Quit(Quit::Safe)),
@@ -853,6 +857,10 @@ macro_rules! script_runner {
                         }
                         Ok(Argument::I64(self.palette.gradient(color_start, color_end, gradient_count as usize) as i64))
                     }
+                    Command::PaletteSort => {
+                        self.palette.sort();
+                        Ok(Argument::Null)
+                    }
                     Command::PaletteClear => {
                         let mut remove_colors = HashSet::new();
                         // Since we're removing colors from the palette, if we see any palette indices,
@@ -1257,6 +1265,11 @@ impl Variables {
             "palette gradient from color $0 to color $1, with an \
             optional $2 (defaulting to 5) added colors\
             e.g., `$$ #404 #00aa33` to add 5 colors to the palette",
+        );
+        variables.add_built_in(
+            Command::PaletteSort,
+            "sorts the palette roughly by hue and lightness \
+            e.g., `$$` and all arguments are ignored",
         );
         variables.add_built_in(
             Command::PaletteClear,
