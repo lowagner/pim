@@ -5,7 +5,6 @@ use crate::settings::*;
 use claim::assert_ok;
 
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::fmt;
 use std::mem;
 use std::str::FromStr;
@@ -1508,6 +1507,7 @@ impl Variables {
 mod test {
     use super::*;
     use crate::message::*;
+    use std::collections::HashSet;
     use strum::IntoEnumIterator;
 
     #[test]

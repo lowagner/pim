@@ -42,7 +42,6 @@ use std::convert::TryFrom;
 use std::fmt;
 use std::fs::File;
 use std::io;
-use std::io::Write;
 
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
@@ -1720,9 +1719,9 @@ impl Session {
                     self.handle_mouse_input(btn, st);
                 }
             }
-            Event::MouseWheel(delta) => {
+            Event::MouseWheel(delta, modifiers) => {
                 if self.settings["input/mouse"].is_set() {
-                    self.handle_mouse_wheel(delta);
+                    self.handle_mouse_wheel(delta, modifiers);
                 }
             }
             Event::CursorMoved(position) => {
@@ -1896,16 +1895,30 @@ impl Session {
         }
     }
 
-    fn handle_mouse_wheel(&mut self, delta: platform::LogicalDelta) {
-        // TODO: use modifiers: if normal, pan vertical, if shift, pan horizontal;
-        //      if ctrl, then zoom
-        if delta.y > 0. {
-            if let Some(v) = self.hover_view {
-                self.activate(v);
+    fn handle_mouse_wheel(
+        &mut self,
+        delta: platform::LogicalDelta,
+        modifiers: platform::ModifiersState,
+    ) {
+        if modifiers.ctrl {
+            // zoom
+            if delta.y > 0. {
+                if let Some(v) = self.hover_view {
+                    self.activate(v);
+                }
+                self.zoom_in(self.cursor);
+            } else if delta.y < 0. {
+                self.zoom_out(self.cursor);
             }
-            self.zoom_in(self.cursor);
-        } else if delta.y < 0. {
-            self.zoom_out(self.cursor);
+            return;
+        }
+        let axis_pan = (Self::PAN_PIXELS as f32 * delta.y as f32) as f32;
+        if modifiers.shift {
+            // pan horizontally
+            self.pan(axis_pan, 0.0);
+        } else {
+            // pan vertically
+            self.pan(0.0, -axis_pan);
         }
     }
 

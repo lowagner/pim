@@ -52,7 +52,7 @@ use cmd::Value;
 use event::Event;
 use execution::{DigestMode, Execution, ExecutionMode};
 use message::*;
-use platform::{ModifiersCount, ModifiersState, WindowEvent, WindowHint};
+use platform::{ModifiersCount, WindowEvent, WindowHint};
 use renderer::Renderer;
 use session::*;
 use timer::FrameTimer;
@@ -284,7 +284,7 @@ pub fn init<P: AsRef<Path>>(paths: &[P], options: Options<'_>) -> std::io::Resul
                     session_events.push(Event::MouseInput(button, state));
                 }
                 WindowEvent::MouseWheel { delta, .. } => {
-                    session_events.push(Event::MouseWheel(delta));
+                    session_events.push(Event::MouseWheel(delta, modifiers_count.into()));
                 }
                 WindowEvent::KeyboardInput(input) => {
                     match input {
@@ -301,6 +301,8 @@ pub fn init<P: AsRef<Path>>(paths: &[P], options: Options<'_>) -> std::io::Resul
                             session_events.push(Event::Paste(win.clipboard()));
                             continue;
                         }
+                        // We need to keep track of modifiers here because Glfw::Scroll
+                        // doesn't supply them.
                         platform::KeyboardInput {
                             key: Some(key),
                             state: platform::InputState::Pressed,

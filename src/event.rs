@@ -63,8 +63,12 @@ impl FromStr for TimedEvent {
 
 #[derive(Debug, Clone)]
 pub enum Event {
+    // TODO: probably should add ModifiersState to MouseInput
+    //      so we can do things like Ctrl+Click, etc.
     MouseInput(platform::MouseButton, platform::InputState),
-    MouseWheel(platform::LogicalDelta),
+    MouseWheel(platform::LogicalDelta, platform::ModifiersState),
+    // TODO: probably should add ModifiersState to CursorMoved
+    //      so we can do things like Ctrl+Drag, etc.
     CursorMoved(platform::LogicalPosition),
     KeyboardInput(platform::KeyboardInput),
     ReceivedCharacter(char, platform::ModifiersState),
@@ -77,7 +81,9 @@ impl From<Event> for String {
             Event::MouseInput(_, platform::InputState::Pressed) => format!("mouse/input pressed"),
             Event::MouseInput(_, platform::InputState::Released) => format!("mouse/input released"),
             Event::MouseInput(_, platform::InputState::Repeated) => unreachable!(),
-            Event::MouseWheel(delta) => format!("mouse/wheel {} {}", delta.x, delta.y),
+            Event::MouseWheel(delta, mods) => {
+                format!("mouse/wheel {} {} {}", mods, delta.x, delta.y)
+            }
             Event::CursorMoved(platform::LogicalPosition { x, y }) => {
                 format!("cursor/moved {} {}", x, y)
             }
@@ -96,6 +102,7 @@ impl From<Event> for String {
     }
 }
 
+// TODO: is this even necessary?
 impl FromStr for Event {
     type Err = parser::Error;
 
@@ -114,11 +121,15 @@ impl FromStr for Event {
                 Ok((Event::MouseInput(platform::MouseButton::Left, s), p))
             }
             "mouse/wheel" => {
-                let ((x, y), p) = parser::tuple::<f64>(rational(), rational())
+                let ((m, (x, y)), p) = optional(parser::param::<platform::ModifiersState>())
+                    .then(parser::tuple::<f64>(rational(), rational()))
                     .followed_by(end())
                     .parse(p)
                     .map_err(|(e, _)| e)?;
-                Ok((Event::MouseWheel(platform::LogicalDelta { x, y }), p))
+                Ok((
+                    Event::MouseWheel(platform::LogicalDelta { x, y }, m.unwrap_or_default()),
+                    p,
+                ))
             }
             "cursor/moved" => {
                 let ((x, y), p) = parser::tuple::<f64>(rational(), rational())
