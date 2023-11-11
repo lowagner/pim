@@ -686,10 +686,13 @@ impl<'a> renderer::Renderer<'a> for Renderer {
 
                 for (id, v) in view_data.iter_mut() {
                     if let Some(view) = session.views.get(*id) {
-                        let transform =
-                            Matrix4::from_translation(
-                                (session.offset + view.offset).extend(*draw::VIEW_LAYER),
-                            ) * Matrix4::from_nonuniform_scale(view.zoom, view.zoom, 1.0);
+                        let transform = Matrix4::from_translation(
+                            (session.offset + view.offset).extend(*draw::VIEW_LAYER),
+                        ) * Matrix4::from_nonuniform_scale(
+                            view.zoom as f32,
+                            view.zoom as f32,
+                            1.0,
+                        );
 
                         // Render views.
                         shd_gate.shade(sprite2d, |mut iface, uni, mut rdr_gate| {
@@ -743,7 +746,7 @@ impl<'a> renderer::Renderer<'a> for Renderer {
                                         .bind_texture(v.layer.fb.color_slot())
                                         .expect("binding textures never fails");
                                     let t = Matrix4::from_translation(
-                                        Vector2::new(0., view.zoom).extend(0.),
+                                        Vector2::new(0., view.zoom as f32).extend(0.),
                                     );
 
                                     // Render layer animation.

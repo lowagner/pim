@@ -604,24 +604,10 @@ impl Session {
     /// Maximum frame width or height.
     const MAX_FRAME_SIZE: u32 = 4096;
     /// Maximum zoom amount as a multiplier.
-    const MAX_ZOOM: f32 = 128.0;
+    const MAX_ZOOM: u32 = 128;
     /// Zoom levels used when zooming in/out.
-    const ZOOM_LEVELS: &'static [f32] = &[
-        1.,
-        2.,
-        3.,
-        4.,
-        6.,
-        8.,
-        10.,
-        12.,
-        16.,
-        20.,
-        24.,
-        32.,
-        64.,
-        Self::MAX_ZOOM,
-    ];
+    const ZOOM_LEVELS: &'static [u32] =
+        &[1, 2, 3, 4, 6, 8, 10, 12, 16, 20, 24, 32, 64, Self::MAX_ZOOM];
 
     /// Name of pim initialization script.
     const INIT: &'static str = "init.pim";
@@ -1254,7 +1240,7 @@ impl Session {
         let SessionCoords { point: mut p, .. } = p;
 
         p = p - self.offset - v.offset;
-        p = p / v.zoom;
+        p = p / v.zoom as f32;
 
         if v.flip_x {
             p.x = v.width() as f32 - p.x;
@@ -1270,7 +1256,7 @@ impl Session {
     pub fn session_coords(&self, v: ViewId, p: Point<ViewExtent, f32>) -> SessionCoords {
         let v = self.view(v);
 
-        let p = Point2::new(p.x * v.zoom, p.y * v.zoom);
+        let p = Point2::new(p.x * v.zoom as f32, p.y * v.zoom as f32);
         let p = p + self.offset + v.offset;
 
         if v.flip_x {
@@ -1618,11 +1604,11 @@ impl Session {
         first.offset.y = 0.;
 
         // TODO: We need a way to distinguish view content size with real (rendered) size.
-        let mut offset = first.height() as f32 * first.zoom + Self::VIEW_MARGIN;
+        let mut offset = first.height() as f32 * first.zoom as f32 + Self::VIEW_MARGIN;
 
         for v in self.views.iter_mut().skip(1) {
             v.offset.y = offset;
-            offset += v.height() as f32 * v.zoom + Self::VIEW_MARGIN;
+            offset += v.height() as f32 * v.zoom as f32 + Self::VIEW_MARGIN;
         }
         self.cursor_dirty();
     }
@@ -2208,9 +2194,10 @@ impl Session {
     /// Vertically the active view in the workspace.
     fn center_active_view_v(&mut self) {
         if let Some(v) = self.views.active() {
+            let zoom = v.zoom as f32;
             self.offset.y =
                 // TODO: This should center based on the total view height, not the frame height.
-                (self.height / 2. - v.fh as f32 / 2. * v.zoom - v.offset.y).floor();
+                (self.height / 2. - v.fh as f32 / 2. * zoom - v.offset.y).floor();
             self.cursor_dirty();
         }
     }
@@ -2218,7 +2205,8 @@ impl Session {
     /// Horizontally center the active view in the workspace.
     fn center_active_view_h(&mut self) {
         if let Some(v) = self.views.active() {
-            self.offset.x = (self.width / 2. - v.width() as f32 * v.zoom / 2. - v.offset.x).floor();
+            let zoom = v.zoom as f32;
+            self.offset.x = (self.width / 2. - v.width() as f32 * zoom / 2. - v.offset.x).floor();
             self.cursor_dirty();
         }
     }
@@ -2234,9 +2222,10 @@ impl Session {
         self.center_active_view_v();
 
         if let Some(v) = self.views.active() {
-            let offset = (frame as u32 * v.fw) as f32 * v.zoom;
+            let zoom = v.zoom as f32;
+            let offset = (frame as u32 * v.fw) as f32 * zoom;
 
-            self.offset.x = self.width / 2. - offset - v.offset.x - v.fw as f32 / 2. * v.zoom;
+            self.offset.x = self.width / 2. - offset - v.offset.x - v.fw as f32 / 2. * zoom;
             self.offset.x = self.offset.x.floor();
 
             self.cursor_dirty();
@@ -2262,50 +2251,62 @@ impl Session {
     ///////////////////////////////////////////////////////////////////////////
     /// Zoom functions
     ///////////////////////////////////////////////////////////////////////////
+    /// Returns the center for a zoom operation.
+    pub fn get_zoom_center(&self) -> SessionCoords {
+        if let Some(s) = self.selection {
+            let v = self.active_view();
+            let coords = s.bounds().center().map(|n| n as f32);
+            self.session_coords(v.id, coords.into())
+        } else if self.hover_view.is_some() {
+            self.cursor
+        } else {
+            self.session_coords(self.views.active_id, self.active_view().center())
+        }
+    }
+
+    /// Gets Some index of the level bigger than or equal to the passed-in zoom,
+    /// or None if no higher level.
+    fn get_zoom_index(&self, zoom: u32) -> usize {
+        let lvls = Self::ZOOM_LEVELS;
+        for (i, z) in lvls.iter().enumerate() {
+            if zoom <= *z {
+                return i;
+            }
+        }
+        Self::ZOOM_LEVELS.len()
+    }
 
     /// Zoom the active view in.
     fn zoom_in(&mut self, center: SessionCoords) {
-        let view = self.active_view_mut();
-        let lvls = Self::ZOOM_LEVELS;
-
-        for (i, zoom) in lvls.iter().enumerate() {
-            if view.zoom <= *zoom {
-                if let Some(z) = lvls.get(i + 1) {
-                    self.zoom(*z, center);
-                } else {
-                    self.message("Maximum zoom level reached", MessageType::Hint);
-                }
-                return;
-            }
+        let zoom = self.active_view().zoom;
+        let index = self.get_zoom_index(zoom);
+        if let Some(z) = Self::ZOOM_LEVELS.get(index + 1) {
+            self.zoom(*z, center);
+        } else {
+            self.message("Maximum zoom level reached", MessageType::Hint);
         }
     }
 
     /// Zoom the active view out.
     fn zoom_out(&mut self, center: SessionCoords) {
-        let view = self.active_view_mut();
-        let lvls = Self::ZOOM_LEVELS;
-
-        for (i, zoom) in lvls.iter().enumerate() {
-            if view.zoom <= *zoom {
-                if i == 0 {
-                    self.message("Minimum zoom level reached", MessageType::Hint);
-                } else if let Some(z) = lvls.get(i - 1) {
-                    self.zoom(*z, center);
-                } else {
-                    unreachable!();
-                }
-                return;
-            }
+        let zoom = self.active_view().zoom;
+        let index = self.get_zoom_index(zoom);
+        if index == 0 {
+            self.message("Minimum zoom level reached", MessageType::Hint);
+        } else if let Some(z) = Self::ZOOM_LEVELS.get(index - 1) {
+            self.zoom(*z, center);
+        } else {
+            unreachable!();
         }
     }
 
     /// Set the active view zoom. Takes a center to zoom to.
-    fn zoom(&mut self, z: f32, center: SessionCoords) {
+    fn zoom(&mut self, z: u32, center: SessionCoords) {
         let px = center.x - self.offset.x;
         let py = center.y - self.offset.y;
 
         let zprev = self.active_view().zoom;
-        let zdiff = z / zprev;
+        let zdiff = z as f32 / zprev as f32;
 
         let nx = (px * zdiff).floor();
         let ny = (py * zdiff).floor();
@@ -2487,15 +2488,7 @@ impl Session {
                 Err(err) => self.message(err, MessageType::Error),
             },
             Cmd::Zoom(op) => {
-                let center = if let Some(s) = self.selection {
-                    let v = self.active_view();
-                    let coords = s.bounds().center().map(|n| n as f32);
-                    self.session_coords(v.id, coords.into())
-                } else if self.hover_view.is_some() {
-                    self.cursor
-                } else {
-                    self.session_coords(self.views.active_id, self.active_view().center())
-                };
+                let center = self.get_zoom_center();
 
                 match op {
                     Op::Incr => {
@@ -2504,8 +2497,9 @@ impl Session {
                     Op::Decr => {
                         self.zoom_out(center);
                     }
-                    Op::Set(z) => {
-                        if !(1. ..=Self::MAX_ZOOM).contains(&z) {
+                    Op::Set(zoom) => {
+                        let z = zoom as u32;
+                        if z <= 0 || z > Self::MAX_ZOOM {
                             self.message("Error: invalid zoom level", MessageType::Error);
                         } else {
                             self.zoom(z, center);
@@ -3123,6 +3117,7 @@ impl Session {
             I64Setting::UiScalePercentage => self.settings["scale%"].to_u64() as i64,
             I64Setting::UiOffsetX => self.offset.x as i64,
             I64Setting::UiOffsetY => self.offset.y as i64,
+            I64Setting::UiZoom => self.active_view().zoom as i64,
             I64Setting::CursorXRay => self.brush.is_set(brush::BrushMode::XRay) as i64,
             I64Setting::BrushSize => self.brush.size as i64,
             I64Setting::BrushErase => self.brush.is_set(brush::BrushMode::Erase) as i64,
@@ -3147,47 +3142,64 @@ impl Session {
         }
     }
 
-    fn set_i64_setting(&mut self, setting: I64Setting, value: i64) -> VoidResult {
+    fn set_i64_setting(
+        &mut self,
+        setting: I64Setting,
+        old_value: i64,
+        new_value: i64,
+    ) -> VoidResult {
         match setting {
             I64Setting::UiAnimate => {
-                self.settings.set("animation", Value::Bool(value != 0))?;
+                self.settings
+                    .set("animation", Value::Bool(new_value != 0))?;
             }
             I64Setting::UiScalePercentage => {
-                if value < 100 || value > 400 {
+                if new_value < 100 || new_value > 400 {
                     return Err(format!(
                         "ui scale % should be between 100 and 400, got {}",
-                        value
+                        new_value
                     ));
                 }
-                let old_percentage = self.settings["scale%"].to_u64() as i64;
-                self.settings.set("scale%", Value::U32(value as u32))?;
+                self.settings.set("scale%", Value::U32(new_value as u32))?;
                 // TODO: We need to recompute the cursor position here
                 // from the window coordinates. Currently, cursor position
                 // is stored only in `SessionCoords`, which would have
                 // to change.
-                // TODO: would be nice not to need to pass in old_percentage here
-                self.rescale((old_percentage as f64) / 100.0, (value as f64) / 100.0);
+                // TODO: would be nice not to need to pass in old_value here
+                self.rescale((old_value as f64) / 100.0, (new_value as f64) / 100.0);
             }
             I64Setting::UiOffsetX => {
-                self.offset.x = value as f32;
+                self.offset.x = new_value as f32;
             }
             I64Setting::UiOffsetY => {
-                self.offset.y = value as f32;
+                self.offset.y = new_value as f32;
             }
-            I64Setting::CursorXRay => self.brush.set(brush::BrushMode::XRay, value),
+            I64Setting::UiZoom => {
+                let valid_zoom = if new_value <= 0 {
+                    self.message("Minimum zoom level reached", MessageType::Hint);
+                    1
+                } else if new_value > Self::MAX_ZOOM as i64 {
+                    self.message("Maximum zoom level reached", MessageType::Hint);
+                    Self::MAX_ZOOM
+                } else {
+                    new_value as u32
+                };
+                self.zoom(valid_zoom, self.get_zoom_center());
+            }
+            I64Setting::CursorXRay => self.brush.set(brush::BrushMode::XRay, new_value),
             I64Setting::BrushSize => {
-                if value < 1 || value > 1000 {
-                    return Err(format!("brush size of {} is invalid", value));
+                if new_value < 1 || new_value > 1000 {
+                    return Err(format!("brush size of {} is invalid", new_value));
                 }
-                self.brush.size = value as usize
+                self.brush.size = new_value as usize
             }
-            I64Setting::BrushErase => self.brush.set(brush::BrushMode::Erase, value),
-            I64Setting::BrushMultiFrame => self.brush.set(brush::BrushMode::Multi, value),
-            I64Setting::BrushPixelPerfect => self.brush.set(brush::BrushMode::Perfect, value),
-            I64Setting::BrushXSymmetry => self.brush.set(brush::BrushMode::XSym, value),
-            I64Setting::BrushYSymmetry => self.brush.set(brush::BrushMode::YSym, value),
+            I64Setting::BrushErase => self.brush.set(brush::BrushMode::Erase, new_value),
+            I64Setting::BrushMultiFrame => self.brush.set(brush::BrushMode::Multi, new_value),
+            I64Setting::BrushPixelPerfect => self.brush.set(brush::BrushMode::Perfect, new_value),
+            I64Setting::BrushXSymmetry => self.brush.set(brush::BrushMode::XSym, new_value),
+            I64Setting::BrushYSymmetry => self.brush.set(brush::BrushMode::YSym, new_value),
             I64Setting::BrushLineAngle => {
-                let snap = value as u32;
+                let snap = new_value as u32;
                 if snap == 0 {
                     // TODO: clean up brush line mode, any line will do to remove:
                     self.brush.set(brush::BrushMode::Line(None), 0);
@@ -3196,21 +3208,21 @@ impl Session {
                 } else {
                     return Err(format!(
                         "brush line snap angle should be between 0 and 360, got {}",
-                        value
+                        new_value
                     ));
                 }
             }
             I64Setting::FrameIndex => {
                 // TODO: maybe simplify current_frame and get max_frames another way:
                 let (_, max_frames) = self.current_frame();
-                let new_frame = value.rem_euclid(max_frames as i64);
+                let new_frame = new_value.rem_euclid(max_frames as i64);
                 self.center_active_view_frame(new_frame as usize);
             }
             I64Setting::FrameWidth => {
-                self.resize_frames(value, self.active_view().fh as i64)?;
+                self.resize_frames(new_value, self.active_view().fh as i64)?;
             }
             I64Setting::FrameHeight => {
-                self.resize_frames(self.active_view().fw as i64, value)?;
+                self.resize_frames(self.active_view().fw as i64, new_value)?;
             }
         }
         Ok(())

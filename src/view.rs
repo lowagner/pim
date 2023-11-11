@@ -121,7 +121,7 @@ pub struct View<R> {
     /// Identifier.
     pub id: ViewId,
     /// Zoom level.
-    pub zoom: f32,
+    pub zoom: u32,
     /// List of operations to carry out on the view.  Cleared every frame.
     pub ops: Vec<ViewOp>,
     /// Whether the view is flipped in the X axis.
@@ -199,7 +199,7 @@ impl<R> View<R> {
             fw,
             fh,
             offset: Vector2::zero(),
-            zoom: 1.,
+            zoom: 1,
             ops: Vec::new(),
             flip_x: false,
             flip_y: false,
@@ -360,8 +360,8 @@ impl<R> View<R> {
         Rect::new(
             self.offset.x,
             self.offset.y,
-            self.offset.x + self.width() as f32 * self.zoom,
-            self.offset.y + self.height() as f32 * self.zoom,
+            self.offset.x + (self.width() * self.zoom) as f32,
+            self.offset.y + (self.height() * self.zoom) as f32,
         )
     }
 

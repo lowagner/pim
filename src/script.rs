@@ -221,6 +221,7 @@ impl fmt::Display for Command {
             Command::I64Setting(I64Setting::UiScalePercentage) => write!(f, "ui-scale%"),
             Command::I64Setting(I64Setting::UiOffsetX) => write!(f, "ui-x"),
             Command::I64Setting(I64Setting::UiOffsetY) => write!(f, "ui-y"),
+            Command::I64Setting(I64Setting::UiZoom) => write!(f, "zoom"),
             Command::I64Setting(I64Setting::CursorXRay) => write!(f, "c-xray"),
             Command::I64Setting(I64Setting::BrushSize) => write!(f, "b-size"),
             Command::I64Setting(I64Setting::BrushErase) => write!(f, "b-erase"),
@@ -278,6 +279,7 @@ impl FromStr for Command {
             "ui-scale%" => Ok(Command::I64Setting(I64Setting::UiScalePercentage)),
             "ui-x" => Ok(Command::I64Setting(I64Setting::UiOffsetX)),
             "ui-y" => Ok(Command::I64Setting(I64Setting::UiOffsetY)),
+            "zoom" => Ok(Command::I64Setting(I64Setting::UiZoom)),
             "c-xray" => Ok(Command::I64Setting(I64Setting::CursorXRay)),
             "b-size" => Ok(Command::I64Setting(I64Setting::BrushSize)),
             "b-erase" => Ok(Command::I64Setting(I64Setting::BrushErase)),
@@ -805,7 +807,7 @@ macro_rules! script_runner {
                         let old_value = self.get_i64_setting(setting);
                         match argument {
                             None => {},
-                            Some(new_value) => self.set_i64_setting(setting, new_value)?,
+                            Some(new_value) => self.set_i64_setting(setting, old_value, new_value)?,
                         }
                         Ok(Argument::I64(old_value))
                     }
@@ -1226,6 +1228,11 @@ impl Variables {
             Command::I64Setting(I64Setting::UiOffsetY),
             "getter/swapper for current UI y offset if $0 is null/present, \
             e.g., `$$ 45` to set y pixel offset to 45",
+        );
+        variables.add_built_in(
+            Command::I64Setting(I64Setting::UiZoom),
+            "getter/swapper for current UI zoom if $0 is null/present, \
+            e.g., `$$ 32` to set zoom to 32x",
         );
         variables.add_built_in(
             Command::I64Setting(I64Setting::CursorXRay),
@@ -1682,9 +1689,16 @@ mod test {
             1234567890
         }
 
-        fn set_i64_setting(&mut self, setting: I64Setting, value: i64) -> VoidResult {
-            self.test_what_ran
-                .push(WhatRan::Mocked(format!("set{:?}({})", setting, value)));
+        fn set_i64_setting(
+            &mut self,
+            setting: I64Setting,
+            old_value: i64,
+            new_value: i64,
+        ) -> VoidResult {
+            self.test_what_ran.push(WhatRan::Mocked(format!(
+                "set{:?}({} -> {})",
+                setting, old_value, new_value
+            )));
             Ok(())
         }
 

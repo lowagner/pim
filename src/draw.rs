@@ -154,6 +154,7 @@ impl Context {
 
 fn draw_ui(session: &Session, canvas: &mut shape2d::Batch, text: &mut TextBatch) {
     let view = session.active_view();
+    let zoom = view.zoom as f32;
 
     if let Some(selection) = session.selection {
         let fill = match session.mode {
@@ -171,17 +172,16 @@ fn draw_ui(session: &Session, canvas: &mut shape2d::Batch, text: &mut TextBatch)
         {
             // Selection dimensions.
             let s = selection;
-            let z = view.zoom;
             let t = format!("{}x{}", r.width(), r.height());
             let (x, align) = if s.x2 > s.x1 {
-                ((s.x2 + 1) as f32 * z, TextAlign::Right)
+                ((s.x2 + 1) as f32 * zoom, TextAlign::Right)
             } else {
-                ((s.x2 as f32) * z, TextAlign::Left)
+                ((s.x2 as f32) * zoom, TextAlign::Left)
             };
             let y = if s.y2 >= s.y1 {
-                (s.y2 + 1) as f32 * z + 1.
+                (s.y2 + 1) as f32 * zoom + 1.
             } else {
-                (s.y2) as f32 * z - self::LINE_HEIGHT + 1.
+                (s.y2) as f32 * zoom - self::LINE_HEIGHT + 1.
             };
             text.add(
                 &t,
@@ -193,7 +193,7 @@ fn draw_ui(session: &Session, canvas: &mut shape2d::Batch, text: &mut TextBatch)
             );
         }
 
-        let t = Matrix4::from_translation(offset.extend(0.)) * Matrix4::from_scale(view.zoom);
+        let t = Matrix4::from_translation(offset.extend(0.)) * Matrix4::from_scale(zoom);
 
         // Selection stroke.
         canvas.add(Shape::Rectangle(
@@ -223,12 +223,9 @@ fn draw_ui(session: &Session, canvas: &mut shape2d::Batch, text: &mut TextBatch)
         // Frame lines
         for n in 1..v.animation.len() {
             let n = n as f32;
-            let x = n * v.zoom * v.fw as f32 + offset.x;
+            let x = n * zoom * v.fw as f32 + offset.x;
             canvas.add(Shape::Line(
-                Line::new(
-                    [x, offset.y],
-                    [x, v.zoom * (v.fh as usize) as f32 + offset.y],
-                ),
+                Line::new([x, offset.y], [x, zoom * (v.fh as usize) as f32 + offset.y]),
                 self::UI_LAYER,
                 Rotation::ZERO,
                 Stroke::new(1.0, Rgba::new(1., 1., 1., 0.6)),
@@ -282,7 +279,7 @@ fn draw_ui(session: &Session, canvas: &mut shape2d::Batch, text: &mut TextBatch)
 
         // Session status
         text.add(
-            &format!("{:>5}%", (view.zoom * 100.) as u32),
+            &format!("{:>5}%", (zoom * 100.) as u32),
             session.width - MARGIN,
             MARGIN + self::LINE_HEIGHT,
             self::TEXT_LAYER,
@@ -494,8 +491,8 @@ fn draw_checker(session: &Session, batch: &mut sprite2d::Batch) {
     if session.settings["checker"].is_set() {
         for v in session.views.iter() {
             let ratio = v.width() as f32 / v.height() as f32;
-            let rx = CHECKER_REPEAT * v.zoom * ratio;
-            let ry = CHECKER_REPEAT * v.zoom;
+            let rx = CHECKER_REPEAT * v.zoom as f32 * ratio;
+            let ry = CHECKER_REPEAT * v.zoom as f32;
 
             batch.add(
                 checker::rect(),
@@ -518,7 +515,7 @@ fn draw_grid(session: &Session, batch: &mut shape2d::Batch) {
         let t = session.offset + v.offset;
         let w = v.width();
         let h = v.height();
-        let m = Matrix4::from_translation(t.extend(0.)) * Matrix4::from_scale(v.zoom);
+        let m = Matrix4::from_translation(t.extend(0.)) * Matrix4::from_scale(v.zoom as f32);
 
         // Grid columns.
         for x in (0..).step_by(gx as usize).skip(1).take_while(|x| *x < w) {
@@ -604,7 +601,7 @@ fn draw_brush(session: &Session, brush: &Brush, shapes: &mut shape2d::Batch) {
     }
     let v = session.active_view();
     let c = session.cursor;
-    let z = v.zoom;
+    let z = v.zoom as f32;
 
     match session.mode {
         Mode::Visual(VisualState::Selecting { .. }) => {
@@ -658,15 +655,13 @@ fn draw_brush(session: &Session, brush: &Brush, shapes: &mut shape2d::Batch) {
                             self::BRUSH_LAYER,
                             stroke,
                             fill,
-                            v.zoom,
+                            z,
                             Align::BottomLeft,
                         ));
                     }
 
                     // X-Ray brush mode.
-                    if brush.is_set(BrushMode::XRay)
-                        && brush.size == 1
-                        && v.zoom >= self::XRAY_MIN_ZOOM
+                    if brush.is_set(BrushMode::XRay) && brush.size == 1 && z >= self::XRAY_MIN_ZOOM
                     {
                         let p: ViewCoords<u32> = view_coords.into();
 
@@ -695,7 +690,7 @@ fn draw_brush(session: &Session, brush: &Brush, shapes: &mut shape2d::Batch) {
                         self::UI_LAYER,
                         Stroke::new(1.0, color.into()),
                         Fill::Empty,
-                        v.zoom,
+                        z,
                         Align::Center,
                     ));
                 }
@@ -723,7 +718,8 @@ pub fn draw_view_animation<R>(session: &Session, v: &View<R>) -> sprite2d::Batch
         v.width(),
         v.fh,
         *v.animation.val(),
-        Rect::new(-(v.fw as f32), 0., 0., v.fh as f32) * v.zoom + (session.offset + v.offset),
+        Rect::new(-(v.fw as f32), 0., 0., v.fh as f32) * v.zoom as f32
+            + (session.offset + v.offset),
         self::VIEW_LAYER,
         Rgba::TRANSPARENT,
         1.,
@@ -737,7 +733,7 @@ pub fn draw_view_composites<R>(session: &Session, v: &View<R>) -> sprite2d::Batc
     for frame in v.animation.frames.iter() {
         batch.add(
             *frame,
-            (*frame - Vector2::new(0., v.fh as f32)) * v.zoom + (session.offset + v.offset),
+            (*frame - Vector2::new(0., v.fh as f32)) * v.zoom as f32 + (session.offset + v.offset),
             self::VIEW_LAYER,
             Rgba::TRANSPARENT,
             1.,

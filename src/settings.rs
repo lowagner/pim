@@ -25,6 +25,8 @@ pub enum I64Setting {
     UiOffsetX,
     /// Offset for the UI, y coordinate.
     UiOffsetY,
+    /// Zoom for the UI, roughly 1 to 128.
+    UiZoom,
     /// X-Ray mode to show the color of the pixel below your cursor; boolean (0 or 1)
     CursorXRay,
     /// Size of the brush, in pixels.
@@ -62,6 +64,7 @@ impl Settings {
         i64_map.insert(I64Setting::UiScalePercentage, 100);
         i64_map.insert(I64Setting::UiOffsetX, 0);
         i64_map.insert(I64Setting::UiOffsetY, 0);
+        i64_map.insert(I64Setting::UiZoom, 1);
         i64_map.insert(I64Setting::CursorXRay, 1);
         i64_map.insert(I64Setting::BrushSize, 1);
         i64_map.insert(I64Setting::BrushErase, 0);

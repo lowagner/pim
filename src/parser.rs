@@ -330,6 +330,7 @@ impl Parse for Direction {
     }
 }
 
+// TODO: "of" might make more sense than "param"
 pub fn param<T: Parse>() -> Parser<T> {
     T::parser()
 }
