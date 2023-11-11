@@ -179,6 +179,8 @@ pub enum Command {
     Paint,
 
     // TODO: BrushReset,
+    /// Resets settings.
+    ResetSettings,
     /// Versions of quit, see enum `Quit`.
     Quit(Quit),
 }
@@ -245,6 +247,7 @@ impl fmt::Display for Command {
             Command::PaletteWriteToFile => write!(f, "p-w"),
             Command::PaletteClear => write!(f, "p-clear"),
             Command::Paint => write!(f, "p"),
+            Command::ResetSettings => write!(f, "reset"),
             Command::Quit(Quit::Safe) => write!(f, "q"),
             Command::Quit(Quit::AllSafe) => write!(f, "qa"),
             Command::Quit(Quit::Forced) => write!(f, "q!"),
@@ -302,6 +305,7 @@ impl FromStr for Command {
             "p-w" => Ok(Command::PaletteWriteToFile),
             "p-clear" => Ok(Command::PaletteClear),
             "p" => Ok(Command::Paint),
+            "reset" => Ok(Command::ResetSettings),
             "q" => Ok(Command::Quit(Quit::Safe)),
             "qa" => Ok(Command::Quit(Quit::AllSafe)),
             "q!" => Ok(Command::Quit(Quit::Forced)),
@@ -949,6 +953,15 @@ macro_rules! script_runner {
 
                         self.script_paint(x, y, color)
                     }
+                    Command::ResetSettings => {
+                        if let Err(e) = self.reset() {
+                            self.message(format!("Error: {}", e), MessageType::Error);
+                            Err(format!("{}", e))
+                        } else {
+                            self.message("Settings reset to default values", MessageType::Okay);
+                            Ok(Argument::Null)
+                        }
+                    }
                     Command::Quit(q) => {
                         self.script_quit(q);
                         Ok(Argument::Null)
@@ -1347,6 +1360,7 @@ impl Variables {
             "paints coordinates ($0, $1) with color $2, defaulting to foreground, \
             e.g., `$$ 3 4 #765432`",
         );
+        variables.add_built_in(Command::ResetSettings, "resets all settings");
         variables.add_built_in(
             Command::Quit(Quit::Safe),
             "quits the current view if it has been saved",
@@ -1705,6 +1719,11 @@ mod test {
         fn resize_frames(&mut self, width: i64, height: i64) -> Result<(), String> {
             self.test_what_ran
                 .push(WhatRan::Mocked(format!("f/resize {} {}", width, height)));
+            Ok(())
+        }
+
+        // This can be return something else for an error.
+        fn reset(&mut self) -> Result<(), String> {
             Ok(())
         }
 
