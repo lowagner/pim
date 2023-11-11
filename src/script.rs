@@ -177,6 +177,12 @@ pub enum Command {
     /// and `paint 11 12 #123456` to paint the pixel at (11, 12) with #123456.
     /// Note that an integer for the color also works as an index to the palette.
     Paint,
+    /// Uses $0 for x, $1 for y, and $2 as an optional color (defaults to foreground color).
+    /// E.g., `bucket 5 10` to flood fill the pixels starting at (5, 10) with the foreground
+    /// color, and `bucket 11 12 #123456` to flood-fill the pixels starting at (11, 12) with
+    /// #123456.  Note that an integer for the color also works as an index to the palette.
+    Bucket,
+    // TODO: Sample, $0 for x and $1 for y, to get the color on the grid.
 
     // TODO: BrushReset,
     /// Resets settings.
@@ -247,6 +253,7 @@ impl fmt::Display for Command {
             Command::PaletteWriteToFile => write!(f, "p-w"),
             Command::PaletteClear => write!(f, "p-clear"),
             Command::Paint => write!(f, "p"),
+            Command::Bucket => write!(f, "b"),
             Command::ResetSettings => write!(f, "reset"),
             Command::Quit(Quit::Safe) => write!(f, "q"),
             Command::Quit(Quit::AllSafe) => write!(f, "qa"),
@@ -305,6 +312,7 @@ impl FromStr for Command {
             "p-w" => Ok(Command::PaletteWriteToFile),
             "p-clear" => Ok(Command::PaletteClear),
             "p" => Ok(Command::Paint),
+            "b" => Ok(Command::Bucket),
             "reset" => Ok(Command::ResetSettings),
             "q" => Ok(Command::Quit(Quit::Safe)),
             "qa" => Ok(Command::Quit(Quit::AllSafe)),
@@ -942,16 +950,30 @@ macro_rules! script_runner {
                     Command::Paint => {
                         let x = self
                             .script_evaluate(&script_stack, Evaluate::Index(0))?
-                            .get_i64("for coordinate")?;
+                            .get_i64("for paint coordinate")?;
                         let y = self
                             .script_evaluate(&script_stack, Evaluate::Index(1))?
-                            .get_i64("for coordinate")?;
+                            .get_i64("for paint coordinate")?;
 
                         let mut color = self.fg; // default to foreground color
                         let color_arg = self.script_evaluate(&script_stack, Evaluate::Index(2))?.get_optional_color(&self.palette)?;
                         get_or_swap_color(&mut color, color_arg);
 
                         self.script_paint(x, y, color)
+                    }
+                    Command::Bucket => {
+                        let x = self
+                            .script_evaluate(&script_stack, Evaluate::Index(0))?
+                            .get_i64("for bucket coordinate")?;
+                        let y = self
+                            .script_evaluate(&script_stack, Evaluate::Index(1))?
+                            .get_i64("for bucket coordinate")?;
+
+                        let mut color = self.fg; // default to foreground color
+                        let color_arg = self.script_evaluate(&script_stack, Evaluate::Index(2))?.get_optional_color(&self.palette)?;
+                        get_or_swap_color(&mut color, color_arg);
+
+                        self.script_bucket(x, y, color)
                     }
                     Command::ResetSettings => {
                         if let Err(e) = self.reset() {
@@ -1358,7 +1380,12 @@ impl Variables {
         variables.add_built_in(
             Command::Paint,
             "paints coordinates ($0, $1) with color $2, defaulting to foreground, \
-            e.g., `$$ 3 4 #765432`",
+            e.g., `$$ 3 4 #765432` to paint coordinate (3, 4) color #765432",
+        );
+        variables.add_built_in(
+            Command::Bucket,
+            "flood-fills starting at coordinates ($0, $1) with color $2, defaulting \
+            to foreground, e.g., `$$ 3 4 #765432` to start flood-filling at (3, 4)",
         );
         variables.add_built_in(Command::ResetSettings, "resets all settings");
         variables.add_built_in(
@@ -1406,6 +1433,7 @@ impl Variables {
         assert_ok!(variables.set("product".to_string(), Variable::Alias("*".to_string())));
         assert_ok!(variables.set("sum".to_string(), Variable::Alias("+".to_string())));
         assert_ok!(variables.set("paint".to_string(), Variable::Alias("p".to_string())));
+        assert_ok!(variables.set("bucket".to_string(), Variable::Alias("b".to_string())));
         assert_ok!(variables.set("f-index".to_string(), Variable::Alias("f".to_string())));
         assert_ok!(variables.set("quit".to_string(), Variable::Alias("q".to_string())));
         assert_ok!(variables.set("quit!".to_string(), Variable::Alias("q!".to_string())));
@@ -1680,6 +1708,13 @@ mod test {
         fn script_paint(&mut self, x: i64, y: i64, color: Rgba8) -> ArgumentResult {
             self.test_what_ran
                 .push(WhatRan::Mocked(format!("p {} {} {}", x, y, color)));
+            // In the implementation, return the color that was under the cursor.
+            Ok(Argument::Color(Self::PAINT_RETURN_COLOR))
+        }
+
+        fn script_bucket(&mut self, x: i64, y: i64, color: Rgba8) -> ArgumentResult {
+            self.test_what_ran
+                .push(WhatRan::Mocked(format!("b {} {} {}", x, y, color)));
             // In the implementation, return the color that was under the cursor.
             Ok(Argument::Color(Self::PAINT_RETURN_COLOR))
         }

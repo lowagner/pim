@@ -46,6 +46,8 @@ pub struct FloodFiller {
 }
 
 impl FloodFiller {
+    // This needs to be an `Option` because we can get an empty result if
+    // the starting point is out of bounds.
     pub fn new(
         view: &View<ViewResource>,
         starting_point: ViewCoords<f32>,
@@ -124,6 +126,10 @@ impl FloodFiller {
         if y < self.grid.height - 1 {
             self.push_on_change(x, y + 1, down);
         }
+    }
+
+    pub fn target_color(&self) -> Rgba8 {
+        return self.target_color;
     }
 
     pub fn run(mut self) -> Option<Vec<Shape>> {

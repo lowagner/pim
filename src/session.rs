@@ -1812,13 +1812,8 @@ impl Session {
                                 }
                                 Tool::Pan(_) => {}
                                 Tool::FloodFill => {
-                                    let start_time = time::Instant::now();
-                                    let filler = FloodFiller::new(self.active_view(), p, self.fg);
-                                    if let Some(shapes) = filler.and_then(|f| f.run()) {
-                                        self.effects.push(Effect::ViewPaintFinal(shapes));
-                                        self.active_view_mut().touch();
-                                    }
-                                    debug!("flood fill in: {:?}", start_time.elapsed());
+                                    // Ignore failures here
+                                    let _ = self.script_bucket(p.x as i64, p.y as i64, self.fg);
                                 }
                             },
                             Mode::Command => {
@@ -2514,6 +2509,8 @@ impl Session {
                     self.message("Settings reset to default values", MessageType::Okay);
                 }
             }
+            // These Fill commands are purposely left out of script.rs.
+            // They clear the entire view (all frames).
             Cmd::Fill(None) => {
                 let bg = self.bg;
                 self.active_view_mut().clear(bg);
@@ -2521,6 +2518,7 @@ impl Session {
             Cmd::Fill(Some(color)) => {
                 self.active_view_mut().clear(color);
             }
+            // TODO: Continue here!
             Cmd::Pan(x, y) => {
                 self.pan(
                     -(x * Self::PAN_PIXELS) as f32,
@@ -3059,6 +3057,30 @@ impl Session {
         // TODO: there's probably something better to return here, e.g., the pixel
         // color that was under the cursor.
         Ok(Argument::Color(color))
+    }
+
+    pub fn script_bucket(&mut self, x: i64, y: i64, color: Rgba8) -> ArgumentResult {
+        let start_time = time::Instant::now();
+        let maybe_filler = FloodFiller::new(
+            self.active_view(),
+            ViewCoords::new(x as f32, y as f32),
+            color,
+        );
+        match maybe_filler {
+            None => Err(format!(
+                "invalid starting point for bucket fill: ({}, {})",
+                x, y
+            )),
+            Some(filler) => {
+                let target_color = filler.target_color();
+                if let Some(shapes) = filler.run() {
+                    self.effects.push(Effect::ViewPaintFinal(shapes));
+                    self.active_view_mut().touch();
+                }
+                debug!("flood fill in: {:?}", start_time.elapsed());
+                Ok(Argument::Color(target_color))
+            }
+        }
     }
 
     pub fn add_view_colors(&mut self) {
