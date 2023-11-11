@@ -240,10 +240,12 @@ impl From<glfw::Key> for Key {
             Glfw::LeftAlt => Key::Alt,
             Glfw::LeftBracket => Key::LBracket,
             Glfw::LeftControl => Key::Control,
+            Glfw::LeftSuper => Key::Meta,
             Glfw::LeftShift => Key::Shift,
             Glfw::RightAlt => Key::Alt,
             Glfw::RightBracket => Key::RBracket,
             Glfw::RightControl => Key::Control,
+            Glfw::RightSuper => Key::Meta,
             Glfw::RightShift => Key::Shift,
             Glfw::Tab => Key::Tab,
 

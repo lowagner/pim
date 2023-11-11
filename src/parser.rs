@@ -250,6 +250,7 @@ impl Parse for platform::Key {
                 "ctrl" => platform::Key::Control,
                 "alt" => platform::Key::Alt,
                 "shift" => platform::Key::Shift,
+                "meta" => platform::Key::Meta,
                 "space" => platform::Key::Space,
                 "return" => platform::Key::Return,
                 "backspace" => platform::Key::Backspace,
@@ -272,6 +273,7 @@ impl Parse for platform::Modifier {
                     "ctrl" => platform::Modifier::Control,
                     "alt" => platform::Modifier::Alt,
                     "shift" => platform::Modifier::Shift,
+                    "meta" => platform::Modifier::Meta,
                     other => return Err(format!("unknown modifier <{}>", other)),
                 };
                 Ok(key)
@@ -296,6 +298,7 @@ impl Parse for platform::ModifiersState {
                         platform::Modifier::Control => state.ctrl = true,
                         platform::Modifier::Shift => state.shift = true,
                         platform::Modifier::Alt => state.alt = true,
+                        platform::Modifier::Meta => state.meta = true,
                     }
                 }
                 state

@@ -1897,6 +1897,8 @@ impl Session {
     }
 
     fn handle_mouse_wheel(&mut self, delta: platform::LogicalDelta) {
+        // TODO: use modifiers: if normal, pan vertical, if shift, pan horizontal;
+        //      if ctrl, then zoom
         if delta.y > 0. {
             if let Some(v) = self.hover_view {
                 self.activate(v);

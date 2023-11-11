@@ -889,6 +889,10 @@ macro_rules! script_runner {
                         //      we could have a "ForceEvaluate" command that nests the evaluate
                         //      e.g., `p-write (identity (whatever-you-want-here))` so that
                         //      you could still have an evaluated result here.
+                        //      Alternatively: convert any token with a / or a . in it into
+                        //      a string (or a number if . and just digits).  <--= Do this.
+                        //      we should throw an error in any `set` `const` `alias` command
+                        //      if the name has a . or / in it.
                         let path = self.script_evaluate(
                             &script_stack,
                             Evaluate::Index(0),

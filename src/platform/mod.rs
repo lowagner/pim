@@ -172,8 +172,7 @@ pub enum Key {
     Slash, Backslash,
 
     // Modifiers.
-    // TODO: add Meta
-    Shift, Control, Alt,
+    Shift, Control, Alt, Meta,
 
     // Math keys.
     Equal, Minus,
@@ -258,6 +257,7 @@ impl fmt::Display for Key {
             Key::Apostrophe => "'".fmt(f),
             Key::Control => "<ctrl>".fmt(f),
             Key::Shift => "<shift>".fmt(f),
+            Key::Meta => "<meta>".fmt(f),
             Key::Alt => "<alt>".fmt(f),
             Key::Up => "<up>".fmt(f),
             Key::Down => "<down>".fmt(f),
@@ -287,12 +287,22 @@ impl fmt::Display for Key {
 
 impl Key {
     pub fn is_modifier(self) -> bool {
-        matches!(self, Key::Alt | Key::Control | Key::Shift)
+        matches!(self, Key::Alt | Key::Control | Key::Shift | Key::Meta)
+    }
+
+    pub fn check_modifiers(self, modifiers: &mut ModifiersCount, delta: i32) {
+        match self {
+            Key::Alt => modifiers.alt += delta,
+            Key::Control => modifiers.ctrl += delta,
+            Key::Shift => modifiers.shift += delta,
+            Key::Meta => modifiers.meta += delta,
+            _ => {}
+        }
     }
 }
 
 pub enum Modifier {
-    // TODO: add Meta
+    Meta,
     Shift,
     Control,
     Alt,
@@ -301,9 +311,36 @@ pub enum Modifier {
 impl fmt::Display for Modifier {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Modifier::Meta => "<meta>".fmt(f),
             Modifier::Control => "<ctrl>".fmt(f),
             Modifier::Shift => "<shift>".fmt(f),
             Modifier::Alt => "<alt>".fmt(f),
+        }
+    }
+}
+
+/// Represents the current state of the keyboard modifiers,
+/// based on how many of them are depressed.
+/// (E.g., for left + right shift could be +2 on shift).
+#[derive(Default, Debug, Hash, PartialEq, Eq, Clone, Copy)]
+pub struct ModifiersCount {
+    /// The "shift" key
+    pub shift: i32,
+    /// The "control" key
+    pub ctrl: i32,
+    /// The "alt" key
+    pub alt: i32,
+    /// The "meta" key. This is the "windows" key on PC and "command" key on Mac.
+    pub meta: i32,
+}
+
+impl From<ModifiersCount> for ModifiersState {
+    fn from(count: ModifiersCount) -> Self {
+        Self {
+            shift: count.shift > 0,
+            ctrl: count.ctrl > 0,
+            alt: count.alt > 0,
+            meta: count.meta > 0,
         }
     }
 }

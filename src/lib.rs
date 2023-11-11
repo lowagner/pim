@@ -52,7 +52,7 @@ use cmd::Value;
 use event::Event;
 use execution::{DigestMode, Execution, ExecutionMode};
 use message::*;
-use platform::{WindowEvent, WindowHint};
+use platform::{ModifiersCount, ModifiersState, WindowEvent, WindowHint};
 use renderer::Renderer;
 use session::*;
 use timer::FrameTimer;
@@ -191,6 +191,12 @@ pub fn init<P: AsRef<Path>>(paths: &[P], options: Options<'_>) -> std::io::Resul
     let mut resized = false;
     let mut hovering = false;
     let mut delta;
+    let mut modifiers_count = ModifiersCount {
+        shift: 0,
+        ctrl: 0,
+        alt: 0,
+        meta: 0,
+    };
 
     while !win.is_closing() {
         match session.animation_delay() {
@@ -280,21 +286,39 @@ pub fn init<P: AsRef<Path>>(paths: &[P], options: Options<'_>) -> std::io::Resul
                 WindowEvent::MouseWheel { delta, .. } => {
                     session_events.push(Event::MouseWheel(delta));
                 }
-                WindowEvent::KeyboardInput(input) => match input {
-                    // Intercept `<insert>` key for pasting.
-                    //
-                    // Reading from the clipboard causes the loop to wake up for some strange
-                    // reason I cannot comprehend. So we only read from clipboard when we
-                    // need to paste.
-                    platform::KeyboardInput {
-                        key: Some(platform::Key::Insert),
-                        state: platform::InputState::Pressed,
-                        modifiers: platform::ModifiersState { shift: true, .. },
-                    } => {
-                        session_events.push(Event::Paste(win.clipboard()));
+                WindowEvent::KeyboardInput(input) => {
+                    match input {
+                        // Intercept `<insert>` key for pasting.
+                        //
+                        // Reading from the clipboard causes the loop to wake up for some strange
+                        // reason I cannot comprehend. So we only read from clipboard when we
+                        // need to paste.
+                        platform::KeyboardInput {
+                            key: Some(platform::Key::Insert),
+                            state: platform::InputState::Pressed,
+                            modifiers: platform::ModifiersState { shift: true, .. },
+                        } => {
+                            session_events.push(Event::Paste(win.clipboard()));
+                            continue;
+                        }
+                        platform::KeyboardInput {
+                            key: Some(key),
+                            state: platform::InputState::Pressed,
+                            ..
+                        } => {
+                            key.check_modifiers(&mut modifiers_count, 1);
+                        }
+                        platform::KeyboardInput {
+                            key: Some(key),
+                            state: platform::InputState::Released,
+                            ..
+                        } => {
+                            key.check_modifiers(&mut modifiers_count, -1);
+                        }
+                        _ => {}
                     }
-                    _ => session_events.push(Event::KeyboardInput(input)),
-                },
+                    session_events.push(Event::KeyboardInput(input));
+                }
                 WindowEvent::ReceivedCharacter(c, mods) => {
                     session_events.push(Event::ReceivedCharacter(c, mods));
                 }
