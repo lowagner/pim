@@ -1274,6 +1274,11 @@ impl Session {
         self.view_coords(self.views.active_id, p)
     }
 
+    /// Convert session coordinates to view coordinates of the active view.
+    pub fn get_active_view_mouse_coords(&self) -> Point<ViewExtent, f32> {
+        self.view_coords(self.views.active_id, self.cursor)
+    }
+
     /// Check whether a point is inside the selection, if any.
     pub fn is_selected(&self, p: ViewCoords<i32>) -> bool {
         if let Some(s) = self.selection {

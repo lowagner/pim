@@ -183,6 +183,10 @@ pub enum Command {
     /// #123456.  Note that an integer for the color also works as an index to the palette.
     Bucket,
     // TODO: Sample, $0 for x and $1 for y, to get the color on the grid.
+    /// Returns the current mouse x-position, in pixel coordinates relative to the drawing.
+    MouseX,
+    /// Returns the current mouse y-position, in pixel coordinates relative to the drawing.
+    MouseY,
 
     // TODO: BrushReset,
     /// Resets settings.
@@ -254,6 +258,8 @@ impl fmt::Display for Command {
             Command::PaletteClear => write!(f, "p-clear"),
             Command::Paint => write!(f, "p"),
             Command::Bucket => write!(f, "b"),
+            Command::MouseX => write!(f, "mx"),
+            Command::MouseY => write!(f, "my"),
             Command::ResetSettings => write!(f, "reset"),
             Command::Quit(Quit::Safe) => write!(f, "q"),
             Command::Quit(Quit::AllSafe) => write!(f, "qa"),
@@ -313,6 +319,8 @@ impl FromStr for Command {
             "p-clear" => Ok(Command::PaletteClear),
             "p" => Ok(Command::Paint),
             "b" => Ok(Command::Bucket),
+            "mx" => Ok(Command::MouseX),
+            "my" => Ok(Command::MouseY),
             "reset" => Ok(Command::ResetSettings),
             "q" => Ok(Command::Quit(Quit::Safe)),
             "qa" => Ok(Command::Quit(Quit::AllSafe)),
@@ -975,6 +983,14 @@ macro_rules! script_runner {
 
                         self.script_bucket(x, y, color)
                     }
+                    Command::MouseX => {
+                        let coords = self.get_active_view_mouse_coords();
+                        Ok(Argument::I64(coords.point.x as i64))
+                    }
+                    Command::MouseY => {
+                        let coords = self.get_active_view_mouse_coords();
+                        Ok(Argument::I64(coords.point.y as i64))
+                    }
                     Command::ResetSettings => {
                         if let Err(e) = self.reset() {
                             self.message(format!("Error: {}", e), MessageType::Error);
@@ -1137,7 +1153,7 @@ impl Variables {
     fn add_built_in(&mut self, command: Command, description: &str) {
         let command_name = format!("{}", command);
         let command_description = description.replace("$$", &command_name);
-        assert_ok!(self.set(command_name, Variable::BuiltIn(command_description),));
+        assert_ok!(self.set(command_name, Variable::BuiltIn(command_description)));
     }
 
     pub fn describe(&self, command: Command) -> String {
@@ -1257,12 +1273,12 @@ impl Variables {
         variables.add_built_in(
             Command::I64Setting(I64Setting::UiOffsetX),
             "getter/swapper for current UI x offset if $0 is null/present, \
-            e.g., `$$ 32` to set x pixel offset to 32",
+            e.g., `$$ 32` to set X pixel offset to 32",
         );
         variables.add_built_in(
             Command::I64Setting(I64Setting::UiOffsetY),
             "getter/swapper for current UI y offset if $0 is null/present, \
-            e.g., `$$ 45` to set y pixel offset to 45",
+            e.g., `$$ 45` to set Y pixel offset to 45",
         );
         variables.add_built_in(
             Command::I64Setting(I64Setting::UiZoom),
@@ -1296,12 +1312,12 @@ impl Variables {
         );
         variables.add_built_in(
             Command::I64Setting(I64Setting::BrushXSymmetry),
-            "getter/swapper for draw with x-symmetry brush option if $0 is null/present, \
+            "getter/swapper for draw with X-symmetry brush option if $0 is null/present, \
             e.g., `$$ false` to turn off",
         );
         variables.add_built_in(
             Command::I64Setting(I64Setting::BrushYSymmetry),
-            "getter/swapper for draw with y-symmetry brush option if $0 is null/present, \
+            "getter/swapper for draw with Y-symmetry brush option if $0 is null/present, \
             e.g., `$$ true` to turn on",
         );
         variables.add_built_in(
@@ -1387,6 +1403,16 @@ impl Variables {
             "flood-fills starting at coordinates ($0, $1) with color $2, defaulting \
             to foreground, e.g., `$$ 3 4 #765432` to start flood-filling at (3, 4)",
         );
+        variables.add_built_in(
+            Command::MouseX,
+            "returns the mouse X position for the current view. \
+            e.g., `p $$ 5` paints the foreground color at coordinates (mouse-x, 5)",
+        );
+        variables.add_built_in(
+            Command::MouseY,
+            "returns the mouse Y position for the current view. \
+            e.g., `p 3 $$` paints the foreground color at coordinates (3, mouse-y)",
+        );
         variables.add_built_in(Command::ResetSettings, "resets all settings");
         variables.add_built_in(
             Command::Quit(Quit::Safe),
@@ -1434,6 +1460,12 @@ impl Variables {
         assert_ok!(variables.set("sum".to_string(), Variable::Alias("+".to_string())));
         assert_ok!(variables.set("paint".to_string(), Variable::Alias("p".to_string())));
         assert_ok!(variables.set("bucket".to_string(), Variable::Alias("b".to_string())));
+        assert_ok!(variables.set("mouse-x".to_string(), Variable::Alias("mx".to_string())));
+        assert_ok!(variables.set("mouse-y".to_string(), Variable::Alias("my".to_string())));
+        assert_ok!(variables.set("cursor-x".to_string(), Variable::Alias("mx".to_string())));
+        assert_ok!(variables.set("cursor-y".to_string(), Variable::Alias("my".to_string())));
+        assert_ok!(variables.set("cx".to_string(), Variable::Alias("mx".to_string())));
+        assert_ok!(variables.set("cy".to_string(), Variable::Alias("my".to_string())));
         assert_ok!(variables.set("f-index".to_string(), Variable::Alias("f".to_string())));
         assert_ok!(variables.set("quit".to_string(), Variable::Alias("q".to_string())));
         assert_ok!(variables.set("quit!".to_string(), Variable::Alias("q!".to_string())));
@@ -1555,7 +1587,9 @@ impl Variables {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::gfx::Point;
     use crate::message::*;
+    use crate::view::ViewExtent;
     use std::collections::HashSet;
     use strum::IntoEnumIterator;
 
@@ -1760,6 +1794,10 @@ mod test {
         // This can be return something else for an error.
         fn reset(&mut self) -> Result<(), String> {
             Ok(())
+        }
+
+        pub fn get_active_view_mouse_coords(&self) -> Point<ViewExtent, f32> {
+            Point::new(7733.0, 6644.0)
         }
 
         fn script_quit(&mut self, quit: Quit) {
