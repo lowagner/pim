@@ -20,7 +20,7 @@ use std::io;
 
 /// View identifier.
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Copy, Clone, Debug, Default)]
-pub struct ViewId(u16);
+pub struct ViewId(pub i32);
 
 impl fmt::Display for ViewId {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -767,14 +767,18 @@ impl<R> ViewManager<R> {
         self.views.keys().cloned()
     }
 
-    /// Get `ViewId` *after* given id.
+    /// Get `ViewId` *after* given id, with wrap-around.
     pub fn after(&self, id: ViewId) -> Option<ViewId> {
-        self.range(id..).nth(1)
+        self.range(id..)
+            .nth(1)
+            .or_else(|| self.first().map(|v| v.id))
     }
 
-    /// Get `ViewId` *before* given id.
+    /// Get `ViewId` *before* given id, with wrap-around.
     pub fn before(&self, id: ViewId) -> Option<ViewId> {
-        self.range(..id).next_back()
+        self.range(..id)
+            .next_back()
+            .or_else(|| self.last().map(|v| v.id))
     }
 
     /// Get the first view.

@@ -1485,14 +1485,16 @@ impl Session {
 
         debug!("load: {:?}", path);
 
-        // View is already loaded.
         if let Some(View { id, .. }) = self
             .views
             .find(|v| v.file_storage().map_or(false, |f| f.contains(&*path)))
         {
-            // TODO: Reload from disk.
+            // View is already loaded.
             let id = *id;
+            eprint!("centering {}\n", id);
             self.activate(id);
+            // TODO: for some reason this doesn't always center.
+            self.center_active_view();
             return Ok(());
         }
 
@@ -2529,34 +2531,23 @@ impl Session {
                     -(y * Self::PAN_PIXELS as i32) as f32,
                 );
             }
-            // TODO: Continue here!
             Cmd::ViewNext => {
-                let id = self.views.active_id;
-
-                if let Some(id) = self
-                    .views
-                    .after(id)
-                    .or_else(|| self.views.first().map(|v| v.id))
-                {
+                if let Some(id) = self.views.after(self.views.active_id) {
                     self.activate(id);
                     self.center_active_view();
                 }
             }
             Cmd::ViewPrev => {
-                let id = self.views.active_id;
-
-                if let Some(id) = self
-                    .views
-                    .before(id)
-                    .or_else(|| self.views.last().map(|v| v.id))
-                {
+                if let Some(id) = self.views.before(self.views.active_id) {
                     self.activate(id);
                     self.center_active_view();
                 }
             }
+            // This is intentionally ignored in script.rs
             Cmd::ViewCenter => {
                 self.center_active_view();
             }
+            // TODO: Continue here!
             Cmd::FrameAdd => {
                 self.active_view_mut().extend();
             }
@@ -3145,6 +3136,7 @@ impl Session {
             I64Setting::UiOffsetX => self.offset.x as i64,
             I64Setting::UiOffsetY => self.offset.y as i64,
             I64Setting::UiZoom => self.active_view().zoom as i64,
+            I64Setting::ViewIndex => self.views.active_id.0 as i64,
             I64Setting::CursorXRay => self.brush.is_set(brush::BrushMode::XRay) as i64,
             I64Setting::BrushSize => self.brush.size as i64,
             I64Setting::BrushErase => self.brush.is_set(brush::BrushMode::Erase) as i64,
@@ -3212,6 +3204,34 @@ impl Session {
                     new_value as u32
                 };
                 self.zoom(valid_zoom, self.get_zoom_center());
+            }
+            I64Setting::ViewIndex => {
+                assert!(old_value != new_value);
+                let maybe_id = if new_value < old_value {
+                    // We want to solve for this type of situation:
+                    // if we are at view-index 5, and we want to decrement to
+                    // view-index 4 but that is missing;
+                    // in that case, find the one before 4.
+                    self.views
+                        .get(ViewId(new_value as i32))
+                        .map(|v| v.id)
+                        .or_else(|| self.views.before(ViewId(new_value as i32)))
+                } else {
+                    // We want to solve for this type of situation:
+                    // if we are at view-index 5, and we want to increment to
+                    // view-index 6 but that is missing;
+                    // in that case, find the one after 6.
+                    self.views
+                        .get(ViewId(new_value as i32))
+                        .map(|v| v.id)
+                        .or_else(|| self.views.after(ViewId(new_value as i32)))
+                };
+                if let Some(id) = maybe_id {
+                    self.activate(id);
+                    self.center_active_view();
+                } else {
+                    self.message(format!("no such view: {}", new_value), MessageType::Error);
+                }
             }
             I64Setting::CursorXRay => self.brush.set(brush::BrushMode::XRay, new_value),
             I64Setting::BrushSize => {

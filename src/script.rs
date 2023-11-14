@@ -236,6 +236,7 @@ impl fmt::Display for Command {
             Command::I64Setting(I64Setting::UiOffsetX) => write!(f, "ui-x"),
             Command::I64Setting(I64Setting::UiOffsetY) => write!(f, "ui-y"),
             Command::I64Setting(I64Setting::UiZoom) => write!(f, "zoom"),
+            Command::I64Setting(I64Setting::ViewIndex) => write!(f, "v"),
             Command::I64Setting(I64Setting::CursorXRay) => write!(f, "c-xray"),
             Command::I64Setting(I64Setting::BrushSize) => write!(f, "b-size"),
             Command::I64Setting(I64Setting::BrushErase) => write!(f, "b-erase"),
@@ -299,6 +300,7 @@ impl FromStr for Command {
             "ui-x" => Ok(Command::I64Setting(I64Setting::UiOffsetX)),
             "ui-y" => Ok(Command::I64Setting(I64Setting::UiOffsetY)),
             "zoom" => Ok(Command::I64Setting(I64Setting::UiZoom)),
+            "v" => Ok(Command::I64Setting(I64Setting::ViewIndex)),
             "c-xray" => Ok(Command::I64Setting(I64Setting::CursorXRay)),
             "b-size" => Ok(Command::I64Setting(I64Setting::BrushSize)),
             "b-erase" => Ok(Command::I64Setting(I64Setting::BrushErase)),
@@ -819,8 +821,10 @@ macro_rules! script_runner {
                             .get_optional_string("for string setting")?;
                         let old_value = self.get_string_setting(setting);
                         match argument {
-                            None => {},
-                            Some(new_value) => self.set_string_setting(setting, new_value)?,
+                            Some(new_value) if new_value != old_value => {
+                                self.set_string_setting(setting, new_value)?;
+                            }
+                            _ => {}
                         }
                         Ok(Argument::String(old_value))
                     }
@@ -830,8 +834,10 @@ macro_rules! script_runner {
                             .get_optional_i64("for i64 setting")?;
                         let old_value = self.get_i64_setting(setting);
                         match argument {
-                            None => {},
-                            Some(new_value) => self.set_i64_setting(setting, old_value, new_value)?,
+                            Some(new_value) if new_value != old_value => {
+                                self.set_i64_setting(setting, old_value, new_value)?;
+                            }
+                            _ => {}
                         }
                         Ok(Argument::I64(old_value))
                     }
@@ -1300,6 +1306,11 @@ impl Variables {
             e.g., `$$ 32` to set zoom to 32x",
         );
         variables.add_built_in(
+            Command::I64Setting(I64Setting::ViewIndex),
+            "getter/swapper for current UI view index if $0 is null/present, \
+            e.g., `$$++` to increment the view",
+        );
+        variables.add_built_in(
             Command::I64Setting(I64Setting::CursorXRay),
             "getter/swapper for x-ray to see pixel under cursor if $0 is null/present, \
             e.g., `$$ 1` to turn on",
@@ -1486,6 +1497,7 @@ impl Variables {
         assert_ok!(variables.set("cx".to_string(), Variable::Alias("mx".to_string())));
         assert_ok!(variables.set("cy".to_string(), Variable::Alias("my".to_string())));
         assert_ok!(variables.set("f-index".to_string(), Variable::Alias("f".to_string())));
+        assert_ok!(variables.set("view".to_string(), Variable::Alias("v".to_string())));
         assert_ok!(variables.set("quit".to_string(), Variable::Alias("q".to_string())));
         assert_ok!(variables.set("quit!".to_string(), Variable::Alias("q!".to_string())));
         for c in [
