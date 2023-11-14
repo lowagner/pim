@@ -1599,20 +1599,10 @@ impl Session {
 
     /// Re-position all views relative to each other so that they don't overlap.
     fn organize_views(&mut self) {
-        if self.views.is_empty() {
-            return;
-        }
-        let last = self
-            .views
-            .last_mut()
-            .expect("view list should never be empty");
-        last.offset.y = 0.0;
-
-        // TODO: We need a way to distinguish view content size with real (rendered) size.
-        let mut offset = last.height() as f32 * last.zoom as f32 + Self::VIEW_MARGIN;
-
-        for v in self.views.iter_mut().rev().skip(1) {
+        let mut offset = 0.0;
+        for v in self.views.iter_mut().rev() {
             v.offset.y = offset;
+            // TODO: We need a way to distinguish view content size with real (rendered) size.
             offset += v.height() as f32 * v.zoom as f32 + Self::VIEW_MARGIN;
         }
         self.cursor_dirty();
