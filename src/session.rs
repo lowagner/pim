@@ -1492,9 +1492,8 @@ impl Session {
             // View is already loaded.
             let id = *id;
             eprint!("centering {}\n", id);
-            self.activate(id);
             // TODO: for some reason this doesn't always center.
-            self.center_active_view();
+            self.edit_view(id);
             return Ok(());
         }
 
@@ -1603,17 +1602,16 @@ impl Session {
         if self.views.is_empty() {
             return;
         }
-        let first = self
+        let last = self
             .views
-            .first_mut()
+            .last_mut()
             .expect("view list should never be empty");
-
-        first.offset.y = 0.;
+        last.offset.y = 0.0;
 
         // TODO: We need a way to distinguish view content size with real (rendered) size.
-        let mut offset = first.height() as f32 * first.zoom as f32 + Self::VIEW_MARGIN;
+        let mut offset = last.height() as f32 * last.zoom as f32 + Self::VIEW_MARGIN;
 
-        for v in self.views.iter_mut().skip(1) {
+        for v in self.views.iter_mut().rev().skip(1) {
             v.offset.y = offset;
             offset += v.height() as f32 * v.zoom as f32 + Self::VIEW_MARGIN;
         }
@@ -2533,14 +2531,12 @@ impl Session {
             }
             Cmd::ViewNext => {
                 if let Some(id) = self.views.after(self.views.active_id) {
-                    self.activate(id);
-                    self.center_active_view();
+                    self.edit_view(id);
                 }
             }
             Cmd::ViewPrev => {
                 if let Some(id) = self.views.before(self.views.active_id) {
-                    self.activate(id);
-                    self.center_active_view();
+                    self.edit_view(id);
                 }
             }
             // This is intentionally ignored in script.rs
@@ -3227,8 +3223,7 @@ impl Session {
                         .or_else(|| self.views.after(ViewId(new_value as i32)))
                 };
                 if let Some(id) = maybe_id {
-                    self.activate(id);
-                    self.center_active_view();
+                    self.edit_view(id);
                 } else {
                     self.message(format!("no such view: {}", new_value), MessageType::Error);
                 }

@@ -796,6 +796,11 @@ impl<R> ViewManager<R> {
         self.iter().next_back()
     }
 
+    /// Get the last view, mutably.
+    pub fn last_mut(&mut self) -> Option<&mut View<R>> {
+        self.iter_mut().next_back()
+    }
+
     /// Get view id range.
     pub fn range<G>(&self, r: G) -> impl DoubleEndedIterator<Item = ViewId> + '_
     where
