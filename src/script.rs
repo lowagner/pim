@@ -187,6 +187,8 @@ pub enum Command {
     MouseX,
     /// Returns the current mouse y-position, in pixel coordinates relative to the drawing.
     MouseY,
+    /// Moves the view by ($0, $1).
+    Pan,
 
     // TODO: BrushReset,
     /// Resets settings.
@@ -260,6 +262,7 @@ impl fmt::Display for Command {
             Command::Bucket => write!(f, "b"),
             Command::MouseX => write!(f, "mx"),
             Command::MouseY => write!(f, "my"),
+            Command::Pan => write!(f, "pan"),
             Command::ResetSettings => write!(f, "reset"),
             Command::Quit(Quit::Safe) => write!(f, "q"),
             Command::Quit(Quit::AllSafe) => write!(f, "qa"),
@@ -321,6 +324,7 @@ impl FromStr for Command {
             "b" => Ok(Command::Bucket),
             "mx" => Ok(Command::MouseX),
             "my" => Ok(Command::MouseY),
+            "pan" => Ok(Command::Pan),
             "reset" => Ok(Command::ResetSettings),
             "q" => Ok(Command::Quit(Quit::Safe)),
             "qa" => Ok(Command::Quit(Quit::AllSafe)),
@@ -991,6 +995,16 @@ macro_rules! script_runner {
                         let coords = self.get_active_view_mouse_coords();
                         Ok(Argument::I64(coords.point.y as i64))
                     }
+                    Command::Pan => {
+                        let x = self
+                            .script_evaluate(&script_stack, Evaluate::Index(0))?
+                            .get_i64("for pan coordinate X")?;
+                        let y = self
+                            .script_evaluate(&script_stack, Evaluate::Index(1))?
+                            .get_i64("for pan coordinate Y")?;
+                        self.pan((-Self::PAN_PIXELS * x) as f32, (-Self::PAN_PIXELS * y) as f32);
+                        Ok(Argument::Null)
+                    }
                     Command::ResetSettings => {
                         if let Err(e) = self.reset() {
                             self.message(format!("Error: {}", e), MessageType::Error);
@@ -1413,6 +1427,11 @@ impl Variables {
             "returns the mouse Y position for the current view. \
             e.g., `p 3 $$` paints the foreground color at coordinates (3, mouse-y)",
         );
+        variables.add_built_in(
+            Command::Pan,
+            "moves the view horizontally+vertically, \
+            e.g., `$$ 11 23` pans (11, 23) in (X, Y) coordinates",
+        );
         variables.add_built_in(Command::ResetSettings, "resets all settings");
         variables.add_built_in(
             Command::Quit(Quit::Safe),
@@ -1646,6 +1665,7 @@ mod test {
 
     script_runner! {TestRunner}
     impl TestRunner {
+        const PAN_PIXELS: i64 = 32;
         const PAINT_RETURN_COLOR: Rgba8 = Rgba8 {
             r: 254,
             g: 253,
@@ -1798,6 +1818,11 @@ mod test {
 
         pub fn get_active_view_mouse_coords(&self) -> Point<ViewExtent, f32> {
             Point::new(7733.0, 6644.0)
+        }
+
+        fn pan(&mut self, x: f32, y: f32) {
+            self.test_what_ran
+                .push(WhatRan::Mocked(format!("pan {} {}", x, y)));
         }
 
         fn script_quit(&mut self, quit: Quit) {

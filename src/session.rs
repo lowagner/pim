@@ -598,7 +598,7 @@ impl Session {
     /// Default palette height in cells.
     const PALETTE_HEIGHT: u32 = 16;
     /// Distance to pan when using keyboard.
-    const PAN_PIXELS: i32 = 32;
+    const PAN_PIXELS: i64 = 32;
     /// Minimum brush size.
     const MIN_BRUSH_SIZE: usize = 1;
     /// Maximum frame width or height.
@@ -2523,13 +2523,13 @@ impl Session {
             Cmd::Fill(Some(color)) => {
                 self.active_view_mut().clear(color);
             }
-            // TODO: Continue here!
             Cmd::Pan(x, y) => {
                 self.pan(
-                    -(x * Self::PAN_PIXELS) as f32,
-                    -(y * Self::PAN_PIXELS) as f32,
+                    -(x * Self::PAN_PIXELS as i32) as f32,
+                    -(y * Self::PAN_PIXELS as i32) as f32,
                 );
             }
+            // TODO: Continue here!
             Cmd::ViewNext => {
                 let id = self.views.active_id;
 
