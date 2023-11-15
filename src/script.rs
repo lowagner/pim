@@ -128,9 +128,13 @@ pub enum Command {
     /// it crops the frames to content.  Returns the number of pixels in one frame, i.e.,
     /// width * height, from *before* the operation.
     FrameResize,
+    // TODO: some of these frame manipulation methods can't be used together unless
+    //      we maybe handle the effects after every action.
     // TODO: FrameClone
     // TODO: FrameDelete
-    // TODO: FrameSwap
+    // TODO: FrameSwap, "fs" with two indices
+    // TODO: FrameClear "fc" with index and color, use view.clear_frame
+    // TODO: FrameAppendAfter "fa"
     // TODO: FrameShift, moves the animation over one to start one frame down
 
     // TODO: FitPixelWidth, FitPixelHeight; zoom to fit that many pixels within the screen based on available area

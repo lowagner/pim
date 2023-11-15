@@ -248,6 +248,8 @@ impl<R> View<R> {
     pub fn append_frame_after(&mut self, index: usize) {
         let (fw, fh) = (self.fw, self.fh);
 
+        // TODO: this is slightly inefficient; we only need to copy
+        // from frame index + 1 over to index+2 and beyond.  but eh.
         self.clone_frame(index);
 
         self.ops.push(ViewOp::ClearRect(
@@ -296,6 +298,16 @@ impl<R> View<R> {
     /// Clear the view to a color.
     pub fn clear(&mut self, color: Rgba8) {
         self.ops.push(ViewOp::Clear(color));
+        self.touch();
+    }
+
+    /// Clear the view to a color.
+    pub fn clear_frame(&mut self, color: Rgba8, index: usize) {
+        let (fw, fh) = (self.fw, self.fh);
+        self.ops.push(ViewOp::ClearRect(
+            color,
+            Rect::new(fw * index as u32, 0, fw * (index + 1) as u32, fh),
+        ));
         self.touch();
     }
 
