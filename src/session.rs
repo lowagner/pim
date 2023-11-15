@@ -2535,11 +2535,8 @@ impl Session {
             }
             // TODO: Continue here!
             Cmd::FrameAdd => {
-                /* TODO
                 let (current_frame, _) = self.current_frame();
                 self.active_view_mut().append_frame_after(current_frame);
-                */
-                self.active_view_mut().extend();
             }
             Cmd::FrameClone(index) => {
                 let view = self.active_view_mut();

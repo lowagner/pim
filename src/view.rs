@@ -93,10 +93,18 @@ pub enum ViewState {
 /// A view operation to be carried out by the renderer.
 #[derive(Debug, Clone)]
 pub enum ViewOp {
-    /// Copy an area of the view to another area.
-    Blit(Rect<u32>, Rect<u32>),
     /// Clear to a color.
     Clear(Rgba8),
+    /// Clear a rectangle and set it to a given color.
+    ClearRect(Rgba8, Rect<u32>),
+    /// Copy an area of the view to another area.
+    Blit(Rect<u32>, Rect<u32>),
+    /// Swap two areas of the view.
+    /// The passed-in `Rect`s must be the same width and height.
+    Swap(Rect<u32>, Rect<u32>),
+    /// Shift the pixels so that [left][right] becomes [right][left];
+    /// unlike Swap, the `Rect`s can be different widths.
+    // TODO: Wrap(Rect<u32> left, Rect<u32> right)
     /// Yank the given area into the paste buffer.
     Yank(Rect<i32>),
     /// Flips a given area horizontally or vertically.
@@ -236,21 +244,19 @@ impl<R> View<R> {
         }
     }
 
-    /* TODO
     /// Extend the view by one frame after the passed-in index.
     pub fn append_frame_after(&mut self, index: usize) {
-        let w = self.width();
         let (fw, fh) = (self.fw, self.fh);
 
-        self.extend();
-        self.ops.push(ViewOp::Blit(
-            Rect::new(fw * index, 0, fw * (index + 1), fh),
-            Rect::new(fw * (index + 1), 0., fw * (index + 2), fh),
+        self.clone_frame(index);
+
+        self.ops.push(ViewOp::ClearRect(
+            Rgba8::TRANSPARENT,
+            Rect::new(fw * (index + 1) as u32, 0, fw * (index + 2) as u32, fh),
         ));
     }
-    */
 
-    pub fn extend(&mut self) {
+    fn extend(&mut self) {
         let w = self.width();
         let (fw, fh) = (self.fw, self.fh);
 

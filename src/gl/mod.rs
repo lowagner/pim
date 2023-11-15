@@ -308,6 +308,7 @@ pub enum RendererError {
     Framebuffer(luminance::framebuffer::FramebufferError),
     Pipeline(luminance::pipeline::PipelineError),
     State(luminance_gl::gl33::StateQueryError),
+    InvalidArgument(String),
 }
 
 impl From<luminance::pipeline::PipelineError> for RendererError {
@@ -330,6 +331,7 @@ impl fmt::Display for RendererError {
             Self::Framebuffer(e) => write!(f, "framebuffer error: {}", e),
             Self::Pipeline(e) => write!(f, "pipeline error: {}", e),
             Self::State(e) => write!(f, "state error: {}", e),
+            Self::InvalidArgument(e) => write!(f, "invalid argument: {}", e),
         }
     }
 }
@@ -997,6 +999,31 @@ impl Renderer {
                         .clear(GenMipmaps::No, (color.r, color.g, color.b, color.a))
                         .map_err(Error::Texture)?;
                 }
+                ViewOp::ClearRect(color, rect) => {
+                    let view = self
+                        .view_data
+                        .get_mut(&v.id)
+                        .expect("views must have associated view data");
+
+                    // TODO: this seems inefficient but haven't figured out the luminance
+                    //      API to see how to clear a texture in a given region.
+                    let texels = vec![
+                        (color.r, color.g, color.b, color.a);
+                        (rect.width() * rect.height()) as usize
+                    ];
+                    let texels = util::align_u8(&texels);
+
+                    view.layer
+                        .fb
+                        .color_slot()
+                        .upload_part_raw(
+                            GenMipmaps::No,
+                            [rect.x1, rect.y1],
+                            [rect.width(), rect.height()],
+                            texels,
+                        )
+                        .map_err(Error::Texture)?;
+                }
                 ViewOp::Blit(src, dst) => {
                     let view = self
                         .view_data
@@ -1014,6 +1041,60 @@ impl Renderer {
                             [dst.x1, dst.y1],
                             [src.width(), src.height()],
                             texels,
+                        )
+                        .map_err(Error::Texture)?;
+                }
+                ViewOp::Swap(a, b) => {
+                    if a.height() != b.height() || a.width() != b.width() {
+                        return Err(RendererError::InvalidArgument(format!(
+                            "{:?} and {:?} are not the same size for swap",
+                            a, b
+                        )));
+                    }
+                    let view = self
+                        .view_data
+                        .get_mut(&v.id)
+                        .expect("views must have associated view data");
+
+                    let (_, texels_a) = v
+                        .layer
+                        .get_snapshot_rect(&a.map(|n| n as i32))
+                        .ok_or_else(|| {
+                            RendererError::InvalidArgument(format!(
+                                "{:?} was an invalid swap area",
+                                a
+                            ))
+                        })?;
+                    let texels_a = util::align_u8(&texels_a);
+                    let (_, texels_b) = v
+                        .layer
+                        .get_snapshot_rect(&b.map(|n| n as i32))
+                        .ok_or_else(|| {
+                            RendererError::InvalidArgument(format!(
+                                "{:?} was an invalid swap area",
+                                b
+                            ))
+                        })?;
+                    let texels_b = util::align_u8(&texels_b);
+
+                    view.layer
+                        .fb
+                        .color_slot()
+                        .upload_part_raw(
+                            GenMipmaps::No,
+                            [a.x1, a.y1],
+                            [b.width(), b.height()],
+                            texels_b,
+                        )
+                        .map_err(Error::Texture)?;
+                    view.layer
+                        .fb
+                        .color_slot()
+                        .upload_part_raw(
+                            GenMipmaps::No,
+                            [b.x1, b.y1],
+                            [a.width(), a.height()],
+                            texels_a,
                         )
                         .map_err(Error::Texture)?;
                 }
