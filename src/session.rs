@@ -2535,16 +2535,25 @@ impl Session {
             }
             // TODO: Continue here!
             Cmd::FrameAdd => {
+                /* TODO
+                let (current_frame, _) = self.current_frame();
+                self.active_view_mut().append_frame_after(current_frame);
+                */
                 self.active_view_mut().extend();
             }
-            Cmd::FrameClone(n) => {
-                let v = self.active_view_mut();
-                let l = v.animation.len() as i32;
-                if n >= -1 && n < l {
-                    v.extend_clone(n);
+            Cmd::FrameClone(index) => {
+                let view = self.active_view_mut();
+                let len = view.animation.len();
+                let index = if index < 0 {
+                    (len as i32 + index) as usize
+                } else {
+                    index as usize
+                };
+                if index < len {
+                    view.clone_frame(index);
                 } else {
                     self.message(
-                        format!("Error: clone index must be in the range {}..{}", 0, l - 1),
+                        format!("Error: clone index must be in the range {}..{}", 0, len - 1),
                         MessageType::Error,
                     );
                 }

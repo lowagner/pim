@@ -1011,8 +1011,8 @@ impl Renderer {
                         .color_slot()
                         .upload_part_raw(
                             GenMipmaps::No,
-                            [dst.x1 as u32, dst.y1 as u32],
-                            [src.width() as u32, src.height() as u32],
+                            [dst.x1, dst.y1],
+                            [src.width(), src.height()],
                             texels,
                         )
                         .map_err(Error::Texture)?;

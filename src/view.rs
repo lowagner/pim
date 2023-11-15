@@ -94,7 +94,7 @@ pub enum ViewState {
 #[derive(Debug, Clone)]
 pub enum ViewOp {
     /// Copy an area of the view to another area.
-    Blit(Rect<f32>, Rect<f32>),
+    Blit(Rect<u32>, Rect<u32>),
     /// Clear to a color.
     Clear(Rgba8),
     /// Yank the given area into the paste buffer.
@@ -133,7 +133,7 @@ pub struct View<R> {
     /// State of the view.
     pub state: ViewState,
     /// Animation state of the sprite displayed by this view.
-    pub animation: Animation<Rect<f32>>,
+    pub animation: Animation<Rect<u32>>,
     /// View resource.
     pub resource: R,
 
@@ -189,9 +189,9 @@ impl<R> View<R> {
             None
         };
 
-        let origin = Rect::origin(fw as f32, fh as f32);
+        let origin = Rect::origin(fw, fh);
         let frames: Vec<_> = (0..nframes)
-            .map(|i| origin + Vector2::new(i as f32 * fw as f32, 0.))
+            .map(|i| origin + Vector2::new(i as u32 * fw, 0))
             .collect();
 
         Self {
@@ -236,13 +236,25 @@ impl<R> View<R> {
         }
     }
 
-    /// Extend the view by one frame.
-    pub fn extend(&mut self) {
-        let w = self.width() as f32;
-        let fw = self.fw as f32;
-        let fh = self.fh as f32;
+    /* TODO
+    /// Extend the view by one frame after the passed-in index.
+    pub fn append_frame_after(&mut self, index: usize) {
+        let w = self.width();
+        let (fw, fh) = (self.fw, self.fh);
 
-        self.animation.frames.push(Rect::new(w, 0., w + fw, fh));
+        self.extend();
+        self.ops.push(ViewOp::Blit(
+            Rect::new(fw * index, 0, fw * (index + 1), fh),
+            Rect::new(fw * (index + 1), 0., fw * (index + 2), fh),
+        ));
+    }
+    */
+
+    pub fn extend(&mut self) {
+        let w = self.width();
+        let (fw, fh) = (self.fw, self.fh);
+
+        self.animation.frames.push(Rect::new(w, 0, w + fw, fh));
 
         self.resized();
     }
@@ -258,20 +270,14 @@ impl<R> View<R> {
 
     /// Extend the view by one frame, by cloning an existing frame,
     /// by index.
-    pub fn extend_clone(&mut self, index: i32) {
-        let width = self.width() as f32;
-        let (fw, fh) = (self.fw as f32, self.fh as f32);
-
-        let index = if index == -1 {
-            self.animation.len() - 1
-        } else {
-            index as usize
-        };
+    pub fn clone_frame(&mut self, index: usize) {
+        let width = self.width();
+        let (fw, fh) = (self.fw, self.fh);
 
         self.extend();
         self.ops.push(ViewOp::Blit(
-            Rect::new(fw * index as f32, 0., fw * (index + 1) as f32, fh),
-            Rect::new(width, 0., width + fw, fh),
+            Rect::new(fw * index as u32, 0, fw * (index + 1) as u32, fh),
+            Rect::new(width, 0, width + fw, fh),
         ));
     }
 
@@ -465,10 +471,10 @@ impl<R> View<R> {
         self.fh = extent.fh;
 
         let mut frames = Vec::new();
-        let origin = Rect::origin(self.fw as f32, self.fh as f32);
+        let origin = Rect::origin(self.fw, self.fh);
 
         for i in 0..extent.nframes {
-            frames.push(origin + Vector2::new(i as f32 * self.fw as f32, 0.));
+            frames.push(origin + Vector2::new(i as u32 * self.fw, 0));
         }
         self.animation = Animation::new(frames);
     }

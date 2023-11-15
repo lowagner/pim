@@ -717,7 +717,7 @@ pub fn draw_view_animation<R>(session: &Session, v: &View<R>) -> sprite2d::Batch
     sprite2d::Batch::singleton(
         v.width(),
         v.fh,
-        *v.animation.val(),
+        v.animation.val().map(|e| e as f32),
         Rect::new(-(v.fw as f32), 0., 0., v.fh as f32) * v.zoom as f32
             + (session.offset + v.offset),
         self::VIEW_LAYER,
@@ -731,9 +731,10 @@ pub fn draw_view_composites<R>(session: &Session, v: &View<R>) -> sprite2d::Batc
     let mut batch = sprite2d::Batch::new(v.width(), v.fh);
 
     for frame in v.animation.frames.iter() {
+        let frame = frame.map(|e| e as f32);
         batch.add(
-            *frame,
-            (*frame - Vector2::new(0., v.fh as f32)) * v.zoom as f32 + (session.offset + v.offset),
+            frame,
+            (frame - Vector2::new(0., v.fh as f32)) * v.zoom as f32 + (session.offset + v.offset),
             self::VIEW_LAYER,
             Rgba::TRANSPARENT,
             1.,
