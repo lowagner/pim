@@ -101,8 +101,6 @@ impl ViewResource {
 
     pub fn history_next(&mut self) -> Option<(usize, Edit)> {
         if let Some(edit) = self.history.get(self.cursor + 1).cloned() {
-            self.cursor += 1;
-
             match edit {
                 Edit::ViewResized(_, to) => {
                     self.extent = to;
@@ -113,6 +111,8 @@ impl ViewResource {
                 }
                 _ => return None,
             }
+            self.cursor += 1;
+
             Some((self.cursor, edit))
         } else {
             None
