@@ -276,8 +276,8 @@ impl<R> View<R> {
 
         self.extend();
         self.ops.push(ViewOp::Blit(
-            Rect::new(fw * index as u32, 0, fw * (index + 1) as u32, fh),
-            Rect::new(width, 0, width + fw, fh),
+            Rect::new(fw * index as u32, 0, width, fh),
+            Rect::new(fw * (index + 1) as u32, 0, width + fw, fh),
         ));
     }
 
