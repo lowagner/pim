@@ -1533,15 +1533,6 @@ impl Session {
         let nframes = frames.len();
         assert!(nframes >= 1);
 
-        // Replace the active view if it's a scratch pad.
-        if let Some(v) = self.views.active() {
-            let id = v.id;
-
-            if v.file_status == FileStatus::NoFile {
-                self.destroy_view(id);
-            }
-        }
-
         let pixels = util::stitch_frames(frames, fw as usize, fh as usize, Rgba8::TRANSPARENT);
         let resource = ViewResource::new(pixels, ViewExtent::new(fw, fh, nframes));
         let id = self.views.add(file_status, fw, fh, nframes, resource);
