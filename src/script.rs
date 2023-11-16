@@ -122,6 +122,7 @@ pub enum Command {
     StringSetting(StringSetting),
     /// Getter/swapper for various settings that are ints (or booleans).
     I64Setting(I64Setting),
+    UsingOptionalI64(OptionalI64For),
 
     /// Setter for the width x height of each frame, using $0 for width and $1 for height.
     /// If either $0 or $1 is null, it keeps that dimension the same; if both are null,
@@ -130,11 +131,8 @@ pub enum Command {
     FrameResize,
     // TODO: some of these frame manipulation methods can't be used together unless
     //      we maybe handle the effects after every action.
-    // TODO: FrameClone
-    // TODO: FrameDelete
     // TODO: FrameSwap, "fs" with two indices
     // TODO: FrameClear "fc" with index and color, use view.clear_frame
-    // TODO: FrameAppendAfter "fa"
     // TODO: FrameShift, moves the animation over one to start one frame down
 
     // TODO: FitPixelWidth, FitPixelHeight; zoom to fit that many pixels within the screen based on available area
@@ -252,6 +250,9 @@ impl fmt::Display for Command {
             Command::I64Setting(I64Setting::FrameIndex) => write!(f, "f"),
             Command::I64Setting(I64Setting::FrameWidth) => write!(f, "f-width"),
             Command::I64Setting(I64Setting::FrameHeight) => write!(f, "f-height"),
+            Command::UsingOptionalI64(OptionalI64For::FrameAdd) => write!(f, "fa"),
+            Command::UsingOptionalI64(OptionalI64For::FrameClone) => write!(f, "fc"),
+            Command::UsingOptionalI64(OptionalI64For::FrameRemove) => write!(f, "fr"),
             Command::FrameResize => write!(f, "f-resize"),
             // TODO: move fg/bg to color getter/setters (ColorSetting)
             Command::ForegroundColor => write!(f, "fg"),
@@ -316,6 +317,9 @@ impl FromStr for Command {
             "f" => Ok(Command::I64Setting(I64Setting::FrameIndex)),
             "f-width" => Ok(Command::I64Setting(I64Setting::FrameWidth)),
             "f-height" => Ok(Command::I64Setting(I64Setting::FrameHeight)),
+            "fa" => Ok(Command::UsingOptionalI64(OptionalI64For::FrameAdd)),
+            "fc" => Ok(Command::UsingOptionalI64(OptionalI64For::FrameClone)),
+            "fr" => Ok(Command::UsingOptionalI64(OptionalI64For::FrameRemove)),
             "f-resize" => Ok(Command::FrameResize),
             "fg" => Ok(Command::ForegroundColor),
             "bg" => Ok(Command::BackgroundColor),
@@ -349,6 +353,16 @@ impl FromStr for Command {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct EmptyCommandParseError;
+
+#[derive(PartialEq, Debug, Clone, Copy)]
+pub enum OptionalI64For {
+    /// Adds a blank frame after Some(i64), otherwise after the current frame.
+    FrameAdd,
+    /// Clones the frame at Some(i64), otherwise the current frame.
+    FrameClone,
+    /// Removes/deletes the frame at Some(i64), otherwise the current frame.
+    FrameRemove,
+}
 
 #[derive(PartialEq, Debug, Clone, Copy)]
 pub enum Quit {
@@ -844,6 +858,13 @@ macro_rules! script_runner {
                             _ => {}
                         }
                         Ok(Argument::I64(old_value))
+                    }
+                    Command::UsingOptionalI64(for_what) => {
+                        let optional_i64 = self
+                            .script_evaluate(&script_stack, Evaluate::Index(0))?
+                            .get_optional_i64("for optional i64 command")?;
+                        self.script_optional_i64(for_what, optional_i64)?;
+                        Ok(Argument::Null)
                     }
                     Command::FrameResize => {
                         let optional_width = self
@@ -1371,6 +1392,21 @@ impl Variables {
             e.g., `$$ 456` to set to 456 pixels high",
         );
         variables.add_built_in(
+            Command::UsingOptionalI64(OptionalI64For::FrameAdd),
+            "adds a blank frame after index $0, or the current frame if $0 is null, \
+            e.g., `$$ -1` to add a frame at the end",
+        );
+        variables.add_built_in(
+            Command::UsingOptionalI64(OptionalI64For::FrameClone),
+            "clones the frame at index $0, or the current frame if $0 is null, \
+            e.g., `$$ 2` to clone the third frame",
+        );
+        variables.add_built_in(
+            Command::UsingOptionalI64(OptionalI64For::FrameRemove),
+            "removes the frame at index $0, or the current frame if $0 is null, \
+            e.g., `$$ 0` to remove the first frame",
+        );
+        variables.add_built_in(
             Command::FrameResize,
             "sets frame size, or crops to content if no arguments, \
             e.g., `$$ 12 34` to set to 12 pixels wide and 34 pixels high",
@@ -1839,6 +1875,18 @@ mod test {
         fn pan(&mut self, x: f32, y: f32) {
             self.test_what_ran
                 .push(WhatRan::Mocked(format!("pan {} {}", x, y)));
+        }
+
+        pub fn script_optional_i64(
+            &mut self,
+            for_what: OptionalI64For,
+            optional_i64: Option<i64>,
+        ) -> VoidResult {
+            self.test_what_ran.push(WhatRan::Mocked(format!(
+                "{:?}{{{}}}",
+                for_what, optional_i64
+            )));
+            Ok(())
         }
 
         fn script_quit(&mut self, quit: Quit) {

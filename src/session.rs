@@ -13,8 +13,8 @@ use crate::message::*;
 use crate::palette::*;
 use crate::platform::{self, InputState, Key, KeyboardInput, LogicalSize, ModifiersState};
 use crate::script::{
-    self, evaluate, get_or_swap_color, Argument, ArgumentResult, Command, Evaluate, Quit, Script,
-    ScriptRunner, Serialize, Variables, VoidResult,
+    self, evaluate, get_or_swap_color, Argument, ArgumentResult, Command, Evaluate, OptionalI64For,
+    Quit, Script, ScriptRunner, Serialize, Variables, VoidResult,
 };
 use crate::script_runner;
 use crate::settings::{I64Setting, StringSetting};
@@ -2525,10 +2525,10 @@ impl Session {
             Cmd::ViewCenter => {
                 self.center_active_view();
             }
+            Cmd::FrameAdd => self.add_frame(None).expect("no err"),
+            Cmd::FrameClone(index) => self.clone_frame(Some(index as i64)).expect("no err"),
+            Cmd::FrameRemove => self.remove_frame(None).expect("no err"),
             // TODO: Continue here!
-            Cmd::FrameAdd => self.add_frame(None),
-            Cmd::FrameClone(index) => self.clone_frame(Some(index as i64)),
-            Cmd::FrameRemove => self.remove_frame(None),
             Cmd::Slice(None) => {
                 let v = self.active_view_mut();
                 v.slice(1);
@@ -3231,25 +3231,31 @@ impl Session {
         Ok(())
     }
 
-    fn add_frame(&mut self, index: Option<i64>) {
+    fn add_frame(&mut self, index: Option<i64>) -> VoidResult {
         match self.frame_index(index, "add") {
             Ok(index) => self.active_view_mut().add_frame_after(index),
+            // TODO: return the error here and make the script fire off the message.
             Err(e) => self.message(e, MessageType::Error),
         }
+        Ok(())
     }
 
-    fn clone_frame(&mut self, index: Option<i64>) {
+    fn clone_frame(&mut self, index: Option<i64>) -> VoidResult {
         match self.frame_index(index, "clone") {
             Ok(index) => self.active_view_mut().clone_frame(index),
+            // TODO: return the error here and make the script fire off the message.
             Err(e) => self.message(e, MessageType::Error),
         }
+        Ok(())
     }
 
-    fn remove_frame(&mut self, index: Option<i64>) {
+    fn remove_frame(&mut self, index: Option<i64>) -> VoidResult {
         match self.frame_index(index, "remove") {
             Ok(index) => self.active_view_mut().remove_frame(index),
+            // TODO: return the error here and make the script fire off the message.
             Err(e) => self.message(e, MessageType::Error),
         }
+        Ok(())
     }
 
     fn frame_index(&self, index: Option<i64>, what_for: &str) -> Result<usize, String> {
@@ -3302,6 +3308,19 @@ impl Session {
         self.check_selection();
         self.organize_views();
         return Ok(());
+    }
+
+    pub fn script_optional_i64(
+        &mut self,
+        for_what: OptionalI64For,
+        optional_i64: Option<i64>,
+    ) -> VoidResult {
+        match for_what {
+            OptionalI64For::FrameAdd => self.add_frame(optional_i64)?,
+            OptionalI64For::FrameClone => self.clone_frame(optional_i64)?,
+            OptionalI64For::FrameRemove => self.remove_frame(optional_i64)?,
+        }
+        Ok(())
     }
 
     pub fn script_quit(&mut self, quit: Quit) {
