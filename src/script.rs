@@ -104,6 +104,7 @@ pub enum Command {
     // GetVariable,
     // TODO: we should define a way to evaluate something and put its value into a variable;
     //       everything below is lazily evaluated.  e.g., `set-val 'my-var' (...)`
+    //       or maybe `set-eval 'my-var' (...)`
     /// Sets a variable with name $0 to the value at $1, allowing future changes.
     /// E.g., `:set 'my-mut' 123` will set `my-mut` to evaluate to 123.
     /// You can also define lambda functions with e.g., `:set 'my-fn' (fg $0)`
@@ -134,6 +135,11 @@ pub enum Command {
     // TODO: FrameSwap, "fs" with two indices
     // TODO: FrameClear "fc" with index and color, use view.clear_frame
     // TODO: FrameShift, moves the animation over one to start one frame down
+    // TODO: FileAppend, keeps the same height but centers the contents in $0 (file name) and adds to animation
+    // TODO: WrapHorizontally: moves the contents of a single frame over to the right by $0 amount,
+    //          wrapping that many pixels to the left side
+    // TODO: WrapVertically: moves the contents of a single frame down by $0 amount,
+    //          wrapping that many pixels to the top side
 
     // TODO: FitPixelWidth, FitPixelHeight; zoom to fit that many pixels within the screen based on available area
     // TODO: convert fg and bg to ColorSetting settings.
@@ -250,6 +256,7 @@ impl fmt::Display for Command {
             Command::I64Setting(I64Setting::FrameIndex) => write!(f, "f"),
             Command::I64Setting(I64Setting::FrameWidth) => write!(f, "f-width"),
             Command::I64Setting(I64Setting::FrameHeight) => write!(f, "f-height"),
+            Command::I64Setting(I64Setting::ImageSplit) => write!(f, "split"),
             Command::UsingOptionalI64(OptionalI64For::FrameAdd) => write!(f, "fa"),
             Command::UsingOptionalI64(OptionalI64For::FrameClone) => write!(f, "fc"),
             Command::UsingOptionalI64(OptionalI64For::FrameRemove) => write!(f, "fr"),
@@ -317,6 +324,7 @@ impl FromStr for Command {
             "f" => Ok(Command::I64Setting(I64Setting::FrameIndex)),
             "f-width" => Ok(Command::I64Setting(I64Setting::FrameWidth)),
             "f-height" => Ok(Command::I64Setting(I64Setting::FrameHeight)),
+            "split" => Ok(Command::I64Setting(I64Setting::ImageSplit)),
             "fa" => Ok(Command::UsingOptionalI64(OptionalI64For::FrameAdd)),
             "fc" => Ok(Command::UsingOptionalI64(OptionalI64For::FrameClone)),
             "fr" => Ok(Command::UsingOptionalI64(OptionalI64For::FrameRemove)),
@@ -1175,6 +1183,7 @@ pub enum Variable {
     Alias(String),
     // Built-in function, e.g., `if`, `fg`, `paint`, etc.:
     // The string is for the `help` function to explain what the command does.
+    // TODO: add a Command field so that we can pull it out for variables.get()
     BuiltIn(String),
 }
 
@@ -1392,6 +1401,12 @@ impl Variables {
             e.g., `$$ 456` to set to 456 pixels high",
         );
         variables.add_built_in(
+            Command::I64Setting(I64Setting::ImageSplit),
+            "getter/swapper for the number of animation frames if $0 is null/present, \
+            without resizing the image; i.e., the desired amount must divide the image width. \
+            e.g., `$$ 2` to split the image into 2 animation frames.",
+        );
+        variables.add_built_in(
             Command::UsingOptionalI64(OptionalI64For::FrameAdd),
             "adds a blank frame after index $0, or the current frame if $0 is null, \
             e.g., `$$ -1` to add a frame at the end",
@@ -1536,7 +1551,18 @@ impl Variables {
         assert_ok!(variables.set("cursor-y".to_string(), Variable::Alias("my".to_string())));
         assert_ok!(variables.set("cx".to_string(), Variable::Alias("mx".to_string())));
         assert_ok!(variables.set("cy".to_string(), Variable::Alias("my".to_string())));
+        assert_ok!(variables.set("f-add".to_string(), Variable::Alias("fa".to_string())));
+        assert_ok!(variables.set("f-clone".to_string(), Variable::Alias("fc".to_string())));
         assert_ok!(variables.set("f-index".to_string(), Variable::Alias("f".to_string())));
+        assert_ok!(variables.set("f-remove".to_string(), Variable::Alias("fr".to_string())));
+        assert_ok!(variables.set("slice".to_string(), Variable::Alias("split".to_string())));
+        assert_ok!(variables.set(
+            "merge".to_string(),
+            Variable::Const(Argument::Script(Script {
+                command: Command::I64Setting(I64Setting::ImageSplit),
+                arguments: vec![Argument::I64(1)],
+            }))
+        ));
         assert_ok!(variables.set("view".to_string(), Variable::Alias("v".to_string())));
         assert_ok!(variables.set("quit".to_string(), Variable::Alias("q".to_string())));
         assert_ok!(variables.set("quit!".to_string(), Variable::Alias("q!".to_string())));
@@ -1562,6 +1588,9 @@ impl Variables {
                             name = alias.clone();
                         }
                         Variable::BuiltIn(_) => {
+                            // TODO: this is required for our variable aliases above in `with_built_ins()`.
+                            //       we should split `run` into a `run(self, command, script, script_stack)`
+                            //       and feed the BuiltIn back into `run`.
                             // TODO: figure out how we want to do this; if we eventually
                             // support calling functions like this:
                             // `prepare 'if'; evaluate $0 $1 $2` to run `if` dynamically.
@@ -1883,7 +1912,7 @@ mod test {
             optional_i64: Option<i64>,
         ) -> VoidResult {
             self.test_what_ran.push(WhatRan::Mocked(format!(
-                "{:?}{{{}}}",
+                "{:?}{{{:?}}}",
                 for_what, optional_i64
             )));
             Ok(())

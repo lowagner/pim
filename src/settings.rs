@@ -51,6 +51,10 @@ pub enum I64Setting {
     FrameWidth,
     /// The height of each frame in the animation, in pixels.
     FrameHeight,
+    /// The number of frames that the image divides into for animation.
+    /// Changing this does *not* affect the width of the image, and
+    /// requires that the desired number of frames divides the image width.
+    ImageSplit,
 }
 
 pub struct Settings {
@@ -79,6 +83,7 @@ impl Settings {
         i64_map.insert(I64Setting::FrameIndex, 0);
         i64_map.insert(I64Setting::FrameWidth, 128);
         i64_map.insert(I64Setting::FrameHeight, 128);
+        i64_map.insert(I64Setting::ImageSplit, 1);
 
         let mut string_map = HashMap::new();
         string_map.insert(StringSetting::Mode, "normal".to_string());

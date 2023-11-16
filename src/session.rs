@@ -2528,7 +2528,6 @@ impl Session {
             Cmd::FrameAdd => self.add_frame(None).expect("no err"),
             Cmd::FrameClone(index) => self.clone_frame(Some(index as i64)).expect("no err"),
             Cmd::FrameRemove => self.remove_frame(None).expect("no err"),
-            // TODO: Continue here!
             Cmd::Slice(None) => {
                 let v = self.active_view_mut();
                 v.slice(1);
@@ -2542,6 +2541,7 @@ impl Session {
                     );
                 }
             }
+            // TODO: Continue here!
             Cmd::Set(ref k, ref v) => {
                 if Settings::DEPRECATED.contains(&k.as_str()) {
                     self.message(
@@ -3116,6 +3116,7 @@ impl Session {
             I64Setting::FrameIndex => self.current_frame() as i64,
             I64Setting::FrameWidth => self.active_view().fw as i64,
             I64Setting::FrameHeight => self.active_view().fh as i64,
+            I64Setting::ImageSplit => self.active_view().animation.len() as i64,
         }
     }
 
@@ -3226,6 +3227,14 @@ impl Session {
             }
             I64Setting::FrameHeight => {
                 self.resize_frames(self.active_view().fw as i64, new_value)?;
+            }
+            I64Setting::ImageSplit => {
+                if !self.active_view_mut().slice(new_value as usize) {
+                    return Err(format!(
+                        "split: view width is not divisible by {}",
+                        new_value
+                    ));
+                }
             }
         }
         Ok(())
