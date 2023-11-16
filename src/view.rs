@@ -262,27 +262,12 @@ impl<R> View<R> {
         ));
     }
 
-    fn extend(&mut self) {
-        let w = self.width();
-        let (fw, fh) = (self.fw, self.fh);
-
-        self.animation.frames.push(Rect::new(w, 0, w + fw, fh));
-
-        self.resized();
-    }
-
-    /// Shrink the view by one frame.
-    pub fn shrink(&mut self) {
-        // Don't allow the view to have zero frames.
-        if self.animation.len() > 1 {
-            self.animation.frames.pop();
-            self.resized();
-        }
-    }
-
     /// Extend the view by one frame, by cloning an existing frame,
     /// by index.
     pub fn clone_frame(&mut self, index: usize) {
+        if index >= self.animation.len() {
+            panic!("cannot clone frame {}", index);
+        }
         let width = self.width();
         let (fw, fh) = (self.fw, self.fh);
 
@@ -294,8 +279,35 @@ impl<R> View<R> {
     }
 
     pub fn remove_frame(&mut self, index: usize) {
-        // TODO: move later frames down if index < animation.len()
+        let width = self.width();
+        let (fw, fh) = (self.fw, self.fh);
         self.shrink();
+        if index >= self.animation.len() - 1 {
+            return;
+        }
+        // Move later frames down.
+        self.ops.push(ViewOp::Blit(
+            Rect::new(fw * (index + 1) as u32, 0, width, fh),
+            Rect::new(fw * index as u32, 0, width - fw, fh),
+        ));
+    }
+
+    fn extend(&mut self) {
+        let w = self.width();
+        let (fw, fh) = (self.fw, self.fh);
+
+        self.animation.frames.push(Rect::new(w, 0, w + fw, fh));
+
+        self.resized();
+    }
+
+    /// Shrink the view by one frame.
+    fn shrink(&mut self) {
+        // Don't allow the view to have zero frames.
+        if self.animation.len() > 1 {
+            self.animation.frames.pop();
+            self.resized();
+        }
     }
 
     /// Resize view frames to the given size.

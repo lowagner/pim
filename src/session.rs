@@ -2384,22 +2384,23 @@ impl Session {
                 _ => {}
             },
             Cmd::FrameCurrent => {
-                let (frame, _) = self.current_frame();
-                result = frame.to_string();
+                result = self.current_frame().to_string();
             }
             Cmd::FramePrev => {
-                let (frame, max_frames) = self.current_frame();
-                // Use wrap around (-1 == max_frames - 1 mod max_frames):
-                let new_frame = (frame + max_frames - 1) % max_frames;
-                result = new_frame.to_string();
-                self.center_active_view_frame(new_frame);
+                let frame = self.current_frame();
+                let max_frames = self.active_view().animation.len();
+                // Use wrap around (-1 == max_frames - 1) mod max_frames:
+                let frame = (frame + max_frames - 1) % max_frames;
+                result = frame.to_string();
+                self.center_active_view_frame(frame);
             }
             Cmd::FrameNext => {
-                let (frame, max_frames) = self.current_frame();
+                let frame = self.current_frame();
+                let max_frames = self.active_view().animation.len();
                 // Use wrap around:
-                let new_frame = (frame + 1) % max_frames;
-                result = new_frame.to_string();
-                self.center_active_view_frame(new_frame);
+                let frame = (frame + 1) % max_frames;
+                result = frame.to_string();
+                self.center_active_view_frame(frame);
             }
             Cmd::ForceQuit => self.quit_view(self.views.active_id),
             Cmd::ForceQuitAll => self.quit(ExitReason::Normal),
@@ -2915,16 +2916,16 @@ impl Session {
         result
     }
 
-    fn current_frame(&self) -> (usize, usize) {
-        let v = self.active_view().extent();
+    fn current_frame(&self) -> usize {
+        let view = self.active_view();
+        let extent = view.extent();
         let center = self.active_view_coords(self.center());
 
-        let frame: usize = if center.x >= 0. {
-            v.to_frame(center.into()).min(v.nframes)
+        if center.x >= 0. {
+            extent.to_frame(center.into()).min(view.animation.len() - 1)
         } else {
             0
-        };
-        return (frame, v.nframes);
+        }
     }
 
     fn cmdline_hide(&mut self) {
@@ -3121,11 +3122,7 @@ impl Session {
                     0
                 }
             }
-            I64Setting::FrameIndex => {
-                // TODO: maybe simplify current_frame and get max_frames another way:
-                let (frame, _) = self.current_frame();
-                frame as i64
-            }
+            I64Setting::FrameIndex => self.current_frame() as i64,
             I64Setting::FrameWidth => self.active_view().fw as i64,
             I64Setting::FrameHeight => self.active_view().fh as i64,
         }
@@ -3229,8 +3226,7 @@ impl Session {
                 }
             }
             I64Setting::FrameIndex => {
-                // TODO: maybe simplify current_frame and get max_frames another way:
-                let (_, max_frames) = self.current_frame();
+                let max_frames = self.active_view().animation.len();
                 let new_frame = new_value.rem_euclid(max_frames as i64);
                 self.center_active_view_frame(new_frame as usize);
             }
@@ -3266,27 +3262,28 @@ impl Session {
     }
 
     fn frame_index(&self, index: Option<i64>, what_for: &str) -> Result<usize, String> {
-        let index = match index {
-            None => self.current_frame().0 as i64,
-            Some(i) => i,
-        };
         let view = self.active_view();
-        let len = view.animation.len();
-        let index = if index < 0 {
-            // This will convert to a large number if we're still negative after adding
-            // index because we convert to usize.
-            (len as i64 + index) as usize
-        } else {
-            index as usize
+        let max_frames = view.animation.len();
+        let index = match index {
+            None => self.current_frame(),
+            Some(index) => {
+                if index < 0 {
+                    // This will convert to a large number if we're still negative after adding
+                    // index because we convert to usize.
+                    (max_frames as i64 + index) as usize
+                } else {
+                    index as usize
+                }
+            }
         };
-        if index < len {
+        if index < max_frames {
             Ok(index)
         } else {
             Err(format!(
                 "Error: {} index must be in the range [{}, {}]",
                 what_for,
                 0,
-                len - 1
+                max_frames - 1
             ))
         }
     }
