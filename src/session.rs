@@ -2534,31 +2534,9 @@ impl Session {
                 self.center_active_view();
             }
             // TODO: Continue here!
-            Cmd::FrameAdd => {
-                let (current_frame, _) = self.current_frame();
-                self.active_view_mut().append_frame_after(current_frame);
-            }
-            Cmd::FrameClone(index) => {
-                let view = self.active_view_mut();
-                let len = view.animation.len();
-                let index = if index < 0 {
-                    (len as i32 + index) as usize
-                } else {
-                    index as usize
-                };
-                if index < len {
-                    view.clone_frame(index);
-                } else {
-                    self.message(
-                        format!("Error: clone index must be in the range {}..{}", 0, len - 1),
-                        MessageType::Error,
-                    );
-                }
-            }
-            Cmd::FrameRemove => {
-                self.active_view_mut().shrink();
-                self.check_selection();
-            }
+            Cmd::FrameAdd => self.add_frame(None),
+            Cmd::FrameClone(index) => self.clone_frame(Some(index as i64)),
+            Cmd::FrameRemove => self.remove_frame(None),
             Cmd::Slice(None) => {
                 let v = self.active_view_mut();
                 v.slice(1);
@@ -3264,6 +3242,53 @@ impl Session {
             }
         }
         Ok(())
+    }
+
+    fn add_frame(&mut self, index: Option<i64>) {
+        match self.frame_index(index, "add") {
+            Ok(index) => self.active_view_mut().add_frame_after(index),
+            Err(e) => self.message(e, MessageType::Error),
+        }
+    }
+
+    fn clone_frame(&mut self, index: Option<i64>) {
+        match self.frame_index(index, "clone") {
+            Ok(index) => self.active_view_mut().clone_frame(index),
+            Err(e) => self.message(e, MessageType::Error),
+        }
+    }
+
+    fn remove_frame(&mut self, index: Option<i64>) {
+        match self.frame_index(index, "remove") {
+            Ok(index) => self.active_view_mut().remove_frame(index),
+            Err(e) => self.message(e, MessageType::Error),
+        }
+    }
+
+    fn frame_index(&self, index: Option<i64>, what_for: &str) -> Result<usize, String> {
+        let index = match index {
+            None => self.current_frame().0 as i64,
+            Some(i) => i,
+        };
+        let view = self.active_view();
+        let len = view.animation.len();
+        let index = if index < 0 {
+            // This will convert to a large number if we're still negative after adding
+            // index because we convert to usize.
+            (len as i64 + index) as usize
+        } else {
+            index as usize
+        };
+        if index < len {
+            Ok(index)
+        } else {
+            Err(format!(
+                "Error: {} index must be in the range [{}, {}]",
+                what_for,
+                0,
+                len - 1
+            ))
+        }
     }
 
     fn resize_frames(&mut self, width: i64, height: i64) -> Result<(), String> {

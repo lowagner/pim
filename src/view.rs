@@ -245,7 +245,7 @@ impl<R> View<R> {
     }
 
     /// Extend the view by one frame after the passed-in index.
-    pub fn append_frame_after(&mut self, index: usize) {
+    pub fn add_frame_after(&mut self, index: usize) {
         let (fw, fh) = (self.fw, self.fh);
 
         // Optimize for when we don't need to copy anything over one frame.
@@ -291,6 +291,11 @@ impl<R> View<R> {
             Rect::new(fw * index as u32, 0, width, fh),
             Rect::new(fw * (index + 1) as u32, 0, width + fw, fh),
         ));
+    }
+
+    pub fn remove_frame(&mut self, index: usize) {
+        // TODO: move later frames down if index < animation.len()
+        self.shrink();
     }
 
     /// Resize view frames to the given size.
