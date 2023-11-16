@@ -282,7 +282,9 @@ impl<R> View<R> {
         let width = self.width();
         let (fw, fh) = (self.fw, self.fh);
         self.shrink();
-        if index >= self.animation.len() - 1 {
+        // Note the animation length changed in `shrink()`,
+        // so indices up to animation.len() can be deleted.
+        if index >= self.animation.len() {
             return;
         }
         // Move later frames down.
