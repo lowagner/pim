@@ -248,10 +248,14 @@ impl<R> View<R> {
     pub fn append_frame_after(&mut self, index: usize) {
         let (fw, fh) = (self.fw, self.fh);
 
-        // TODO: this is slightly inefficient; we only need to copy
-        // from frame index + 1 over to index+2 and beyond.  but eh.
-        self.clone_frame(index);
-
+        // Optimize for when we don't need to copy anything over one frame.
+        if index >= self.animation.len() - 1 {
+            self.extend();
+            return;
+        }
+        // We don't need to copy this frame but all future frames,
+        // so that we can clear out the frame at index+1.
+        self.clone_frame(index + 1);
         self.ops.push(ViewOp::ClearRect(
             Rgba8::TRANSPARENT,
             Rect::new(fw * (index + 1) as u32, 0, fw * (index + 2) as u32, fh),
