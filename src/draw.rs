@@ -220,6 +220,59 @@ fn draw_ui(session: &Session, canvas: &mut shape2d::Batch, text: &mut TextBatch)
     for v in session.views.iter() {
         let offset = v.offset + session.offset;
 
+        let (border_color, current_view_frame) = if session.is_active(v.id) {
+            let color = match session.mode {
+                // TODO: (rgx) Use `Rgba8::alpha`.
+                Mode::Visual(_) => Rgba8::new(color::RED.r, color::RED.g, color::RED.b, 0xdd),
+                _ => color::WHITE,
+            };
+            (color.into(), session.current_frame())
+        } else if session.hover_view == Some(v.id) {
+            (Rgba::new(0.7, 0.7, 0.7, 1.0), usize::MAX)
+        } else {
+            (Rgba::new(0.5, 0.5, 0.5, 1.0), usize::MAX)
+        };
+
+        // View border
+        let r = v.rect();
+        canvas.add(Shape::Rectangle(
+            Rect::new(r.x1 - 1., r.y1 - 1., r.x2 + 1., r.y2 + 1.) + session.offset,
+            self::UI_LAYER,
+            Rotation::ZERO,
+            Stroke::new(1.0, border_color),
+            Fill::Empty,
+        ));
+
+        // Current frame border
+        if current_view_frame < usize::MAX {
+            // TODO: not very pretty code here, but does the job.
+            //       might be nice to make the bottom rect always the height of the W x H text
+            let color = Rgba::new(1.0, 1.0, 1.0, 0.2);
+            let x1 = current_view_frame as f32 * zoom * v.fw as f32 + offset.x;
+            let rect_height = 6.0 + zoom.min(14.0);
+            let rect_below = Rect::new(
+                x1 - 1.0,
+                offset.y,
+                x1 + zoom * v.fw as f32 + (current_view_frame + 1 == v.animation.len()) as usize as f32,
+                offset.y - rect_height,
+            );
+            let rect_above = rect_below + Vector2::new(0.0, rect_height + zoom * v.fh as f32);
+            canvas.add(Shape::Rectangle(
+                rect_above,
+                self::UI_LAYER,
+                Rotation::ZERO,
+                Stroke::NONE,
+                Fill::Solid(color),
+            ));
+            canvas.add(Shape::Rectangle(
+                rect_below,
+                self::UI_LAYER,
+                Rotation::ZERO,
+                Stroke::NONE,
+                Fill::Solid(color),
+            ));
+        }
+
         // Frame lines
         for n in 1..v.animation.len() {
             let n = n as f32;
@@ -231,28 +284,6 @@ fn draw_ui(session: &Session, canvas: &mut shape2d::Batch, text: &mut TextBatch)
                 Stroke::new(1.0, Rgba::new(1., 1., 1., 0.6)),
             ));
         }
-        // View border
-        let r = v.rect();
-        let border_color = if session.is_active(v.id) {
-            match session.mode {
-                // TODO: (rgx) Use `Rgba8::alpha`.
-                Mode::Visual(_) => {
-                    Rgba8::new(color::RED.r, color::RED.g, color::RED.b, 0xdd).into()
-                }
-                _ => color::WHITE.into(),
-            }
-        } else if session.hover_view == Some(v.id) {
-            Rgba::new(0.7, 0.7, 0.7, 1.0)
-        } else {
-            Rgba::new(0.5, 0.5, 0.5, 1.0)
-        };
-        canvas.add(Shape::Rectangle(
-            Rect::new(r.x1 - 1., r.y1 - 1., r.x2 + 1., r.y2 + 1.) + session.offset,
-            self::UI_LAYER,
-            Rotation::ZERO,
-            Stroke::new(1.0, border_color),
-            Fill::Empty,
-        ));
 
         if session.settings["ui/view-info"].is_set() {
             // View info

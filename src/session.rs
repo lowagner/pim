@@ -446,6 +446,7 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             map: hashmap! {
+                // TODO: add all these to script.rs
                 "debug" => Value::Bool(false),
                 "checker" => Value::Bool(false),
                 "background" => Value::Rgba8(color::TRANSPARENT),
@@ -2907,7 +2908,7 @@ impl Session {
         result
     }
 
-    fn current_frame(&self) -> usize {
+    pub fn current_frame(&self) -> usize {
         let view = self.active_view();
         let extent = view.extent();
         let center = self.active_view_coords(self.center());
