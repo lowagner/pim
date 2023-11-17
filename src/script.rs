@@ -3508,6 +3508,34 @@ mod test {
     }
 
     #[test]
+    fn test_variables_can_run_conditional_built_in_scripts() {
+        let mut test_runner = TestRunner::new();
+
+        assert_eq!(
+            Script {
+                command: Command::Evaluate("if".to_string()),
+                arguments: vec![
+                    Argument::I64(0),
+                    Argument::Color(Rgba8::RED),
+                    Argument::Color(Rgba8::GREEN),
+                ],
+            }
+            .run(&mut test_runner),
+            Ok(Argument::Color(Rgba8::GREEN))
+        );
+
+        assert_eq!(
+            test_runner.test_what_ran,
+            Vec::from([
+                WhatRan::Begin(Command::Evaluate("if".to_string())),
+                WhatRan::Evaluated(Ok(Argument::I64(0))),
+                WhatRan::Evaluated(Ok(Argument::Color(Rgba8::GREEN))),
+                WhatRan::End(Command::Evaluate("if".to_string())),
+            ])
+        );
+    }
+
+    #[test]
     fn test_variables_can_run_aliased_scripts() {
         let mut test_runner = TestRunner::new();
 
