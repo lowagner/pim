@@ -123,6 +123,7 @@ pub enum Command {
     StringSetting(StringSetting),
     /// Getter/swapper for various settings that are ints (or booleans).
     I64Setting(I64Setting),
+    /// Commands that take an optional i64 argument.
     UsingOptionalI64(OptionalI64For),
 
     /// Setter for the width x height of each frame, using $0 for width and $1 for height.
@@ -638,6 +639,15 @@ pub trait ScriptRunner {
     /// stack because all sorts of redirection is possible, i.e., due to `Argument::Use`
     /// or additional nested scripts being run via `Argument::Script`.
     fn run(&mut self, script_stack: Vec<&Script>) -> ArgumentResult;
+
+    /// Executes a script on the top of the stack but using `command` to override the
+    /// `script.command` value.  This is e.g., for Variable::BuiltIn.
+    fn run_command(
+        &mut self,
+        command: &Command,
+        script: &Script,
+        script_stack: Vec<&Script>,
+    ) -> ArgumentResult;
 }
 
 #[macro_export] // meta programming
@@ -690,8 +700,19 @@ macro_rules! script_runner {
                 }
                 let script: &Script = &script_stack[script_stack.len() - 1];
                 let command = script.command.clone();
-                self.begin_script_command(command.clone());
-                let result = match command.clone() {
+                self.begin_script_command(&command.clone());
+                let result = self.run_command(&command, script, script_stack);
+                self.end_script_command(&command);
+                result
+            }
+
+            fn run_command(
+                &mut self,
+                command: &Command,
+                script: &Script,
+                script_stack: Vec<&Script>,
+            ) -> ArgumentResult {
+                match command {
                     Command::Help => {
                         if script.arguments.len() != 1 {
                             self.message(self.variables.describe(Command::Help), MessageType::Info);
@@ -845,10 +866,10 @@ macro_rules! script_runner {
                         let argument = self
                             .script_evaluate(&script_stack, Evaluate::Index(0))?
                             .get_optional_string("for string setting")?;
-                        let old_value = self.get_string_setting(setting);
+                        let old_value = self.get_string_setting(*setting);
                         match argument {
                             Some(new_value) if new_value != old_value => {
-                                self.set_string_setting(setting, new_value)?;
+                                self.set_string_setting(*setting, new_value)?;
                             }
                             _ => {}
                         }
@@ -858,10 +879,10 @@ macro_rules! script_runner {
                         let argument = self
                             .script_evaluate(&script_stack, Evaluate::Index(0))?
                             .get_optional_i64("for i64 setting")?;
-                        let old_value = self.get_i64_setting(setting);
+                        let old_value = self.get_i64_setting(*setting);
                         match argument {
                             Some(new_value) if new_value != old_value => {
-                                self.set_i64_setting(setting, old_value, new_value)?;
+                                self.set_i64_setting(*setting, old_value, new_value)?;
                             }
                             _ => {}
                         }
@@ -871,7 +892,7 @@ macro_rules! script_runner {
                         let optional_i64 = self
                             .script_evaluate(&script_stack, Evaluate::Index(0))?
                             .get_optional_i64("for optional i64 command")?;
-                        self.script_optional_i64(for_what, optional_i64)?;
+                        self.script_optional_i64(*for_what, optional_i64)?;
                         Ok(Argument::Null)
                     }
                     Command::FrameResize => {
@@ -1054,14 +1075,10 @@ macro_rules! script_runner {
                         }
                     }
                     Command::Quit(q) => {
-                        self.script_quit(q);
+                        self.script_quit(*q);
                         Ok(Argument::Null)
                     }
-                };
-                // TODO: move the above `match` into its own function so
-                // this method always gets called:
-                self.end_script_command(command);
-                result
+                }
             }
         }
     };
@@ -1576,16 +1593,16 @@ impl Variables {
 
     /// Returns the Argument represented by this name, returning Null if not present in the map.
     // Notice that we resolve aliases here so that you'll definitely get an argument.
-    pub fn get(&self, mut name: String) -> Argument {
+    pub fn get<'a>(&'a self, mut name: &'a String) -> Argument {
         for _iteration in 1..24 {
-            match &self.map.get(&name) {
+            match &self.map.get(name) {
                 None => return Argument::Null,
                 Some(variable) => {
                     match variable {
                         Variable::Const(arg) => return arg.clone(),
                         Variable::Mutable(arg) => return arg.clone(),
                         Variable::Alias(alias) => {
-                            name = alias.clone();
+                            name = alias;
                         }
                         Variable::BuiltIn(_) => {
                             // TODO: this is required for our variable aliases above in `with_built_ins()`.
@@ -1606,7 +1623,6 @@ impl Variables {
 
     /// Sets the variable, returning the old value if it was present in the map.
     /// NOTE! Will return an error if the variable was present and const.
-    // TODO: rename `swap_in`
     pub fn set(&mut self, name: String, variable: Variable) -> ArgumentResult {
         match &variable {
             Variable::Alias(alias) => {
@@ -1821,12 +1837,12 @@ mod test {
             }
         }
 
-        fn begin_script_command(&mut self, command: Command) {
-            self.test_what_ran.push(WhatRan::Begin(command));
+        fn begin_script_command(&mut self, command: &Command) {
+            self.test_what_ran.push(WhatRan::Begin(command.clone()));
         }
 
-        fn end_script_command(&mut self, command: Command) {
-            self.test_what_ran.push(WhatRan::End(command));
+        fn end_script_command(&mut self, command: &Command) {
+            self.test_what_ran.push(WhatRan::End(command.clone()));
         }
 
         // We wrap evaluate for tests to get `WhatRan`.
@@ -2254,7 +2270,10 @@ mod test {
 
         assert_eq!(
             test_runner.test_what_ran,
-            Vec::from([WhatRan::Begin(Command::PushPop),])
+            Vec::from([
+                WhatRan::Begin(Command::PushPop),
+                WhatRan::End(Command::PushPop),
+            ])
         );
         assert_eq!(
             result,
@@ -2307,6 +2326,7 @@ mod test {
                 WhatRan::Begin(Command::Error),
                 WhatRan::End(Command::Error),
                 WhatRan::Evaluated(Err("".to_string())),
+                WhatRan::End(Command::RunAll),
             ])
         );
         assert_eq!(result, Err("".to_string()));
@@ -2945,7 +2965,8 @@ mod test {
             test_runner.test_what_ran,
             vec![
                 WhatRan::Begin(Command::If),
-                WhatRan::Evaluated(Err("$1 should only be used inside a script".to_string()))
+                WhatRan::Evaluated(Err("$1 should only be used inside a script".to_string())),
+                WhatRan::End(Command::If),
             ]
         );
     }
@@ -3403,9 +3424,10 @@ mod test {
     fn test_variables_has_some_const_defaults() {
         let mut variables = Variables::with_built_ins();
         let mut check_variable = |name: &str, value: Argument| {
-            assert_eq!(variables.get(name.to_string()), value);
+            let name_string = name.to_string();
+            assert_eq!(variables.get(&name_string), value);
             assert_eq!(
-                variables.set(name.to_string(), Variable::Mutable(Argument::I64(123))),
+                variables.set(name_string, Variable::Mutable(Argument::I64(123))),
                 Err(format!("variable `{}` is not reassignable", name))
             );
         };
@@ -3419,10 +3441,8 @@ mod test {
     #[test]
     fn test_variables_can_serialize_built_ins() {
         let variables = Variables::with_built_ins();
-        let swap = variables
-            .get("swap".to_string())
-            .get_script("for test")
-            .unwrap();
+        let name = "swap".to_string();
+        let swap = variables.get(&name).get_script("for test").unwrap();
         assert_eq!(
             format!("{}", Serialize::Script(&swap)),
             "fg (bg fg)".to_string()
@@ -3435,7 +3455,7 @@ mod test {
 
         let var_name = "wyzx".to_string();
         // Nothing in variables yet:
-        assert_eq!(variables.get(var_name.clone()), Argument::Null);
+        assert_eq!(variables.get(&var_name), Argument::Null);
 
         // First assignment is fine:
         assert_eq!(
@@ -3443,14 +3463,14 @@ mod test {
             // The previous value of this variable was null:
             Ok(Argument::Null)
         );
-        assert_eq!(variables.get(var_name.clone()), Argument::I64(456));
+        assert_eq!(variables.get(&var_name), Argument::I64(456));
 
         // Can't reassign:
         assert_eq!(
             variables.set(var_name.clone(), Variable::Const(Argument::I64(789))),
             Err(format!("variable `{}` is not reassignable", var_name))
         );
-        assert_eq!(variables.get(var_name.clone()), Argument::I64(456)); // No change!
+        assert_eq!(variables.get(&var_name), Argument::I64(456)); // No change!
     }
 
     #[test]
@@ -3459,7 +3479,7 @@ mod test {
 
         let var_name = "cdef".to_string();
         // Nothing in variables yet:
-        assert_eq!(variables.get(var_name.clone()), Argument::Null);
+        assert_eq!(variables.get(&var_name), Argument::Null);
 
         // First assignment is fine:
         assert_eq!(
@@ -3467,7 +3487,7 @@ mod test {
             // The previous value of this variable was null:
             Ok(Argument::Null)
         );
-        assert_eq!(variables.get(var_name.clone()), Argument::I64(456));
+        assert_eq!(variables.get(&var_name), Argument::I64(456));
 
         // Can't reassign:
         assert_eq!(
@@ -3475,7 +3495,7 @@ mod test {
             // Returns the old value:
             Ok(Argument::I64(456))
         );
-        assert_eq!(variables.get(var_name.clone()), Argument::I64(789));
+        assert_eq!(variables.get(&var_name), Argument::I64(789));
     }
 
     #[test]
@@ -3488,17 +3508,17 @@ mod test {
 
         _ = variables.set(x.clone(), Variable::Alias(y.clone()));
         // If Y isn't defined yet:
-        assert_eq!(variables.get(x.clone()), Argument::Null);
+        assert_eq!(variables.get(&x), Argument::Null);
 
         _ = variables.set(y.clone(), Variable::Alias(z.clone()));
         // Z isn't defined yet, either:
-        assert_eq!(variables.get(x.clone()), Argument::Null);
-        assert_eq!(variables.get(y.clone()), Argument::Null);
+        assert_eq!(variables.get(&x), Argument::Null);
+        assert_eq!(variables.get(&y), Argument::Null);
 
         _ = variables.set(z.clone(), Variable::Const(Argument::I64(123)));
-        assert_eq!(variables.get(x.clone()), Argument::I64(123));
-        assert_eq!(variables.get(y.clone()), Argument::I64(123));
-        assert_eq!(variables.get(z.clone()), Argument::I64(123)); // not an alias, but should make sense!
+        assert_eq!(variables.get(&x), Argument::I64(123));
+        assert_eq!(variables.get(&y), Argument::I64(123));
+        assert_eq!(variables.get(&z), Argument::I64(123)); // not an alias, but should make sense!
     }
 
     #[test]
@@ -3534,10 +3554,7 @@ mod test {
         };
 
         assert_eq!(variables.set_from_script(&script), Ok(Argument::Null));
-        assert_eq!(
-            variables.get(var_name.clone()),
-            Argument::Script(lambda.clone())
-        );
+        assert_eq!(variables.get(&var_name), Argument::Script(lambda.clone()));
 
         // Double check that we can mutate:
         script.arguments[1] = Argument::I64(-123);
@@ -3545,7 +3562,7 @@ mod test {
             variables.set_from_script(&script),
             Ok(Argument::Script(lambda))
         );
-        assert_eq!(variables.get(var_name), Argument::I64(-123));
+        assert_eq!(variables.get(&var_name), Argument::I64(-123));
     }
 
     #[test]
@@ -3565,10 +3582,7 @@ mod test {
         };
 
         assert_eq!(variables.set_from_script(&script), Ok(Argument::Null));
-        assert_eq!(
-            variables.get(var_name.clone()),
-            Argument::Script(lambda.clone())
-        );
+        assert_eq!(variables.get(&var_name), Argument::Script(lambda.clone()));
 
         // Double check that we cannot reassign:
         script.arguments[1] = Argument::I64(603);
@@ -3579,7 +3593,7 @@ mod test {
                 var_name.clone()
             ))
         );
-        assert_eq!(variables.get(var_name), Argument::Script(lambda));
+        assert_eq!(variables.get(&var_name), Argument::Script(lambda));
     }
 
     #[test]
@@ -3608,7 +3622,7 @@ mod test {
             ),
             Ok(Argument::Null)
         );
-        assert_eq!(variables.get(alias_name.clone()), aliased_value.clone());
+        assert_eq!(variables.get(&alias_name), aliased_value.clone());
 
         // Double check that we cannot reassign:
         script.arguments[1] = Argument::String("change-to-this".to_string());
@@ -3623,7 +3637,7 @@ mod test {
             *variables.map.get(&alias_name).expect("should be here"),
             Variable::Alias(alias_value.clone())
         );
-        assert_eq!(variables.get(alias_name.clone()), aliased_value.clone());
+        assert_eq!(variables.get(&alias_name), aliased_value.clone());
         // But we can modify the underlying value:
         aliased_value = Argument::I64(8675309);
         assert_eq!(
@@ -3633,7 +3647,7 @@ mod test {
             ),
             Ok(Argument::String("hello".to_string()))
         );
-        assert_eq!(variables.get(alias_name), aliased_value);
+        assert_eq!(variables.get(&alias_name), aliased_value);
     }
 
     #[test]
