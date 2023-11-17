@@ -251,7 +251,8 @@ fn draw_ui(session: &Session, canvas: &mut shape2d::Batch, text: &mut TextBatch)
             let rect_below = Rect::new(
                 x1 - 1.0,
                 offset.y,
-                x1 + zoom * v.fw as f32 + (current_view_frame + 1 == v.animation.len()) as usize as f32,
+                x1 + zoom * v.fw as f32
+                    + (current_view_frame + 1 == v.animation.len()) as usize as f32,
                 offset.y - rect_height,
             );
             let rect_above = rect_below + Vector2::new(0.0, rect_height + zoom * v.fh as f32);
@@ -283,8 +284,8 @@ fn draw_ui(session: &Session, canvas: &mut shape2d::Batch, text: &mut TextBatch)
             ));
         }
 
-        if session.settings["ui/view-info"].is_set() {
-            // View info
+        if current_view_frame < usize::MAX && session.settings["ui/view-info"].is_set() {
+            // View info, but only for the current view.
             text.add(
                 &format!("{}x{}x{}", v.fw, v.fh, v.animation.len()),
                 offset.x,
