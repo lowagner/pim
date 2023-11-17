@@ -245,11 +245,9 @@ fn draw_ui(session: &Session, canvas: &mut shape2d::Batch, text: &mut TextBatch)
 
         // Current frame border
         if current_view_frame < usize::MAX {
-            // TODO: not very pretty code here, but does the job.
-            //       might be nice to make the bottom rect always the height of the W x H text
             let color = Rgba::new(1.0, 1.0, 1.0, 0.2);
             let x1 = current_view_frame as f32 * zoom * v.fw as f32 + offset.x;
-            let rect_height = 6.0 + zoom.min(14.0);
+            let rect_height = 12.0 + (zoom - 6.0).min(8.0);
             let rect_below = Rect::new(
                 x1 - 1.0,
                 offset.y,
