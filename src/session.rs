@@ -2164,7 +2164,7 @@ impl Session {
 
     /// Center the palette in the workspace.
     fn center_palette(&mut self) {
-        let h = self.settings["p/height"].to_u64() as usize;
+        let h = self.palette.height;
         let n = usize::min(self.palette.size(), h) as f32;
         let p = &mut self.palette;
 
@@ -3097,6 +3097,7 @@ impl Session {
             I64Setting::UiScalePercentage => self.settings["scale%"].to_u64() as i64,
             I64Setting::UiOffsetX => self.offset.x as i64,
             I64Setting::UiOffsetY => self.offset.y as i64,
+            I64Setting::PaletteHeight => self.palette.height as i64,
             I64Setting::UiZoom => self.active_view().zoom as i64,
             I64Setting::ViewIndex => self.views.active_id.0 as i64,
             I64Setting::CursorXRay => self.brush.is_set(brush::BrushMode::XRay) as i64,
@@ -3151,6 +3152,14 @@ impl Session {
             }
             I64Setting::UiOffsetY => {
                 self.offset.y = new_value as f32;
+            }
+            I64Setting::PaletteHeight => {
+                if new_value > 0 {
+                    self.palette.height = new_value as usize;
+                    self.center_palette();
+                } else {
+                    return Err(format!("invalid palette height: {}", new_value));
+                }
             }
             I64Setting::UiZoom => {
                 let valid_zoom = if new_value <= 0 {

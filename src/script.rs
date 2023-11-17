@@ -244,6 +244,7 @@ impl fmt::Display for Command {
             Command::I64Setting(I64Setting::UiScalePercentage) => write!(f, "ui-scale%"),
             Command::I64Setting(I64Setting::UiOffsetX) => write!(f, "ui-x"),
             Command::I64Setting(I64Setting::UiOffsetY) => write!(f, "ui-y"),
+            Command::I64Setting(I64Setting::PaletteHeight) => write!(f, "p-height"),
             Command::I64Setting(I64Setting::UiZoom) => write!(f, "zoom"),
             Command::I64Setting(I64Setting::ViewIndex) => write!(f, "v"),
             Command::I64Setting(I64Setting::CursorXRay) => write!(f, "c-xray"),
@@ -312,6 +313,7 @@ impl FromStr for Command {
             "ui-scale%" => Ok(Command::I64Setting(I64Setting::UiScalePercentage)),
             "ui-x" => Ok(Command::I64Setting(I64Setting::UiOffsetX)),
             "ui-y" => Ok(Command::I64Setting(I64Setting::UiOffsetY)),
+            "p-height" => Ok(Command::I64Setting(I64Setting::PaletteHeight)),
             "zoom" => Ok(Command::I64Setting(I64Setting::UiZoom)),
             "v" => Ok(Command::I64Setting(I64Setting::ViewIndex)),
             "c-xray" => Ok(Command::I64Setting(I64Setting::CursorXRay)),
@@ -1379,6 +1381,11 @@ impl Variables {
             Command::I64Setting(I64Setting::UiOffsetY),
             "getter/swapper for current UI y offset if $0 is null/present, \
             e.g., `$$ 45` to set Y pixel offset to 45",
+        );
+        variables.add_built_in(
+            Command::I64Setting(I64Setting::PaletteHeight),
+            "getter/swapper for current palette height if $0 is null/present, \
+            e.g., `$$ 5` to set show 5 colors squares vertically",
         );
         variables.add_built_in(
             Command::I64Setting(I64Setting::UiZoom),

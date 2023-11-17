@@ -25,6 +25,8 @@ pub enum I64Setting {
     UiOffsetX,
     /// Offset for the UI, y coordinate.
     UiOffsetY,
+    /// Height of the palette, as the number of colors it supports vertically.
+    PaletteHeight,
     /// Zoom for the UI, roughly 1 to 128.
     UiZoom,
     /// Index for the current view.
@@ -70,6 +72,7 @@ impl Settings {
         i64_map.insert(I64Setting::UiScalePercentage, 100);
         i64_map.insert(I64Setting::UiOffsetX, 0);
         i64_map.insert(I64Setting::UiOffsetY, 0);
+        i64_map.insert(I64Setting::PaletteHeight, 16);
         i64_map.insert(I64Setting::UiZoom, 1);
         i64_map.insert(I64Setting::ViewIndex, 0);
         i64_map.insert(I64Setting::CursorXRay, 1);
