@@ -5,7 +5,7 @@ use crate::font::TextBatch;
 use crate::platform::{self, LogicalSize};
 use crate::renderer;
 use crate::session::{self, Blending, Effect, Session};
-use crate::settings::I64Setting;
+use crate::settings::*;
 use crate::sprite;
 use crate::util;
 use crate::view::resource::ViewResource;
@@ -664,7 +664,7 @@ impl<'a> renderer::Renderer<'a> for Renderer {
         );
 
         // Render to screen framebuffer.
-        let bg = Rgba::from(session.settings["background"].to_rgba8());
+        let bg = Rgba::from(session.get_color_setting(ColorSetting::UiBackground));
         let screen_st = &pipeline_st
             .clone()
             .set_clear_color([bg.r, bg.g, bg.b, bg.a]);
@@ -743,7 +743,9 @@ impl<'a> renderer::Renderer<'a> for Renderer {
 
                     // Render view animations, but only for the active view.
                     let view = session.active_view();
-                    if session.get_i64_setting(I64Setting::UiAnimate) != 0 && view.animation.len() > 1 {
+                    if session.get_i64_setting(I64Setting::UiAnimate) != 0
+                        && view.animation.len() > 1
+                    {
                         if let Some(v) = view_data.get_mut(&view.id) {
                             if let Some(tess) = &v.anim_tess {
                                 let bound_layer = pipeline
@@ -845,7 +847,8 @@ impl<'a> renderer::Renderer<'a> for Renderer {
                     .bind_texture(cursors)
                     .expect("binding textures never fails");
                 shd_gate.shade(cursor2d, |mut iface, uni, mut rdr_gate| {
-                    let ui_scale = session.get_i64_setting(I64Setting::UiScalePercentage) as f64 / 100.0;
+                    let ui_scale =
+                        session.get_i64_setting(I64Setting::UiScalePercentage) as f64 / 100.0;
                     let pixel_ratio = platform::pixel_ratio(*scale_factor);
 
                     iface.set(&uni.cursor, bound_cursors.binding());

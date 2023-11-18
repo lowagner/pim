@@ -59,6 +59,12 @@ pub enum I64Setting {
     ImageSplit,
 }
 
+#[derive(Eq, Hash, PartialEq, Debug, Clone, Copy, EnumIter)]
+pub enum ColorSetting {
+    /// Background color for the UI.
+    UiBackground,
+}
+
 /*
 // TODO: i don't think we need these; we can just delete.
 //       session.rs will just lookup settings via `get_i64_setting(FrameHeight)` or whatever.
@@ -156,3 +162,6 @@ mod test {
     }
 }
 */
+// TODO: move the Command::StringSetting(...) <-> to_string from_string logic tests into this file
+// TODO: move the Command::ColorSetting(...) <-> to_string from_string logic tests into this file
+// TODO: move the Command::I64Setting(...) <-> to_string from_string logic tests into this file

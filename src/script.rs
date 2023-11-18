@@ -119,6 +119,9 @@ pub enum Command {
     CreateAlias,
 
     // TODO: Map: uses mode $0, with keybinding at $1, to evaluate command at $2.  optional command at $3 for release
+    /// Getter/swapper for various settings that are colors.  These can be set via palette index (i64)
+    /// or via a color argument (Rgba8).
+    ColorSetting(ColorSetting),
     /// Getter/swapper for various settings that are strings.
     StringSetting(StringSetting),
     /// Getter/swapper for various settings that are ints (or booleans).
@@ -237,6 +240,7 @@ impl fmt::Display for Command {
             Command::SetVariable => write!(f, "set"),
             Command::ConstVariable => write!(f, "const"),
             Command::CreateAlias => write!(f, "alias"),
+            Command::ColorSetting(ColorSetting::UiBackground) => write!(f, "ui-bg"),
             Command::StringSetting(StringSetting::Mode) => write!(f, "mode"),
             Command::StringSetting(StringSetting::Cwd) => write!(f, "cwd"),
             Command::StringSetting(StringSetting::ConfigDirectory) => write!(f, "config-dir"),
@@ -308,6 +312,7 @@ impl FromStr for Command {
             "set" => Ok(Command::SetVariable),
             "const" => Ok(Command::ConstVariable),
             "alias" => Ok(Command::CreateAlias),
+            "ui-bg" => Ok(Command::ColorSetting(ColorSetting::UiBackground)),
             "mode" => Ok(Command::StringSetting(StringSetting::Mode)),
             "cwd" => Ok(Command::StringSetting(StringSetting::Cwd)),
             "config-dir" => Ok(Command::StringSetting(StringSetting::ConfigDirectory)),
@@ -873,6 +878,20 @@ macro_rules! script_runner {
                     Command::SetVariable => self.variables.set_from_script(&script),
                     Command::ConstVariable => self.variables.set_from_script(&script),
                     Command::CreateAlias => self.variables.set_from_script(&script),
+                    Command::ColorSetting(setting) => {
+                        let optional_color = self.script_evaluate(
+                            &script_stack,
+                            Evaluate::Index(0),
+                        )?.get_optional_color(&self.palette)?;
+                        let old_value = self.get_color_setting(*setting);
+                        match optional_color {
+                            Some(new_value) if new_value != old_value => {
+                                self.set_color_setting(*setting, new_value)?;
+                            }
+                            _ => {}
+                        }
+                        Ok(Argument::Color(old_value))
+                    }
                     Command::StringSetting(setting) => {
                         let argument = self
                             .script_evaluate(&script_stack, Evaluate::Index(0))?
@@ -928,10 +947,12 @@ macro_rules! script_runner {
                         Ok(Argument::I64(old_width * old_height))
                     }
                     Command::ForegroundColor => {
+                        // TODO: move to ColorSetting::Foreground
                         let color_arg = self.script_evaluate(&script_stack, Evaluate::Index(0))?.get_optional_color(&self.palette)?;
                         Ok(Argument::Color(get_or_swap_color(&mut self.fg, color_arg)))
                     }
                     Command::BackgroundColor => {
+                        // TODO: move to ColorSetting::Background
                         let color_arg = self.script_evaluate(&script_stack, Evaluate::Index(0))?.get_optional_color(&self.palette)?;
                         Ok(Argument::Color(get_or_swap_color(&mut self.bg, color_arg)))
                     }
@@ -1350,6 +1371,11 @@ impl Variables {
             Command::CreateAlias,
             "creates an alias with name $0 that evaluates name $1 when called, \
             e.g., `$$ 'fgc' 'fg'` to add `fgc` as an alias for `fg`",
+        );
+        variables.add_built_in(
+            Command::ColorSetting(ColorSetting::UiBackground),
+            "getter/swapper for the current UI background color if $0 is null/present, \
+            e.g., `$$ #123` to make the background color #123",
         );
         variables.add_built_in(
             Command::StringSetting(StringSetting::Mode),

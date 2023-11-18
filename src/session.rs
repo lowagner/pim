@@ -17,7 +17,7 @@ use crate::script::{
     OptionalI64For, Quit, Script, ScriptRunner, Serialize, Variables, VoidResult,
 };
 use crate::script_runner;
-use crate::settings::{I64Setting, StringSetting};
+use crate::settings::*;
 use crate::util;
 
 use crate::gfx::math::*;
@@ -448,11 +448,11 @@ impl Default for Settings {
             map: hashmap! {
                 "debug" => Value::Bool(false),
                 "checker" => Value::U32(0),
-                // TODO: add all these to script.rs
                 "background" => Value::Rgba8(color::TRANSPARENT),
                 "input/mouse" => Value::Bool(true),
                 "scale%" => Value::U32(100),
                 "animation" => Value::Bool(true),
+                // TODO: add all these to script.rs
                 "animation/delay" => Value::U32(160),
                 "ui/palette" => Value::Bool(true),
                 "ui/status" => Value::Bool(true),
@@ -3088,6 +3088,21 @@ impl Session {
             }
         }
         self.center_palette();
+    }
+
+    pub fn get_color_setting(&self, setting: ColorSetting) -> Rgba8 {
+        match setting {
+            ColorSetting::UiBackground => self.settings["background"].to_rgba8(),
+        }
+    }
+
+    pub fn set_color_setting(&mut self, setting: ColorSetting, color: Rgba8) -> VoidResult {
+        match setting {
+            ColorSetting::UiBackground => {
+                self.settings.set("background", Value::Rgba8(color))?;
+            }
+        }
+        Ok(())
     }
 
     pub fn get_string_setting(&self, setting: StringSetting) -> String {
