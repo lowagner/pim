@@ -3094,6 +3094,7 @@ impl Session {
 
     fn get_i64_setting(&self, setting: I64Setting) -> i64 {
         match setting {
+            I64Setting::Debug => self.settings["debug"].is_set() as i64,
             I64Setting::UiAnimate => self.settings["animation"].is_set() as i64,
             I64Setting::UiScalePercentage => self.settings["scale%"].to_u64() as i64,
             I64Setting::UiOffsetX => self.offset.x as i64,
@@ -3129,6 +3130,9 @@ impl Session {
         new_value: i64,
     ) -> VoidResult {
         match setting {
+            I64Setting::Debug => {
+                self.settings.set("debug", Value::Bool(new_value != 0))?;
+            }
             I64Setting::UiAnimate => {
                 self.settings
                     .set("animation", Value::Bool(new_value != 0))?;

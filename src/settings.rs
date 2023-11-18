@@ -1,9 +1,4 @@
-use claim::assert_ok;
-use directories;
 use strum_macros::EnumIter;
-
-use std::collections::HashMap;
-use std::io;
 
 #[derive(Eq, Hash, PartialEq, Debug, Clone, Copy, EnumIter)]
 pub enum StringSetting {
@@ -17,6 +12,8 @@ pub enum StringSetting {
 
 #[derive(Eq, Hash, PartialEq, Debug, Clone, Copy, EnumIter)]
 pub enum I64Setting {
+    /// Whether in debug mode or not.
+    Debug,
     /// Animate the frames in the UI; boolean (0 or 1).
     UiAnimate,
     /// The interface scale (e.g., for palette boxes and command line), as a percentage (100 = 1x).
@@ -59,6 +56,9 @@ pub enum I64Setting {
     ImageSplit,
 }
 
+/*
+// TODO: i don't think we need these; we can just delete.
+//       session.rs will just lookup settings via `get_i64_setting(FrameHeight)` or whatever.
 pub struct Settings {
     i64_map: HashMap<I64Setting, i64>,
     string_map: HashMap<StringSetting, String>,
@@ -68,6 +68,7 @@ impl Settings {
     pub fn new() -> Self {
         // Default settings!
         let mut i64_map = HashMap::new();
+        i64_map.insert(I64Setting::Debug, 1);
         i64_map.insert(I64Setting::UiAnimate, 1);
         i64_map.insert(I64Setting::UiScalePercentage, 100);
         i64_map.insert(I64Setting::UiOffsetX, 0);
@@ -151,3 +152,4 @@ mod test {
         }
     }
 }
+*/

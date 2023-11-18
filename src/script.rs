@@ -240,6 +240,7 @@ impl fmt::Display for Command {
             Command::StringSetting(StringSetting::Mode) => write!(f, "mode"),
             Command::StringSetting(StringSetting::Cwd) => write!(f, "cwd"),
             Command::StringSetting(StringSetting::ConfigDirectory) => write!(f, "config-dir"),
+            Command::I64Setting(I64Setting::Debug) => write!(f, "debug"),
             Command::I64Setting(I64Setting::UiAnimate) => write!(f, "ui-a"),
             Command::I64Setting(I64Setting::UiScalePercentage) => write!(f, "ui-scale%"),
             Command::I64Setting(I64Setting::UiOffsetX) => write!(f, "ui-x"),
@@ -309,6 +310,7 @@ impl FromStr for Command {
             "mode" => Ok(Command::StringSetting(StringSetting::Mode)),
             "cwd" => Ok(Command::StringSetting(StringSetting::Cwd)),
             "config-dir" => Ok(Command::StringSetting(StringSetting::ConfigDirectory)),
+            "debug" => Ok(Command::I64Setting(I64Setting::Debug)),
             "ui-a" => Ok(Command::I64Setting(I64Setting::UiAnimate)),
             "ui-scale%" => Ok(Command::I64Setting(I64Setting::UiScalePercentage)),
             "ui-x" => Ok(Command::I64Setting(I64Setting::UiOffsetX)),
@@ -1361,6 +1363,11 @@ impl Variables {
             Command::StringSetting(StringSetting::ConfigDirectory),
             "getter/swapper for the config file directory if $0 is null/present, \
             e.g., `$$ '/home/whatever'` to change directories",
+        );
+        variables.add_built_in(
+            Command::I64Setting(I64Setting::Debug),
+            "getter/swapper for debug mode if $0 is null/present, \
+            e.g., `$$ on` to turn on debug",
         );
         variables.add_built_in(
             Command::I64Setting(I64Setting::UiAnimate),
@@ -3421,7 +3428,6 @@ mod test {
                 Err(format!("built-in `{}` is not reassignable", name))
             );
         }
-        let settings = Settings::new();
         for i64_setting in I64Setting::iter() {
             let name = format!("{}", Command::I64Setting(i64_setting));
             assert_eq!(
