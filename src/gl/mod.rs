@@ -739,26 +739,23 @@ impl<'a> renderer::Renderer<'a> for Renderer {
                     iface.set(&uni.ortho, ortho);
                     iface.set(&uni.transform, identity);
 
-                    // Render view animations.
-                    if session.settings["animation"].is_set() {
-                        for (id, v) in view_data.iter_mut() {
-                            match (&v.anim_tess, session.views.get(*id)) {
-                                (Some(tess), Some(view)) if view.animation.len() > 1 => {
-                                    let bound_layer = pipeline
-                                        .bind_texture(v.layer.fb.color_slot())
-                                        .expect("binding textures never fails");
-                                    let t = Matrix4::from_translation(
-                                        Vector2::new(0., view.zoom as f32).extend(0.),
-                                    );
+                    // Render view animations, but only for the active view.
+                    let view = session.active_view();
+                    if session.settings["animation"].is_set() && view.animation.len() > 0 {
+                        if let Some(v) = view_data.get_mut(&view.id) {
+                            if let Some(tess) = &v.anim_tess {
+                                let bound_layer = pipeline
+                                    .bind_texture(v.layer.fb.color_slot())
+                                    .expect("binding textures never fails");
+                                let t = Matrix4::from_translation(
+                                    Vector2::new(0., view.zoom as f32).extend(0.),
+                                );
 
-                                    // Render layer animation.
-                                    iface.set(&uni.tex, bound_layer.binding());
-                                    iface.set(&uni.transform, t.into());
-                                    rdr_gate.render(render_st, |mut tess_gate| {
-                                        tess_gate.render(tess)
-                                    })?;
-                                }
-                                _ => (),
+                                // Render layer animation.
+                                iface.set(&uni.tex, bound_layer.binding());
+                                iface.set(&uni.transform, t.into());
+                                rdr_gate
+                                    .render(render_st, |mut tess_gate| tess_gate.render(tess))?;
                             }
                         }
                     }
@@ -1250,17 +1247,17 @@ impl Renderer {
             return;
         }
         // TODO: Does this need to run if the view has only one frame?
-        for v in s.views.iter() {
-            // FIXME: When `v.animation.val()` doesn't change, we don't need
-            // to re-create the buffer.
-            let batch = draw::draw_view_animation(s, v);
+        // Only update animation for the active view.
+        let v = s.active_view();
+        // FIXME: When `v.animation.val()` doesn't change, we don't need
+        // to re-create the buffer.
+        let batch = draw::draw_view_animation(s, v);
 
-            if let Some(vd) = self.view_data.get_mut(&v.id) {
-                vd.anim_tess = Some(
-                    self.ctx
-                        .tessellation::<_, Sprite2dVertex>(batch.vertices().as_slice()),
-                );
-            }
+        if let Some(vd) = self.view_data.get_mut(&v.id) {
+            vd.anim_tess = Some(
+                self.ctx
+                    .tessellation::<_, Sprite2dVertex>(batch.vertices().as_slice()),
+            );
         }
     }
 
