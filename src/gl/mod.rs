@@ -747,9 +747,11 @@ impl<'a> renderer::Renderer<'a> for Renderer {
                                 let bound_layer = pipeline
                                     .bind_texture(v.layer.fb.color_slot())
                                     .expect("binding textures never fails");
+                                let zoom = view.zoom as f32;
                                 let t = Matrix4::from_translation(Vector3::new(
-                                    0.0,
-                                    view.zoom as f32,
+                                    // Move the animation over a bit from the frames.
+                                    -24.0 * zoom,
+                                    zoom,
                                     0.0,
                                 ));
 
