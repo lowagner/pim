@@ -163,6 +163,7 @@ impl Brush {
 
     /// Start drawing. Called when input is first pressed.
     pub fn start_drawing(&mut self, p: ViewCoords<i32>, color: Rgba8, extent: ViewExtent) {
+        // TODO: handle the case that state is already DrawStarted; e.g., for when rmb presses after lmb presses.
         self.state = BrushState::DrawStarted(extent);
         self.color = color;
         self.stroke = Vec::with_capacity(32);

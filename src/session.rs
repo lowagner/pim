@@ -569,8 +569,10 @@ pub struct Session {
     /// The brush tool settings.
     pub brush: Brush,
 
-    /// Input state of the mouse.
-    mouse_state: InputState,
+    /// Input state of the left mouse button.
+    lmb_state: InputState,
+    /// Input state of the right mouse button
+    rmb_state: InputState,
 
     /// Internal command bus. Used to send internal messages asynchronously.
     /// We do this when we want the renderer to have a chance to run before
@@ -636,7 +638,8 @@ impl Session {
             help_offset: Vector2::zero(),
             tool: Tool::default(),
             prev_tool: Option::default(),
-            mouse_state: InputState::Released,
+            lmb_state: InputState::Released,
+            rmb_state: InputState::Released,
             hover_color: Option::default(),
             hover_view: Option::default(),
             fg: color::WHITE,
@@ -1150,8 +1153,11 @@ impl Session {
                 &mut Execution::Normal,
             );
         }
-        if self.mouse_state == InputState::Pressed {
+        if self.lmb_state == InputState::Pressed {
             self.handle_mouse_input(platform::MouseButton::Left, InputState::Released);
+        }
+        if self.rmb_state == InputState::Pressed {
+            self.handle_mouse_input(platform::MouseButton::Right, InputState::Released);
         }
     }
 
@@ -1738,10 +1744,13 @@ impl Session {
 
     fn handle_mouse_input(&mut self, button: platform::MouseButton, state: platform::InputState) {
         // TODO: add right mouse button
-        if button != platform::MouseButton::Left {
+        if button == platform::MouseButton::Left {
+            self.lmb_state = state;
+        } else if button == platform::MouseButton::Right {
+            self.rmb_state = state;
+        } else {
             return;
         }
-        self.mouse_state = state;
 
         // Pan tool.
         match &mut self.tool {
@@ -1764,9 +1773,10 @@ impl Session {
                 // Click on palette.
                 if let Some(color) = self.palette.hover {
                     if self.mode == Mode::Command {
+                        // TODO: something more interesting for right-mouse-button
                         self.cmdline.puts(&Rgb8::from(color).to_string());
                     } else {
-                        self.pick_color(color);
+                        self.pick_color(color, button);
                     }
                     return;
                 }
@@ -1790,17 +1800,21 @@ impl Session {
                                     let color = if self.brush.is_set(brush::BrushMode::Erase) {
                                         Rgba8::TRANSPARENT
                                     } else {
-                                        self.fg
+                                        self.fg_or_bg(button)
                                     };
                                     self.brush.start_drawing(p.into(), color, extent);
                                 }
                                 Tool::Sampler => {
-                                    self.sample_color();
+                                    self.sample_color(button);
                                 }
                                 Tool::Pan(_) => {}
                                 Tool::FloodFill => {
                                     // Ignore failures here
-                                    let _ = self.script_bucket(p.x as i64, p.y as i64, self.fg);
+                                    let _ = self.script_bucket(
+                                        p.x as i64,
+                                        p.y as i64,
+                                        self.fg_or_bg(button),
+                                    );
                                 }
                             },
                             Mode::Command => {
@@ -1907,8 +1921,11 @@ impl Session {
             Tool::Pan(PanState::Panning) => {
                 self.pan(cursor.x - prev_cursor.x, cursor.y - prev_cursor.y);
             }
-            Tool::Sampler if self.mouse_state == InputState::Pressed => {
-                self.sample_color();
+            Tool::Sampler if self.lmb_state == InputState::Pressed => {
+                self.sample_color(platform::MouseButton::Left);
+            }
+            Tool::Sampler if self.rmb_state == InputState::Pressed => {
+                self.sample_color(platform::MouseButton::Right);
             }
             _ => {
                 match self.mode {
@@ -1934,7 +1951,7 @@ impl Session {
                         _ => {}
                     },
                     Mode::Visual(VisualState::Selecting { dragging: false }) => {
-                        if self.mouse_state == InputState::Pressed {
+                        if self.lmb_state == InputState::Pressed {
                             if let Some(ref mut s) = self.selection {
                                 *s = Selection::new(s.x1, s.y1, p.x as i32 + 1, p.y as i32 + 1);
                             }
@@ -1944,7 +1961,7 @@ impl Session {
                         let view = self.active_view().layer_bounds();
 
                         // Resize selection.
-                        if self.mouse_state == InputState::Pressed && p != prev_p {
+                        if self.lmb_state == InputState::Pressed && p != prev_p {
                             if let Some(ref mut s) = self.selection {
                                 // TODO: (rgx) Better API.
                                 let delta = *p - Vector2::new(prev_p.x, prev_p.y);
@@ -1999,7 +2016,7 @@ impl Session {
 
         if let Some(key) = key {
             // While the mouse is down, don't accept keyboard input.
-            if self.mouse_state == InputState::Pressed {
+            if self.lmb_state == InputState::Pressed || self.rmb_state == InputState::Pressed {
                 return;
             }
 
@@ -2978,23 +2995,29 @@ impl Session {
     /// Color functions
     ///////////////////////////////////////////////////////////////////////////
 
-    /// Pick the given color as foreground color.
-    fn pick_color(&mut self, color: Rgba8) {
+    fn fg_or_bg(&self, button: platform::MouseButton) -> Rgba8 {
+        if button == platform::MouseButton::Left {
+            self.fg
+        } else {
+            self.bg
+        }
+    }
+
+    /// Picks the given color as foreground or background color, depending on mouse button.
+    fn pick_color(&mut self, color: Rgba8, button: platform::MouseButton) {
         if color.a == 0x0 {
             return;
         }
-        // TODO: make fg/bg behavior customizable here.
-        // here it switches fg -> bg and sets fg to the new value.
-        if color != self.fg {
-            self.bg = self.fg;
+        if button == platform::MouseButton::Left {
             self.fg = color;
+        } else {
+            self.bg = color;
         }
-        // TODO: Switch to brush.
     }
 
-    fn sample_color(&mut self) {
+    fn sample_color(&mut self, button: platform::MouseButton) {
         if let Some(color) = self.hover_color {
-            self.pick_color(color);
+            self.pick_color(color, button);
         }
     }
 
