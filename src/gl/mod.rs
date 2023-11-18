@@ -5,6 +5,7 @@ use crate::font::TextBatch;
 use crate::platform::{self, LogicalSize};
 use crate::renderer;
 use crate::session::{self, Blending, Effect, Session};
+use crate::settings::I64Setting;
 use crate::sprite;
 use crate::util;
 use crate::view::resource::ViewResource;
@@ -672,7 +673,8 @@ impl<'a> renderer::Renderer<'a> for Renderer {
             screen_st,
             |pipeline, mut shd_gate| {
                 // Draw view checkers to screen framebuffer.
-                if session.settings["checker"].is_set() {
+                let checker_side = session.get_i64_setting(I64Setting::UiChecker);
+                if checker_side > 0 {
                     shd_gate.shade(sprite2d, |mut iface, uni, mut rdr_gate| {
                         let bound_checker = pipeline
                             .bind_texture(checker)

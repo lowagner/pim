@@ -446,9 +446,9 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             map: hashmap! {
-                // TODO: add all these to script.rs
                 "debug" => Value::Bool(false),
-                "checker" => Value::Bool(false),
+                "checker" => Value::U32(0),
+                // TODO: add all these to script.rs
                 "background" => Value::Rgba8(color::TRANSPARENT),
                 "input/mouse" => Value::Bool(true),
                 "scale%" => Value::U32(100),
@@ -3059,7 +3059,7 @@ impl Session {
         self.center_palette();
     }
 
-    fn get_string_setting(&self, setting: StringSetting) -> String {
+    pub fn get_string_setting(&self, setting: StringSetting) -> String {
         match setting {
             StringSetting::Mode => self.mode.to_string(),
             StringSetting::Cwd => {
@@ -3069,7 +3069,7 @@ impl Session {
         }
     }
 
-    fn set_string_setting(&mut self, setting: StringSetting, value: String) -> VoidResult {
+    pub fn set_string_setting(&mut self, setting: StringSetting, value: String) -> VoidResult {
         match setting {
             StringSetting::Mode => {
                 let mode =
@@ -3092,10 +3092,11 @@ impl Session {
         Ok(())
     }
 
-    fn get_i64_setting(&self, setting: I64Setting) -> i64 {
+    pub fn get_i64_setting(&self, setting: I64Setting) -> i64 {
         match setting {
             I64Setting::Debug => self.settings["debug"].is_set() as i64,
             I64Setting::UiAnimate => self.settings["animation"].is_set() as i64,
+            I64Setting::UiChecker => self.settings["checker"].to_u64() as i64,
             I64Setting::UiScalePercentage => self.settings["scale%"].to_u64() as i64,
             I64Setting::UiOffsetX => self.offset.x as i64,
             I64Setting::UiOffsetY => self.offset.y as i64,
@@ -3123,7 +3124,7 @@ impl Session {
         }
     }
 
-    fn set_i64_setting(
+    pub fn set_i64_setting(
         &mut self,
         setting: I64Setting,
         old_value: i64,
@@ -3136,6 +3137,13 @@ impl Session {
             I64Setting::UiAnimate => {
                 self.settings
                     .set("animation", Value::Bool(new_value != 0))?;
+            }
+            I64Setting::UiChecker => {
+                if new_value >= 0 {
+                    self.settings.set("checker", Value::U32(new_value as u32))?;
+                } else {
+                    return Err(format!("invalid value for checkerboard: {}", new_value));
+                }
             }
             I64Setting::UiScalePercentage => {
                 if new_value < 100 || new_value > 400 {

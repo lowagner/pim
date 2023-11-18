@@ -242,6 +242,7 @@ impl fmt::Display for Command {
             Command::StringSetting(StringSetting::ConfigDirectory) => write!(f, "config-dir"),
             Command::I64Setting(I64Setting::Debug) => write!(f, "debug"),
             Command::I64Setting(I64Setting::UiAnimate) => write!(f, "ui-a"),
+            Command::I64Setting(I64Setting::UiChecker) => write!(f, "checker"),
             Command::I64Setting(I64Setting::UiScalePercentage) => write!(f, "ui-scale%"),
             Command::I64Setting(I64Setting::UiOffsetX) => write!(f, "ui-x"),
             Command::I64Setting(I64Setting::UiOffsetY) => write!(f, "ui-y"),
@@ -312,6 +313,7 @@ impl FromStr for Command {
             "config-dir" => Ok(Command::StringSetting(StringSetting::ConfigDirectory)),
             "debug" => Ok(Command::I64Setting(I64Setting::Debug)),
             "ui-a" => Ok(Command::I64Setting(I64Setting::UiAnimate)),
+            "checker" => Ok(Command::I64Setting(I64Setting::UiChecker)),
             "ui-scale%" => Ok(Command::I64Setting(I64Setting::UiScalePercentage)),
             "ui-x" => Ok(Command::I64Setting(I64Setting::UiOffsetX)),
             "ui-y" => Ok(Command::I64Setting(I64Setting::UiOffsetY)),
@@ -1373,6 +1375,11 @@ impl Variables {
             Command::I64Setting(I64Setting::UiAnimate),
             "getter/swapper for toggling animation if $0 is null/present, \
             e.g., `$$ on` to turn on animation",
+        );
+        variables.add_built_in(
+            Command::I64Setting(I64Setting::UiChecker),
+            "getter/swapper for how big the checkerboard is if $0 is null/present, \
+            e.g., `$$ 0` to turn off checkerboard transparency, `$$ 5` to set to 5x5 pixels",
         );
         variables.add_built_in(
             Command::I64Setting(I64Setting::UiScalePercentage),

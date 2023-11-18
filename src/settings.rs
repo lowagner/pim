@@ -16,6 +16,8 @@ pub enum I64Setting {
     Debug,
     /// Animate the frames in the UI; boolean (0 or 1).
     UiAnimate,
+    /// Whether to show a checkerboard for transparent colors.
+    UiChecker,
     /// The interface scale (e.g., for palette boxes and command line), as a percentage (100 = 1x).
     UiScalePercentage,
     /// Offset for the UI, x coordinate.
@@ -28,6 +30,7 @@ pub enum I64Setting {
     UiZoom,
     /// Index for the current view.
     ViewIndex,
+    // TODO: ViewAnimationDelay -- delay in ms for the current animation frame
     /// X-Ray mode to show the color of the pixel below your cursor; boolean (0 or 1)
     CursorXRay,
     /// Size of the brush, in pixels.

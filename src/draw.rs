@@ -5,6 +5,7 @@ use crate::font::{TextAlign, TextBatch};
 use crate::platform;
 use crate::session;
 use crate::session::{Mode, Session, Tool, VisualState};
+use crate::settings::I64Setting;
 use crate::sprite;
 use crate::view::{View, ViewCoords};
 
@@ -519,7 +520,9 @@ fn draw_palette(session: &Session, batch: &mut shape2d::Batch) {
 }
 
 fn draw_checker(session: &Session, batch: &mut sprite2d::Batch) {
-    if session.settings["checker"].is_set() {
+    let checker_side = session.get_i64_setting(I64Setting::UiChecker);
+    // TODO: modify checker size based on checker_side
+    if checker_side > 0 {
         for v in session.views.iter() {
             let ratio = v.width() as f32 / v.height() as f32;
             let rx = CHECKER_REPEAT * v.zoom as f32 * ratio;

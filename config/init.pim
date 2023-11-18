@@ -57,7 +57,7 @@ map/visual  w             :selection/jump +
 map/visual  b             :selection/jump -
 
 set scale% = 100                                              --  Set interface scale to 100%
-set checker = off                                             --  Turn off alpha checker
+set checker = 0                                               --  Turn off alpha checker
 set debug = off                                               --  Turn off debug mode
 set background = #0000                                        --  Set background appearance to black
 
