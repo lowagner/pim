@@ -743,7 +743,7 @@ impl<'a> renderer::Renderer<'a> for Renderer {
 
                     // Render view animations, but only for the active view.
                     let view = session.active_view();
-                    if session.settings["animation"].is_set() && view.animation.len() > 1 {
+                    if session.get_i64_setting(I64Setting::UiAnimate) != 0 && view.animation.len() > 1 {
                         if let Some(v) = view_data.get_mut(&view.id) {
                             if let Some(tess) = &v.anim_tess {
                                 let bound_layer = pipeline
@@ -824,7 +824,7 @@ impl<'a> renderer::Renderer<'a> for Renderer {
                     rdr_gate.render(render_st, |mut tess_gate| tess_gate.render(&screen_tess))
                 })?;
 
-                if session.settings["debug"].is_set() || !execution.is_normal() {
+                if session.get_i64_setting(I64Setting::Debug) != 0 || !execution.is_normal() {
                     let bound_font = pipeline
                         .bind_texture(font)
                         .expect("binding textures never fails");
@@ -845,7 +845,7 @@ impl<'a> renderer::Renderer<'a> for Renderer {
                     .bind_texture(cursors)
                     .expect("binding textures never fails");
                 shd_gate.shade(cursor2d, |mut iface, uni, mut rdr_gate| {
-                    let ui_scale = session.settings["scale%"].to_u64() as f64 / 100.0;
+                    let ui_scale = session.get_i64_setting(I64Setting::UiScalePercentage) as f64 / 100.0;
                     let pixel_ratio = platform::pixel_ratio(*scale_factor);
 
                     iface.set(&uni.cursor, bound_cursors.binding());
@@ -1249,7 +1249,7 @@ impl Renderer {
     }
 
     fn update_view_animations(&mut self, s: &Session) {
-        if !s.settings["animation"].is_set() {
+        if s.get_i64_setting(I64Setting::UiAnimate) == 0 {
             return;
         }
         // TODO: Does this need to run if the view has only one frame?
