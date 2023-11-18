@@ -396,7 +396,9 @@ fn draw_ui(session: &Session, canvas: &mut shape2d::Batch, text: &mut TextBatch)
         );
     }
 
-    if session.settings["debug"].is_set() && session.settings["debug/crosshair"].is_set() {
+    if session.get_i64_setting(I64Setting::Debug) != 0
+        && session.settings["debug/crosshair"].is_set()
+    {
         canvas.add(Shape::Line(
             Line::new(
                 [session.width / 2., 0.],
@@ -424,7 +426,7 @@ fn draw_overlay(
     text: &mut TextBatch,
     exec: &Execution,
 ) {
-    let debug = session.settings["debug"].is_set();
+    let debug = session.get_i64_setting(I64Setting::Debug) != 0;
 
     match exec {
         Execution::Recording { path, .. } => {

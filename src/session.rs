@@ -453,6 +453,7 @@ impl Default for Settings {
                 "scale%" => Value::U32(100),
                 "animation" => Value::Bool(true),
                 // TODO: add all these to script.rs
+                // TODO: make this delay per-view:
                 "animation/delay" => Value::U32(160),
                 "ui/palette" => Value::Bool(true),
                 "ui/status" => Value::Bool(true),
@@ -1739,7 +1740,7 @@ impl Session {
     }
 
     fn get_scale(&self) -> f64 {
-        self.settings["scale%"].to_u64() as f64 / 100.0
+        self.get_i64_setting(I64Setting::UiScalePercentage) as f64 / 100.0
     }
 
     fn handle_mouse_input(&mut self, button: platform::MouseButton, state: platform::InputState) {
