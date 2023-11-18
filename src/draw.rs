@@ -41,7 +41,6 @@ pub const CHECKER: [u8; 16] = [
     0x66, 0x66, 0x66, 0xff,
     0x55, 0x55, 0x55, 0xff,
 ];
-const CHECKER_REPEAT: f32 = 4.;
 const LINE_HEIGHT: f32 = GLYPH_HEIGHT + 4.;
 const MARGIN: f32 = 10.;
 
@@ -520,23 +519,25 @@ fn draw_palette(session: &Session, batch: &mut shape2d::Batch) {
 }
 
 fn draw_checker(session: &Session, batch: &mut sprite2d::Batch) {
-    let checker_side = session.get_i64_setting(I64Setting::UiChecker);
-    // TODO: modify checker size based on checker_side
-    if checker_side > 0 {
-        for v in session.views.iter() {
-            let ratio = v.width() as f32 / v.height() as f32;
-            let rx = CHECKER_REPEAT * v.zoom as f32 * ratio;
-            let ry = CHECKER_REPEAT * v.zoom as f32;
+    let checker_side = session.get_i64_setting(I64Setting::UiChecker) as f32;
+    if checker_side <= 0.0 {
+        return;
+    }
+    for v in session.views.iter() {
+        // Number of times to repeat in the Y direction:
+        let ry = v.height() as f32 / checker_side;
+        let ratio = v.width() as f32 / v.height() as f32;
+        // Number of times to repeat in the X direction:
+        let rx = ry * ratio;
 
-            batch.add(
-                checker::rect(),
-                v.rect() + session.offset,
-                self::CHECKER_LAYER,
-                Rgba::TRANSPARENT,
-                1.,
-                Repeat::new(rx, ry),
-            );
-        }
+        batch.add(
+            checker::rect(),
+            v.rect() + session.offset,
+            self::CHECKER_LAYER,
+            Rgba::TRANSPARENT,
+            1.,
+            Repeat::new(rx, ry),
+        );
     }
 }
 
