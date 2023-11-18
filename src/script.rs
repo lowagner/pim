@@ -147,20 +147,6 @@ pub enum Command {
 
     // TODO: FitPixelWidth, FitPixelHeight; zoom to fit that many pixels within the screen based on available area
     // TODO: convert fg and bg to ColorSetting settings.
-    /// Uses $0 to set the foreground color, if not null, and returns the old value.
-    /// If $0 is null, returns the current foreground color without changing it.
-    /// If $1 is a valid color, e.g., a hex color (#123456) or a palette index (0),
-    /// then the foreground color will be updated to that color and the old color
-    /// will be returned (in hex).  For example:
-    ///     `fg 1`          sets foreground color to what is in palette 1
-    ///     `fg #fedcba`    sets the foreground color to #fedcba
-    ///     `fg`            just returns the foreground color without changing it
-    ForegroundColor,
-    /// Same as `ForegroundColor` but for the background color.  For example:
-    ///     `bg 0`          sets background color to what is in palette 0
-    ///     `bg #012345`    sets the background color to #012345
-    ///     `bg`            just returns the background color without changing it
-    BackgroundColor,
     /// Uses $0 for the palette index, and $1 as an optional color to update the palette at that index.
     /// Returns the original color in the palette.
     PaletteColor,
@@ -241,6 +227,8 @@ impl fmt::Display for Command {
             Command::ConstVariable => write!(f, "const"),
             Command::CreateAlias => write!(f, "alias"),
             Command::ColorSetting(ColorSetting::UiBackground) => write!(f, "ui-bg"),
+            Command::ColorSetting(ColorSetting::Foreground) => write!(f, "fg"),
+            Command::ColorSetting(ColorSetting::Background) => write!(f, "bg"),
             Command::StringSetting(StringSetting::Mode) => write!(f, "mode"),
             Command::StringSetting(StringSetting::Cwd) => write!(f, "cwd"),
             Command::StringSetting(StringSetting::ConfigDirectory) => write!(f, "config-dir"),
@@ -269,9 +257,6 @@ impl fmt::Display for Command {
             Command::UsingOptionalI64(OptionalI64For::FrameClone) => write!(f, "fc"),
             Command::UsingOptionalI64(OptionalI64For::FrameRemove) => write!(f, "fr"),
             Command::FrameResize => write!(f, "f-resize"),
-            // TODO: move fg/bg to color getter/setters (ColorSetting)
-            Command::ForegroundColor => write!(f, "fg"),
-            Command::BackgroundColor => write!(f, "bg"),
             Command::PaletteColor => write!(f, "pc"),
             Command::PaletteAddColor => write!(f, "p-add"),
             Command::PaletteAddGradient => write!(f, "p-gradient"),
@@ -313,6 +298,8 @@ impl FromStr for Command {
             "const" => Ok(Command::ConstVariable),
             "alias" => Ok(Command::CreateAlias),
             "ui-bg" => Ok(Command::ColorSetting(ColorSetting::UiBackground)),
+            "fg" => Ok(Command::ColorSetting(ColorSetting::Foreground)),
+            "bg" => Ok(Command::ColorSetting(ColorSetting::Background)),
             "mode" => Ok(Command::StringSetting(StringSetting::Mode)),
             "cwd" => Ok(Command::StringSetting(StringSetting::Cwd)),
             "config-dir" => Ok(Command::StringSetting(StringSetting::ConfigDirectory)),
@@ -341,8 +328,6 @@ impl FromStr for Command {
             "fc" => Ok(Command::UsingOptionalI64(OptionalI64For::FrameClone)),
             "fr" => Ok(Command::UsingOptionalI64(OptionalI64For::FrameRemove)),
             "f-resize" => Ok(Command::FrameResize),
-            "fg" => Ok(Command::ForegroundColor),
-            "bg" => Ok(Command::BackgroundColor),
             "pc" => Ok(Command::PaletteColor),
             "p-add" => Ok(Command::PaletteAddColor),
             "p-gradient" => Ok(Command::PaletteAddGradient),
@@ -946,16 +931,6 @@ macro_rules! script_runner {
                         }
                         Ok(Argument::I64(old_width * old_height))
                     }
-                    Command::ForegroundColor => {
-                        // TODO: move to ColorSetting::Foreground
-                        let color_arg = self.script_evaluate(&script_stack, Evaluate::Index(0))?.get_optional_color(&self.palette)?;
-                        Ok(Argument::Color(get_or_swap_color(&mut self.fg, color_arg)))
-                    }
-                    Command::BackgroundColor => {
-                        // TODO: move to ColorSetting::Background
-                        let color_arg = self.script_evaluate(&script_stack, Evaluate::Index(0))?.get_optional_color(&self.palette)?;
-                        Ok(Argument::Color(get_or_swap_color(&mut self.bg, color_arg)))
-                    }
                     Command::PaletteColor => {
                         // TODO: pull out palette_index logic into a helper function
                         //       so we can re-use it for PaletteRepaint
@@ -1116,6 +1091,7 @@ macro_rules! script_runner {
     };
 }
 
+// TODO: can we remove this?
 /// Essentially a getter/swapper for color, with a Null argument making
 /// this behave as a getter and a non-Null argument as a swapper, i.e.,
 /// we return the old value as we swap in the new value.
@@ -1378,6 +1354,16 @@ impl Variables {
             e.g., `$$ #123` to make the background color #123",
         );
         variables.add_built_in(
+            Command::ColorSetting(ColorSetting::Foreground),
+            "getter/swapper for foreground color if $0 is null/present, \
+            e.g., `$$ 3` to set foreground color to palette 3",
+        );
+        variables.add_built_in(
+            Command::ColorSetting(ColorSetting::Background),
+            "getter/swapper for background color if $0 is null/present, \
+            e.g., `$$ #123456` to set background color to #123456",
+        );
+        variables.add_built_in(
             Command::StringSetting(StringSetting::Mode),
             "getter/swapper for the current mode if $0 is null/present, \
             e.g., `$$ 'normal'` to go to normal mode",
@@ -1520,16 +1506,6 @@ impl Variables {
             e.g., `$$ 12 34` to set to 12 pixels wide and 34 pixels high",
         );
         variables.add_built_in(
-            Command::ForegroundColor,
-            "getter/swapper for foreground color if $0 is null/present, \
-            e.g., `$$ 3` to set foreground color to palette 3",
-        );
-        variables.add_built_in(
-            Command::BackgroundColor,
-            "getter/swapper for background color if $0 is null/present, \
-            e.g., `$$ #123456` to set background color to #123456",
-        );
-        variables.add_built_in(
             Command::PaletteColor,
             "getter/swapper for palette color $0 if $1 is null/present, \
             e.g., `$$ 7 #123456` to set palette color 7 to #123456",
@@ -1626,10 +1602,12 @@ impl Variables {
         assert_ok!(variables.set(
             "swap".to_string(),
             Variable::Const(Argument::Script(Script {
-                command: Command::ForegroundColor,
+                command: Command::ColorSetting(ColorSetting::Foreground),
                 arguments: vec![Argument::Script(Script {
-                    command: Command::BackgroundColor,
-                    arguments: vec![Argument::Script(Script::zero_arg(Command::ForegroundColor))],
+                    command: Command::ColorSetting(ColorSetting::Background),
+                    arguments: vec![Argument::Script(Script::zero_arg(Command::ColorSetting(
+                        ColorSetting::Foreground
+                    )))],
                 })],
             })),
         ));
@@ -1639,6 +1617,12 @@ impl Variables {
         assert_ok!(variables.set("multiply".to_string(), Variable::Alias("*".to_string())));
         assert_ok!(variables.set("product".to_string(), Variable::Alias("*".to_string())));
         assert_ok!(variables.set("sum".to_string(), Variable::Alias("+".to_string())));
+        assert_ok!(variables.set(
+            "ui-background".to_string(),
+            Variable::Alias("ui-bg".to_string())
+        ));
+        assert_ok!(variables.set("foreground".to_string(), Variable::Alias("fg".to_string())));
+        assert_ok!(variables.set("background".to_string(), Variable::Alias("bg".to_string())));
         assert_ok!(variables.set("paint".to_string(), Variable::Alias("p".to_string())));
         assert_ok!(variables.set("bucket".to_string(), Variable::Alias("b".to_string())));
         assert_ok!(variables.set("mouse-x".to_string(), Variable::Alias("mx".to_string())));
@@ -1946,6 +1930,35 @@ mod test {
                 .push(WhatRan::Mocked("p-view".to_string()));
         }
 
+        fn get_color_setting(&self, setting: ColorSetting) -> Rgba8 {
+            match setting {
+                ColorSetting::Foreground => self.fg,
+                ColorSetting::Background => self.bg,
+                _ => Rgba8 {
+                    r: 99,
+                    g: 88,
+                    b: 77,
+                    a: 66,
+                },
+            }
+        }
+
+        fn set_color_setting(&mut self, setting: ColorSetting, value: Rgba8) -> VoidResult {
+            match setting {
+                ColorSetting::Foreground => {
+                    self.fg = value;
+                }
+                ColorSetting::Background => {
+                    self.bg = value;
+                }
+                _ => {
+                    self.test_what_ran
+                        .push(WhatRan::Mocked(format!("set{:?}({})", setting, value)));
+                }
+            }
+            Ok(())
+        }
+
         fn get_string_setting(&self, _setting: StringSetting) -> String {
             "asdf".to_string()
         }
@@ -2035,7 +2048,7 @@ mod test {
     #[test]
     fn test_script_run_taking_too_many_arguments() {
         let script = Script {
-            command: Command::ForegroundColor,
+            command: Command::ColorSetting(ColorSetting::Foreground),
             arguments: Vec::new(),
         };
 
@@ -2045,9 +2058,9 @@ mod test {
         assert_eq!(
             test_runner.test_what_ran,
             Vec::from([
-                WhatRan::Begin(Command::ForegroundColor),
+                WhatRan::Begin(Command::ColorSetting(ColorSetting::Foreground)),
                 WhatRan::Evaluated(Ok(Argument::Null)),
-                WhatRan::End(Command::ForegroundColor),
+                WhatRan::End(Command::ColorSetting(ColorSetting::Foreground)),
             ])
         );
         assert!(result.is_ok());
@@ -2100,7 +2113,7 @@ mod test {
             arguments: Vec::from([
                 Argument::I64(1),
                 Argument::Script(Script {
-                    command: Command::ForegroundColor,
+                    command: Command::ColorSetting(ColorSetting::Foreground),
                     arguments: Vec::from([Argument::Color(Rgba8::RED)]),
                 }),
             ]),
@@ -2114,9 +2127,9 @@ mod test {
             Vec::from([
                 WhatRan::Begin(Command::If),
                 WhatRan::Evaluated(Ok(Argument::I64(1))),
-                WhatRan::Begin(Command::ForegroundColor),
+                WhatRan::Begin(Command::ColorSetting(ColorSetting::Foreground)),
                 WhatRan::Evaluated(Ok(Argument::Color(Rgba8::RED))),
-                WhatRan::End(Command::ForegroundColor),
+                WhatRan::End(Command::ColorSetting(ColorSetting::Foreground)),
                 // This second one comes as a result of returning this from the foreground;
                 // this is what it was previously:
                 WhatRan::Evaluated(Ok(Argument::Color(Rgba8::WHITE))),
@@ -2212,10 +2225,12 @@ mod test {
             command: Command::PushPop,
             arguments: Vec::from([
                 Argument::Script(Script {
-                    command: Command::ForegroundColor,
+                    command: Command::ColorSetting(ColorSetting::Foreground),
                     arguments: Vec::from([Argument::I64(palette_index as i64)]),
                 }),
-                Argument::Script(Script::zero_arg(Command::ForegroundColor)),
+                Argument::Script(Script::zero_arg(Command::ColorSetting(
+                    ColorSetting::Foreground,
+                ))),
             ]),
         };
         let mut test_runner = TestRunner::new();
@@ -2236,22 +2251,22 @@ mod test {
             Vec::from([
                 WhatRan::Begin(Command::PushPop),
                 // Evaluating the "push" part of PushPop; pushing a new color:
-                WhatRan::Begin(Command::ForegroundColor),
+                WhatRan::Begin(Command::ColorSetting(ColorSetting::Foreground)),
                 WhatRan::Evaluated(Ok(Argument::I64(palette_index as i64))),
-                WhatRan::End(Command::ForegroundColor),
+                WhatRan::End(Command::ColorSetting(ColorSetting::Foreground)),
                 WhatRan::Evaluated(Ok(Argument::Color(initial_color))),
                 // Now running the later arguments:
-                WhatRan::Begin(Command::ForegroundColor),
+                WhatRan::Begin(Command::ColorSetting(ColorSetting::Foreground)),
                 WhatRan::Evaluated(Ok(Argument::Null)), // no argument to fg, getter.
-                WhatRan::End(Command::ForegroundColor),
+                WhatRan::End(Command::ColorSetting(ColorSetting::Foreground)),
                 // Foreground color inside the commands is evaluating to this:
                 WhatRan::Evaluated(Ok(Argument::Color(
                     test_runner.palette.colors[palette_index]
                 ))),
                 // Now we are evaluating the "pop" part of PushPop; resetting color:
-                WhatRan::Begin(Command::ForegroundColor),
+                WhatRan::Begin(Command::ColorSetting(ColorSetting::Foreground)),
                 WhatRan::Evaluated(Ok(Argument::Color(initial_color))),
-                WhatRan::End(Command::ForegroundColor),
+                WhatRan::End(Command::ColorSetting(ColorSetting::Foreground)),
                 WhatRan::End(Command::PushPop),
             ])
         );
@@ -2270,10 +2285,12 @@ mod test {
             command: Command::PushPop,
             arguments: Vec::from([
                 Argument::Script(Script {
-                    command: Command::BackgroundColor,
+                    command: Command::ColorSetting(ColorSetting::Background),
                     arguments: Vec::from([Argument::Color(new_color)]),
                 }),
-                Argument::Script(Script::zero_arg(Command::BackgroundColor)),
+                Argument::Script(Script::zero_arg(Command::ColorSetting(
+                    ColorSetting::Background,
+                ))),
                 // This will be an error:
                 Argument::Use(Use {
                     lookback: 0,
@@ -2301,23 +2318,23 @@ mod test {
             Vec::from([
                 WhatRan::Begin(Command::PushPop),
                 // Evaluating the "push" part of PushPop; pushing a new color:
-                WhatRan::Begin(Command::BackgroundColor),
+                WhatRan::Begin(Command::ColorSetting(ColorSetting::Background)),
                 WhatRan::Evaluated(Ok(Argument::Color(new_color))),
-                WhatRan::End(Command::BackgroundColor),
+                WhatRan::End(Command::ColorSetting(ColorSetting::Background)),
                 WhatRan::Evaluated(Ok(Argument::Color(initial_color))),
                 // Now running the later arguments:
-                WhatRan::Begin(Command::BackgroundColor),
+                WhatRan::Begin(Command::ColorSetting(ColorSetting::Background)),
                 WhatRan::Evaluated(Ok(Argument::Null)), // no argument to bg, getter.
-                WhatRan::End(Command::BackgroundColor),
+                WhatRan::End(Command::ColorSetting(ColorSetting::Background)),
                 // Background color inside the commands is evaluating to this:
                 WhatRan::Evaluated(Ok(Argument::Color(new_color))),
                 // Trying something that will error:
                 WhatRan::Evaluated(Err("$1234 should only be used inside a script".to_string())),
                 // NOTE: I64(4042) should NOT be evaluated!
                 // Now we are evaluating the "pop" part of PushPop; resetting color:
-                WhatRan::Begin(Command::BackgroundColor),
+                WhatRan::Begin(Command::ColorSetting(ColorSetting::Background)),
                 WhatRan::Evaluated(Ok(Argument::Color(initial_color))),
-                WhatRan::End(Command::BackgroundColor),
+                WhatRan::End(Command::ColorSetting(ColorSetting::Background)),
                 WhatRan::End(Command::PushPop),
             ])
         );
@@ -2332,7 +2349,9 @@ mod test {
             command: Command::PushPop,
             arguments: Vec::from([
                 Argument::I64(0),
-                Argument::Script(Script::zero_arg(Command::BackgroundColor)),
+                Argument::Script(Script::zero_arg(Command::ColorSetting(
+                    ColorSetting::Background,
+                ))),
             ]),
         };
         let mut test_runner = TestRunner::new();
@@ -2357,7 +2376,9 @@ mod test {
         let script = Script {
             command: Command::RunAll,
             arguments: Vec::from([
-                Argument::Script(Script::zero_arg(Command::ForegroundColor)),
+                Argument::Script(Script::zero_arg(Command::ColorSetting(
+                    ColorSetting::Foreground,
+                ))),
                 // Not much point to a non-script argument in RunAll unless you refer to
                 // it later, e.g., via $1 or similar.
                 Argument::I64(32),
@@ -2371,7 +2392,9 @@ mod test {
                 }),
                 Argument::Script(Script::zero_arg(Command::Error)),
                 // Should not evaluate this:
-                Argument::Script(Script::zero_arg(Command::BackgroundColor)),
+                Argument::Script(Script::zero_arg(Command::ColorSetting(
+                    ColorSetting::Background,
+                ))),
             ]),
         };
         let mut test_runner = TestRunner::new();
@@ -2382,9 +2405,9 @@ mod test {
             test_runner.test_what_ran,
             Vec::from([
                 WhatRan::Begin(Command::RunAll),
-                WhatRan::Begin(Command::ForegroundColor),
+                WhatRan::Begin(Command::ColorSetting(ColorSetting::Foreground)),
                 WhatRan::Evaluated(Ok(Argument::Null)),
-                WhatRan::End(Command::ForegroundColor),
+                WhatRan::End(Command::ColorSetting(ColorSetting::Foreground)),
                 WhatRan::Evaluated(Ok(Argument::Color(test_runner.fg))),
                 WhatRan::Evaluated(Ok(Argument::I64(32))),
                 WhatRan::Begin(Command::Paint),
@@ -2408,8 +2431,12 @@ mod test {
         let script = Script {
             command: Command::RunAll,
             arguments: Vec::from([
-                Argument::Script(Script::zero_arg(Command::ForegroundColor)),
-                Argument::Script(Script::zero_arg(Command::BackgroundColor)),
+                Argument::Script(Script::zero_arg(Command::ColorSetting(
+                    ColorSetting::Foreground,
+                ))),
+                Argument::Script(Script::zero_arg(Command::ColorSetting(
+                    ColorSetting::Background,
+                ))),
                 Argument::I64(33),
             ]),
         };
@@ -2421,13 +2448,13 @@ mod test {
             test_runner.test_what_ran,
             Vec::from([
                 WhatRan::Begin(Command::RunAll),
-                WhatRan::Begin(Command::ForegroundColor),
+                WhatRan::Begin(Command::ColorSetting(ColorSetting::Foreground)),
                 WhatRan::Evaluated(Ok(Argument::Null)),
-                WhatRan::End(Command::ForegroundColor),
+                WhatRan::End(Command::ColorSetting(ColorSetting::Foreground)),
                 WhatRan::Evaluated(Ok(Argument::Color(test_runner.fg))),
-                WhatRan::Begin(Command::BackgroundColor),
+                WhatRan::Begin(Command::ColorSetting(ColorSetting::Background)),
                 WhatRan::Evaluated(Ok(Argument::Null)),
-                WhatRan::End(Command::BackgroundColor),
+                WhatRan::End(Command::ColorSetting(ColorSetting::Background)),
                 WhatRan::Evaluated(Ok(Argument::Color(test_runner.bg))),
                 WhatRan::Evaluated(Ok(Argument::I64(33))),
                 WhatRan::End(Command::RunAll),
@@ -2463,7 +2490,9 @@ mod test {
                         Argument::Color(Rgba8::RED),
                     ],
                 }),
-                Argument::Script(Script::zero_arg(Command::ForegroundColor)),
+                Argument::Script(Script::zero_arg(Command::ColorSetting(
+                    ColorSetting::Foreground,
+                ))),
             ],
         };
         let mut test_runner = TestRunner::new();
@@ -2491,9 +2520,9 @@ mod test {
                 WhatRan::Evaluated(Ok(Argument::Color(Rgba8::RED))),
                 WhatRan::End(Command::Error),
                 WhatRan::Evaluated(Err("123 null #ff0000".to_string())),
-                WhatRan::Begin(Command::ForegroundColor),
+                WhatRan::Begin(Command::ColorSetting(ColorSetting::Foreground)),
                 WhatRan::Evaluated(Ok(Argument::Null)),
-                WhatRan::End(Command::ForegroundColor),
+                WhatRan::End(Command::ColorSetting(ColorSetting::Foreground)),
                 WhatRan::Evaluated(Ok(Argument::Color(test_runner.fg))),
                 WhatRan::End(Command::Echo),
             ])
@@ -2532,7 +2561,9 @@ mod test {
                         Argument::Color(Rgba8::GREEN),
                     ],
                 }),
-                Argument::Script(Script::zero_arg(Command::BackgroundColor)),
+                Argument::Script(Script::zero_arg(Command::ColorSetting(
+                    ColorSetting::Background,
+                ))),
             ],
         };
         let mut test_runner = TestRunner::new();
@@ -2559,9 +2590,9 @@ mod test {
                 WhatRan::Evaluated(Ok(Argument::Color(Rgba8::GREEN))),
                 WhatRan::End(Command::Error),
                 WhatRan::Evaluated(Err("null 123 #00ff00".to_string())),
-                WhatRan::Begin(Command::BackgroundColor),
+                WhatRan::Begin(Command::ColorSetting(ColorSetting::Background)),
                 WhatRan::Evaluated(Ok(Argument::Null)),
-                WhatRan::End(Command::BackgroundColor),
+                WhatRan::End(Command::ColorSetting(ColorSetting::Background)),
                 WhatRan::Evaluated(Ok(Argument::Color(test_runner.bg))),
                 WhatRan::End(Command::Error),
             ])
@@ -2772,11 +2803,11 @@ mod test {
                     arguments: vec![],
                 }),
                 Argument::Script(Script {
-                    command: Command::ForegroundColor,
+                    command: Command::ColorSetting(ColorSetting::Foreground),
                     arguments: vec![Argument::Color(Rgba8::BLACK)],
                 }),
                 Argument::Script(Script {
-                    command: Command::BackgroundColor,
+                    command: Command::ColorSetting(ColorSetting::Background),
                     arguments: vec![Argument::Color(Rgba8::RED)],
                 }),
             ],
@@ -2809,9 +2840,9 @@ mod test {
                 WhatRan::Begin(Command::Evaluate(variable_name.clone())),
                 WhatRan::End(Command::Evaluate(variable_name.clone())),
                 WhatRan::Evaluated(Ok(Argument::I64(1))),
-                WhatRan::Begin(Command::ForegroundColor),
+                WhatRan::Begin(Command::ColorSetting(ColorSetting::Foreground)),
                 WhatRan::Evaluated(Ok(Argument::Color(Rgba8::BLACK))),
-                WhatRan::End(Command::ForegroundColor),
+                WhatRan::End(Command::ColorSetting(ColorSetting::Foreground)),
                 WhatRan::Evaluated(Ok(Argument::Color(Rgba8::WHITE))), // previous FG color
                 WhatRan::End(Command::If),
                 // Second run:
@@ -2819,9 +2850,9 @@ mod test {
                 WhatRan::Begin(Command::Evaluate(variable_name.clone())),
                 WhatRan::End(Command::Evaluate(variable_name.clone())),
                 WhatRan::Evaluated(Ok(Argument::I64(0))),
-                WhatRan::Begin(Command::BackgroundColor),
+                WhatRan::Begin(Command::ColorSetting(ColorSetting::Background)),
                 WhatRan::Evaluated(Ok(Argument::Color(Rgba8::RED))),
-                WhatRan::End(Command::BackgroundColor),
+                WhatRan::End(Command::ColorSetting(ColorSetting::Background)),
                 WhatRan::Evaluated(Ok(Argument::Color(Rgba8::BLACK))), // previous BG color
                 WhatRan::End(Command::If),
             ]
@@ -2836,7 +2867,7 @@ mod test {
             arguments: Vec::from([
                 Argument::String(variable_name.clone()),
                 Argument::Script(Script {
-                    command: Command::ForegroundColor,
+                    command: Command::ColorSetting(ColorSetting::Foreground),
                     arguments: vec![Argument::Use(Use {
                         index: 1,
                         lookback: -1,
@@ -2871,9 +2902,9 @@ mod test {
                 WhatRan::End(Command::SetVariable),
                 // Second run:
                 WhatRan::Begin(Command::Evaluate(variable_name.clone())),
-                WhatRan::Begin(Command::ForegroundColor),
+                WhatRan::Begin(Command::ColorSetting(ColorSetting::Foreground)),
                 WhatRan::Evaluated(Ok(Argument::Color(Rgba8::BLUE))),
-                WhatRan::End(Command::ForegroundColor),
+                WhatRan::End(Command::ColorSetting(ColorSetting::Foreground)),
                 WhatRan::End(Command::Evaluate(variable_name.clone())),
             ]
         );
@@ -2887,7 +2918,7 @@ mod test {
             arguments: Vec::from([
                 Argument::String(variable_name.clone()),
                 Argument::Script(Script {
-                    command: Command::BackgroundColor,
+                    command: Command::ColorSetting(ColorSetting::Background),
                     arguments: vec![Argument::Use(Use {
                         index: 2,
                         lookback: -1,
@@ -2921,9 +2952,9 @@ mod test {
                 WhatRan::End(Command::ConstVariable),
                 // Second run:
                 WhatRan::Begin(Command::Evaluate(variable_name.clone())),
-                WhatRan::Begin(Command::BackgroundColor),
+                WhatRan::Begin(Command::ColorSetting(ColorSetting::Background)),
                 WhatRan::Evaluated(Ok(Argument::Color(Rgba8::BLACK))),
-                WhatRan::End(Command::BackgroundColor),
+                WhatRan::End(Command::ColorSetting(ColorSetting::Background)),
                 WhatRan::End(Command::Evaluate(variable_name.clone())),
             ]
         );
@@ -3475,6 +3506,13 @@ mod test {
 
     #[test]
     fn test_commands_can_be_printed_and_unprinted() {
+        for setting in ColorSetting::iter() {
+            let command = Command::ColorSetting(setting);
+            let name = format!("{}", command);
+            let command_from_name = Command::from_str(&name).unwrap();
+            assert_eq!(command_from_name, command);
+        }
+
         for setting in StringSetting::iter() {
             let command = Command::StringSetting(setting);
             let name = format!("{}", command);
@@ -3704,7 +3742,7 @@ mod test {
         let mut variables = Variables::new();
         let var_name = "blast-turtle".to_string();
         let lambda = Script {
-            command: Command::ForegroundColor,
+            command: Command::ColorSetting(ColorSetting::Foreground),
             arguments: vec![Argument::I64(30)],
         };
         let mut script = Script {
@@ -3735,7 +3773,7 @@ mod test {
         let mut variables = Variables::new();
         let var_name = "blast-dog".to_string();
         let lambda = Script {
-            command: Command::ForegroundColor,
+            command: Command::ColorSetting(ColorSetting::Foreground),
             arguments: vec![Argument::I64(29)],
         };
         let mut script = Script {
@@ -3895,8 +3933,14 @@ mod test {
         assert_eq!(Command::from_str("set"), Ok(Command::SetVariable));
         assert_eq!(Command::from_str("const"), Ok(Command::ConstVariable));
         assert_eq!(Command::from_str("alias"), Ok(Command::CreateAlias));
-        assert_eq!(Command::from_str("fg"), Ok(Command::ForegroundColor));
-        assert_eq!(Command::from_str("bg"), Ok(Command::BackgroundColor));
+        assert_eq!(
+            Command::from_str("fg"),
+            Ok(Command::ColorSetting(ColorSetting::Foreground))
+        );
+        assert_eq!(
+            Command::from_str("bg"),
+            Ok(Command::ColorSetting(ColorSetting::Background))
+        );
         assert_eq!(Command::from_str("pc"), Ok(Command::PaletteColor));
         assert_eq!(Command::from_str("p-add"), Ok(Command::PaletteAddColor));
         assert_eq!(Command::from_str("p-clear"), Ok(Command::PaletteClear));
@@ -3936,7 +3980,7 @@ mod test {
                     command: Command::Evaluate("jangles".to_string()),
                     arguments: vec![
                         Argument::Script(Script {
-                            command: Command::ForegroundColor,
+                            command: Command::ColorSetting(ColorSetting::Foreground),
                             arguments: vec![Argument::Use(Use {
                                 index: 2,
                                 lookback: -3,

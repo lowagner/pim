@@ -490,7 +490,7 @@ mod test {
         assert_eq!(
             result,
             Script {
-                command: Command::BackgroundColor,
+                command: Command::ColorSetting(ColorSetting::Background),
                 arguments: vec![],
             }
         );
@@ -557,9 +557,9 @@ mod test {
         assert_eq!(
             result,
             Script {
-                command: Command::ForegroundColor,
+                command: Command::ColorSetting(ColorSetting::Foreground),
                 arguments: vec![Argument::Script(Script {
-                    command: Command::BackgroundColor,
+                    command: Command::ColorSetting(ColorSetting::Background),
                     arguments: vec![]
                 }),],
             }
@@ -587,7 +587,7 @@ mod test {
                         arguments: vec![]
                     }),
                     Argument::Script(Script {
-                        command: Command::ForegroundColor,
+                        command: Command::ColorSetting(ColorSetting::Foreground),
                         arguments: vec![Argument::Script(Script {
                             command: Command::Evaluate("swap3".to_string()),
                             arguments: vec![]
@@ -608,7 +608,7 @@ mod test {
         assert_eq!(
             result,
             Script {
-                command: Command::ForegroundColor,
+                command: Command::ColorSetting(ColorSetting::Foreground),
                 arguments: vec![Argument::Script(Script {
                     command: Command::Evaluate("hello".to_string()),
                     arguments: vec![Argument::String("world".to_string()), Argument::I64(123),],
@@ -627,7 +627,7 @@ mod test {
         assert_eq!(
             result,
             Script {
-                command: Command::ForegroundColor,
+                command: Command::ColorSetting(ColorSetting::Foreground),
                 arguments: vec![Argument::Script(Script {
                     command: Command::Evaluate("hello".to_string()),
                     arguments: vec![Argument::String("world".to_string()), Argument::I64(-123),],

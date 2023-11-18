@@ -3093,6 +3093,8 @@ impl Session {
     pub fn get_color_setting(&self, setting: ColorSetting) -> Rgba8 {
         match setting {
             ColorSetting::UiBackground => self.settings["background"].to_rgba8(),
+            ColorSetting::Foreground => self.fg,
+            ColorSetting::Background => self.bg,
         }
     }
 
@@ -3100,6 +3102,12 @@ impl Session {
         match setting {
             ColorSetting::UiBackground => {
                 self.settings.set("background", Value::Rgba8(color))?;
+            }
+            ColorSetting::Foreground => {
+                self.fg = color;
+            }
+            ColorSetting::Background => {
+                self.bg = color;
             }
         }
         Ok(())
