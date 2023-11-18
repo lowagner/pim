@@ -1802,7 +1802,14 @@ impl Session {
                                     } else {
                                         self.fg_or_bg(button)
                                     };
-                                    self.brush.start_drawing(p.into(), color, extent);
+                                    let previous_out =
+                                        self.brush.start_drawing(p.into(), color, extent);
+                                    if !previous_out.is_empty() {
+                                        self.effects.extend_from_slice(&[
+                                            Effect::ViewBlendingChanged(Blending::Alpha),
+                                            Effect::ViewPaintFinal(previous_out),
+                                        ]);
+                                    }
                                 }
                                 Tool::Sampler => {
                                     self.sample_color(button);
@@ -1865,6 +1872,7 @@ impl Session {
                         match self.brush.state {
                             BrushState::Drawing { .. } | BrushState::DrawStarted { .. } => {
                                 self.brush.stop_drawing();
+                                // TODO: if the other mouse button is still pressed, resume drawing with it
                                 self.active_view_mut().touch();
                             }
                             _ => {}

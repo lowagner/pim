@@ -161,13 +161,25 @@ impl Brush {
         }
     }
 
-    /// Start drawing. Called when input is first pressed.
-    pub fn start_drawing(&mut self, p: ViewCoords<i32>, color: Rgba8, extent: ViewExtent) {
-        // TODO: handle the case that state is already DrawStarted; e.g., for when rmb presses after lmb presses.
+    /// Starts drawing. Called when input is first pressed.
+    /// Returns an output in case we had a second button pressed simultaneously.
+    pub fn start_drawing(
+        &mut self,
+        p: ViewCoords<i32>,
+        color: Rgba8,
+        extent: ViewExtent,
+    ) -> Vec<Shape> {
+        let out = self.output(
+            Stroke::NONE,
+            Fill::Solid(self.color.into()),
+            1.0,
+            Align::BottomLeft,
+        );
         self.state = BrushState::DrawStarted(extent);
         self.color = color;
         self.stroke = Vec::with_capacity(32);
         self.draw(p);
+        out
     }
 
     /// If a line mode is active, return it
