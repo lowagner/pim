@@ -12,7 +12,7 @@ use crate::view::{View, ViewId, ViewOp, ViewState};
 use crate::{data, data::Assets, image};
 
 use crate::gfx::{shape2d, sprite2d, Origin, Rgba, Rgba8, ZDepth};
-use crate::gfx::{Matrix4, Rect, Repeat, Vector2};
+use crate::gfx::{Matrix4, Rect, Repeat, Vector3};
 
 use luminance::context::GraphicsContext;
 use luminance::depth_test::DepthComparison;
@@ -741,15 +741,17 @@ impl<'a> renderer::Renderer<'a> for Renderer {
 
                     // Render view animations, but only for the active view.
                     let view = session.active_view();
-                    if session.settings["animation"].is_set() && view.animation.len() > 0 {
+                    if session.settings["animation"].is_set() && view.animation.len() > 1 {
                         if let Some(v) = view_data.get_mut(&view.id) {
                             if let Some(tess) = &v.anim_tess {
                                 let bound_layer = pipeline
                                     .bind_texture(v.layer.fb.color_slot())
                                     .expect("binding textures never fails");
-                                let t = Matrix4::from_translation(
-                                    Vector2::new(0., view.zoom as f32).extend(0.),
-                                );
+                                let t = Matrix4::from_translation(Vector3::new(
+                                    0.0,
+                                    view.zoom as f32,
+                                    0.0,
+                                ));
 
                                 // Render layer animation.
                                 iface.set(&uni.tex, bound_layer.binding());
