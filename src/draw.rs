@@ -218,6 +218,7 @@ fn draw_ui(session: &Session, canvas: &mut shape2d::Batch, text: &mut TextBatch)
     }
 
     for v in session.views.iter() {
+        let zoom = v.zoom as f32;
         let offset = v.offset + session.offset;
 
         let (border_color, current_view_frame) = if session.is_active(v.id) {
