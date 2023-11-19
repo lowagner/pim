@@ -231,7 +231,7 @@ impl fmt::Display for Command {
             Command::ColorSetting(ColorSetting::Foreground) => write!(f, "fg"),
             Command::ColorSetting(ColorSetting::Background) => write!(f, "bg"),
             Command::StringSetting(StringSetting::Mode) => write!(f, "mode"),
-            Command::StringSetting(StringSetting::Cwd) => write!(f, "cwd"),
+            Command::StringSetting(StringSetting::Cwd) => write!(f, "cwd"), // Directory
             Command::StringSetting(StringSetting::ConfigDirectory) => write!(f, "config-dir"),
             Command::I64Setting(I64Setting::Debug) => write!(f, "debug"),
             Command::I64Setting(I64Setting::UiAnimate) => write!(f, "ui-a"),

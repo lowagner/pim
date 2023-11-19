@@ -2559,7 +2559,6 @@ impl Session {
                     );
                 }
             }
-            // TODO: Continue here!
             Cmd::Set(ref k, ref v) => {
                 if Settings::DEPRECATED.contains(&k.as_str()) {
                     self.message(
@@ -2596,7 +2595,6 @@ impl Session {
             Cmd::Noop => {
                 // Nothing happening!
             }
-            // TODO: this doesn't need to be implemented in script.rs
             Cmd::ChangeDir(dir) => {
                 let home = self.base_dirs.home_dir().to_path_buf();
                 let path = dir.map(|s| s.into()).unwrap_or(home);
@@ -2609,6 +2607,7 @@ impl Session {
                     Err(e) => self.message(format!("Error: {}: {:?}", e, path), MessageType::Error),
                 }
             }
+            // TODO: Continue here!
             Cmd::Source(Some(ref path)) => {
                 if let Err(ref e) = self.source_path(path) {
                     self.message(
