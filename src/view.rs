@@ -17,6 +17,7 @@ use std::collections::btree_map;
 use std::collections::{BTreeMap, VecDeque};
 use std::fmt;
 use std::io;
+use std::time;
 
 /// View identifier.
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Copy, Clone, Debug, Default)]
@@ -154,11 +155,17 @@ pub struct View<R> {
 pub struct Animation<T> {
     pub index: usize,
     pub frames: Vec<T>,
+    /// How much time between frames for animation.
+    pub delay: time::Duration,
 }
 
 impl<T> Animation<T> {
-    pub fn new(frames: Vec<T>) -> Self {
-        Self { index: 0, frames }
+    pub fn new(frames: Vec<T>, delay: time::Duration) -> Self {
+        Self {
+            index: 0,
+            frames,
+            delay,
+        }
     }
 
     pub fn len(&self) -> usize {
@@ -190,7 +197,15 @@ impl<R> std::ops::DerefMut for View<R> {
 
 impl<R> View<R> {
     /// Create a new view. Takes a frame width and height.
-    pub fn new(id: ViewId, fs: FileStatus, fw: u32, fh: u32, nframes: usize, resource: R) -> Self {
+    pub fn new(
+        id: ViewId,
+        fs: FileStatus,
+        fw: u32,
+        fh: u32,
+        nframes: usize,
+        animation_delay: time::Duration,
+        resource: R,
+    ) -> Self {
         let saved_snapshot = if let FileStatus::Saved(_) = &fs {
             Some(Default::default())
         } else {
@@ -212,7 +227,7 @@ impl<R> View<R> {
             flip_x: false,
             flip_y: false,
             file_status: fs,
-            animation: Animation::new(frames),
+            animation: Animation::new(frames, animation_delay),
             state: ViewState::Okay,
             saved_snapshot,
             resource,
@@ -517,7 +532,9 @@ impl<R> View<R> {
         for i in 0..extent.nframes {
             frames.push(origin + Vector2::new(i as u32 * self.fw, 0));
         }
-        self.animation = Animation::new(frames);
+        // Keep the original delay.
+        let delay = self.animation.delay;
+        self.animation = Animation::new(frames, delay);
     }
 }
 
@@ -731,10 +748,22 @@ impl<R> ViewManager<R> {
         }
     }
 
+    pub fn len(&self) -> usize {
+        self.views.len()
+    }
+
     /// Add a view.
-    pub fn add(&mut self, fs: FileStatus, w: u32, h: u32, nframes: usize, resource: R) -> ViewId {
+    pub fn add(
+        &mut self,
+        fs: FileStatus,
+        w: u32,
+        h: u32,
+        nframes: usize,
+        animation_delay: time::Duration,
+        resource: R,
+    ) -> ViewId {
         let id = self.gen_id();
-        let view = View::new(id, fs, w, h, nframes, resource);
+        let view = View::new(id, fs, w, h, nframes, animation_delay, resource);
 
         self.views.insert(id, view);
 

@@ -199,7 +199,7 @@ pub fn init<P: AsRef<Path>>(paths: &[P], options: Options<'_>) -> std::io::Resul
     };
 
     while !win.is_closing() {
-        match session.animation_delay() {
+        match session.get_delay_if_animating() {
             Some(delay) if session.is_running() => {
                 // How much time is left until the next animation frame?
                 let remaining = delay - session.accumulator;

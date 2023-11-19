@@ -747,15 +747,15 @@ impl Session {
             self.brush.update();
         }
 
-        if let Some(delay) = self.animation_delay() {
+        if let Some(delay) = self.get_delay_if_animating() {
             self.accumulator += delta;
             if self.accumulator >= delay {
-                for v in self.views.iter_mut() {
-                    v.animation.step();
-                }
+                // We only update the active view's animation.
+                self.active_view_mut().animation.step();
                 self.accumulator = time::Duration::from_secs(0);
             }
         }
+
         if self.ignore_received_characters {
             self.ignore_received_characters = false;
         }
@@ -957,16 +957,24 @@ impl Session {
         .floor()
     }
 
-    /// Get the current animation delay. Returns `None` if animations aren't playing,
-    /// or if none of the views have more than one frame.
-    pub fn animation_delay(&self) -> Option<time::Duration> {
-        let animations = self.views.iter().any(|v| v.animation.len() > 1);
+    /// Gets the current animation delay. Returns `None` if animations aren't playing,
+    /// or if the current view has only one frame.
+    pub fn get_delay_if_animating(&self) -> Option<time::Duration> {
+        let view = self.active_view();
 
-        if self.settings["animation"].is_set() && animations {
-            let delay = self.settings["animation/delay"].to_u64();
-            Some(time::Duration::from_millis(delay))
+        if self.get_i64_setting(I64Setting::UiAnimate) != 0 && view.animation.len() > 1 {
+            Some(view.animation.delay)
         } else {
             None
+        }
+    }
+
+    pub fn animation_delay(&self) -> time::Duration {
+        if self.views.len() == 0 {
+            // This should only execute at the start of the program when no views are open.
+            time::Duration::from_millis(self.settings["animation/delay"].to_u64())
+        } else {
+            self.active_view().animation.delay
         }
     }
 
@@ -1466,9 +1474,11 @@ impl Session {
             "gif" => {
                 let palette = self.colors();
                 let view = self.view(id);
-                let delay = time::Duration::from_millis(self.settings["animation/delay"].to_u64());
-
-                view.save_gif(path, delay, &palette, scale)?
+                // `view.save_gif` would work because View derefs the inner Resource,
+                // but `view.resource.save_gif` makes it clear that `view.animation.delay`
+                // isn't available in the resource itself, so we need to supply it.
+                view.resource
+                    .save_gif(path, view.animation.delay, &palette, scale)?
             }
             "svg" => self.view(id).save_svg(path, scale)?,
             "png" => self.view(id).save_png(path, scale)?,
@@ -1543,7 +1553,10 @@ impl Session {
 
         let pixels = util::stitch_frames(frames, fw as usize, fh as usize, Rgba8::TRANSPARENT);
         let resource = ViewResource::new(pixels, ViewExtent::new(fw, fh, nframes));
-        let id = self.views.add(file_status, fw, fh, nframes, resource);
+        let delay = self.animation_delay();
+        let id = self
+            .views
+            .add(file_status, fw, fh, nframes, delay, resource);
 
         self.effects.push(Effect::ViewAdded(id));
 
