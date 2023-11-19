@@ -262,6 +262,7 @@ impl fmt::Display for Command {
             Command::UsingOptionalI64(OptionalI64For::FrameClone) => write!(f, "fc"),
             Command::UsingOptionalI64(OptionalI64For::FrameRemove) => write!(f, "fr"),
             Command::UsingStrings(StringsFor::Source) => write!(f, "source"),
+            Command::UsingStrings(StringsFor::Edit) => write!(f, "e"),
             Command::FrameResize => write!(f, "f-resize"),
             Command::PaletteColor => write!(f, "pc"),
             Command::PaletteAddColor => write!(f, "p-add"),
@@ -337,6 +338,7 @@ impl FromStr for Command {
             "fc" => Ok(Command::UsingOptionalI64(OptionalI64For::FrameClone)),
             "fr" => Ok(Command::UsingOptionalI64(OptionalI64For::FrameRemove)),
             "source" => Ok(Command::UsingStrings(StringsFor::Source)),
+            "e" => Ok(Command::UsingStrings(StringsFor::Edit)),
             "f-resize" => Ok(Command::FrameResize),
             "pc" => Ok(Command::PaletteColor),
             "p-add" => Ok(Command::PaletteAddColor),
@@ -383,6 +385,10 @@ pub enum OptionalI64For {
 pub enum StringsFor {
     /// Path names to source, i.e. for configuration.
     Source,
+    /// Path names to edit, i.e. as images.
+    Edit,
+    // TODO: `Concatenate` for combining lots of new images in the horizontal direction into a new view
+    // TODO: `Append` for appending images in the horizontal direction to the current view
 }
 
 #[derive(PartialEq, Debug, Clone, Copy)]
@@ -1554,6 +1560,11 @@ impl Variables {
             e.g., `$$ 'hi.pim'` to execute 'hi.pim'",
         );
         variables.add_built_in(
+            Command::UsingStrings(StringsFor::Edit),
+            "loads all images in the files specified by the arguments, \
+            e.g., `$$ 'hi.png' 'hello.png'` to load both files",
+        );
+        variables.add_built_in(
             Command::FrameResize,
             "sets frame size, or crops to content if no arguments, \
             e.g., `$$ 12 34` to set to 12 pixels wide and 34 pixels high",
@@ -1689,6 +1700,7 @@ impl Variables {
         assert_ok!(variables.set("f-index".to_string(), Variable::Alias("f".to_string())));
         assert_ok!(variables.set("f-remove".to_string(), Variable::Alias("fr".to_string())));
         assert_ok!(variables.set("slice".to_string(), Variable::Alias("split".to_string())));
+        assert_ok!(variables.set("edit".to_string(), Variable::Alias("e".to_string())));
         assert_ok!(variables.set(
             "merge".to_string(),
             Variable::Const(Argument::Script(Script {

@@ -172,9 +172,8 @@ pub fn init<P: AsRef<Path>>(paths: &[P], options: Options<'_>) -> std::io::Resul
 
     let mut renderer: gl::Renderer = Renderer::new(&mut win, win_size, scale_factor, assets)?;
 
-    if let Err(e) = session.edit(paths) {
-        session.message(format!("Error loading path(s): {}", e), MessageType::Error);
-    }
+    session.edit(paths);
+
     // Make sure our session ticks once before anything is rendered.
     let effects = session.update(
         &mut vec![],

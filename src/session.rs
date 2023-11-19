@@ -1288,6 +1288,27 @@ impl Session {
         }
     }
 
+    /// Edit paths, with error handling.
+    ///
+    /// Loads the given files into the session. Returns an error if one of
+    /// the paths couldn't be loaded. If a path points to a directory,
+    /// loads all files within that directory.
+    ///
+    /// If a path doesn't exist, creates a blank view for that path.
+    pub fn edit<P: AsRef<Path>>(&mut self, paths: &[P]) {
+        match self.edit_internal(paths) {
+            Ok((success_count, fail_count)) => {
+                if success_count + fail_count > 1 {
+                    self.message(
+                        format!("{} path(s) loaded, {} skipped", success_count, fail_count),
+                        MessageType::Info,
+                    )
+                }
+            }
+            Err(e) => self.message(format!("Error loading path(s): {}", e), MessageType::Error),
+        }
+    }
+
     /// Edit paths.
     ///
     /// Loads the given files into the session. Returns an error if one of
@@ -1295,7 +1316,7 @@ impl Session {
     /// loads all files within that directory.
     ///
     /// If a path doesn't exist, creates a blank view for that path.
-    pub fn edit<P: AsRef<Path>>(&mut self, paths: &[P]) -> io::Result<(usize, usize)> {
+    fn edit_internal<P: AsRef<Path>>(&mut self, paths: &[P]) -> io::Result<(usize, usize)> {
         use std::ffi::OsStr;
 
         let (mut success_count, mut fail_count) = (0usize, 0usize);
@@ -1354,6 +1375,9 @@ impl Session {
         Ok((success_count, fail_count))
     }
 
+    // TODO: based on what's inside this function i'm not sure it's concatenating frames
+    // into one new image, but that would be a useful method (called "cat").
+    // TODO: it would also be nice to have a `append` command for adding to the current file.
     /// Load the given paths into the session as frames in a new view.
     pub fn edit_frames<P: AsRef<Path>>(&mut self, paths: &[P]) -> io::Result<()> {
         let completer = FileCompleter::new(&self.cwd, path::SUPPORTED_READ_FORMATS);
@@ -2621,26 +2645,14 @@ impl Session {
                     MessageType::Error,
                 );
             }
-            // TODO: Continue here!
             Cmd::Edit(ref paths) => {
                 if paths.is_empty() {
                     self.unimplemented();
-                }
-
-                match self.edit(paths) {
-                    Ok((success_count, fail_count)) => {
-                        if success_count + fail_count > 1 {
-                            self.message(
-                                format!("{} path(s) loaded, {} skipped", success_count, fail_count),
-                                MessageType::Info,
-                            )
-                        }
-                    }
-                    Err(e) => {
-                        self.message(format!("Error loading path(s): {}", e), MessageType::Error)
-                    }
+                } else {
+                    self.edit(paths);
                 }
             }
+            // TODO: Continue here!
             Cmd::EditFrames(ref paths) => {
                 if !paths.is_empty() {
                     if let Err(e) = self.edit_frames(paths) {
@@ -3430,6 +3442,9 @@ impl Session {
                 for string in strings {
                     self.source_path(string).map_err(|e| e.to_string())?;
                 }
+            }
+            StringsFor::Edit => {
+                self.edit(&strings);
             }
         }
         Ok(())
