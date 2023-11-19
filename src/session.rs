@@ -453,10 +453,8 @@ impl Default for Settings {
                 "animation" => Value::Bool(true),
                 "animation/delay" => Value::U32(160),
                 // TODO: add all these to script.rs or delete
-                "ui/status" => Value::Bool(true),
                 "ui/cursor" => Value::Bool(true),
                 "ui/message" => Value::Bool(true),
-                "ui/switcher" => Value::Bool(true),
                 "ui/view-info" => Value::Bool(true),
 
                 "grid" => Value::Bool(false),

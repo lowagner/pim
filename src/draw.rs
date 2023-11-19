@@ -135,6 +135,9 @@ impl Context {
         self::draw_paste(session, &mut self.paste_batch);
         self::draw_grid(session, &mut self.ui_batch);
         self::draw_ui(session, &mut self.ui_batch, &mut self.text_batch);
+        self::draw_status(session, &mut self.ui_batch, &mut self.text_batch);
+        self::draw_switcher(session, &mut self.ui_batch, &mut self.text_batch);
+        self::draw_meta(session, &mut self.ui_batch, &mut self.text_batch);
         self::draw_overlay(session, avg_frametime, &mut self.overlay_batch, execution);
         self::draw_palette(session, &mut self.ui_batch);
         self::draw_cursor(session, &mut self.cursor_sprite, &mut self.tool_batch);
@@ -152,6 +155,8 @@ impl Context {
     }
 }
 
+// TODO: rename this, as there are a lot of UI-related draw methods that aren't in this method,
+//       e.g., draw_palette is separate.
 fn draw_ui(session: &Session, canvas: &mut shape2d::Batch, text: &mut TextBatch) {
     let view = session.active_view();
     let zoom = view.zoom as f32;
@@ -297,70 +302,76 @@ fn draw_ui(session: &Session, canvas: &mut shape2d::Batch, text: &mut TextBatch)
             );
         }
     }
-    if session.settings["ui/status"].is_set() {
-        // Active view status
+}
+
+fn draw_status(session: &Session, canvas: &mut shape2d::Batch, text: &mut TextBatch) {
+    let view = session.active_view();
+    let zoom = view.zoom as f32;
+
+    // Active view status
+    text.add(
+        &view.status(),
+        MARGIN,
+        MARGIN + self::LINE_HEIGHT,
+        self::TEXT_LAYER,
+        Rgba8::WHITE,
+        TextAlign::Left,
+    );
+
+    // Session status
+    text.add(
+        &format!("{:>5}%", (zoom * 100.) as u32),
+        session.width - MARGIN,
+        MARGIN + self::LINE_HEIGHT,
+        self::TEXT_LAYER,
+        Rgba8::WHITE,
+        TextAlign::Right,
+    );
+
+    if session.width >= 600. {
+        let cursor = session.view_coords(view.id, session.cursor);
+        let hover_color = session
+            .hover_color
+            .map_or(String::new(), |c| Rgb8::from(c).to_string());
         text.add(
-            &view.status(),
-            MARGIN,
+            &format!("{:>4},{:<4} {}", cursor.x, cursor.y, hover_color),
+            (session.width * 0.5).floor(),
             MARGIN + self::LINE_HEIGHT,
             self::TEXT_LAYER,
             Rgba8::WHITE,
             TextAlign::Left,
         );
-
-        // Session status
-        text.add(
-            &format!("{:>5}%", (zoom * 100.) as u32),
-            session.width - MARGIN,
-            MARGIN + self::LINE_HEIGHT,
-            self::TEXT_LAYER,
-            Rgba8::WHITE,
-            TextAlign::Right,
-        );
-
-        if session.width >= 600. {
-            let cursor = session.view_coords(view.id, session.cursor);
-            let hover_color = session
-                .hover_color
-                .map_or(String::new(), |c| Rgb8::from(c).to_string());
-            text.add(
-                &format!("{:>4},{:<4} {}", cursor.x, cursor.y, hover_color),
-                (session.width * 0.5).floor(),
-                MARGIN + self::LINE_HEIGHT,
-                self::TEXT_LAYER,
-                Rgba8::WHITE,
-                TextAlign::Left,
-            );
-        }
     }
+}
 
-    if session.settings["ui/switcher"].is_set() {
-        if session.width >= 400. {
-            // Fg color
-            canvas.add(Shape::Rectangle(
-                Rect::origin(11., 11.).with_origin(
-                    (session.width * 0.4).floor(),
-                    self::LINE_HEIGHT + self::MARGIN + 2.,
-                ),
-                self::UI_LAYER,
-                Rotation::ZERO,
-                Stroke::new(1.0, Rgba::WHITE),
-                Fill::Solid(session.fg.into()),
-            ));
-            // Bg color
-            canvas.add(Shape::Rectangle(
-                Rect::origin(11., 11.).with_origin(
-                    (session.width * 0.4).floor() + 25.,
-                    self::LINE_HEIGHT + self::MARGIN + 2.,
-                ),
-                self::UI_LAYER,
-                Rotation::ZERO,
-                Stroke::new(1.0, Rgba::WHITE),
-                Fill::Solid(session.bg.into()),
-            ));
-        }
+fn draw_switcher(session: &Session, canvas: &mut shape2d::Batch, text: &mut TextBatch) {
+    if session.width >= 400. {
+        // Foreground color (session.fg, left click)
+        canvas.add(Shape::Rectangle(
+            Rect::origin(11., 11.).with_origin(
+                (session.width * 0.4).floor(),
+                self::LINE_HEIGHT + self::MARGIN + 2.,
+            ),
+            self::UI_LAYER,
+            Rotation::ZERO,
+            Stroke::new(1.0, Rgba::WHITE),
+            Fill::Solid(session.fg.into()),
+        ));
+        // Background color (session.bg, right click)
+        canvas.add(Shape::Rectangle(
+            Rect::origin(11., 11.).with_origin(
+                (session.width * 0.4).floor() + 25.,
+                self::LINE_HEIGHT + self::MARGIN + 2.,
+            ),
+            self::UI_LAYER,
+            Rotation::ZERO,
+            Stroke::new(1.0, Rgba::WHITE),
+            Fill::Solid(session.bg.into()),
+        ));
     }
+}
 
+fn draw_meta(session: &Session, canvas: &mut shape2d::Batch, text: &mut TextBatch) {
     // Command-line & message
     if session.mode == Mode::Command {
         let s = format!("{}", &session.cmdline.input());
