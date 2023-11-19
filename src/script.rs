@@ -6,7 +6,9 @@ use claim::assert_ok;
 
 use std::collections::HashMap;
 use std::fmt;
+use std::io;
 use std::mem;
+use std::path::Path;
 use std::str::FromStr;
 
 /*
@@ -63,6 +65,9 @@ pub enum Command {
     /// from earlier arguments since that prevents the last argument from
     /// executing.
     RunAll,
+    /// Evaluates each Argument as a string path to read, returning early if any is an Err.
+    /// Also returns early if any file fails to parse correctly.
+    Source,
 
     // Evaluates the first argument, then uses it as an index into the remaining arguments.
     // TODO: option 1: if 0, don't run anything.  1, 2, etc. index the arguments directly as $1, $2, etc.
@@ -216,6 +221,7 @@ impl fmt::Display for Command {
             Command::Error => write!(f, "error"),
             Command::PushPop => write!(f, "push-pop"),
             Command::RunAll => write!(f, "run-all"),
+            Command::Source => write!(f, "source"),
             Command::Not => write!(f, "not"),
             Command::If => write!(f, "if"),
             Command::Even => write!(f, "even"),
@@ -291,6 +297,7 @@ impl FromStr for Command {
             "error" => Ok(Command::Error),
             "push-pop" => Ok(Command::PushPop),
             "run-all" => Ok(Command::RunAll),
+            "source" => Ok(Command::Source),
             "not" => Ok(Command::Not),
             "if" => Ok(Command::If),
             "even" => Ok(Command::Even),
@@ -812,6 +819,16 @@ macro_rules! script_runner {
                             value = self.script_evaluate(&script_stack, Evaluate::Index(i as u32))?;
                         }
                         Ok(value)
+                    }
+                    Command::Source => {
+                        for i in 0..script.arguments.len() {
+                            let path = self.script_evaluate(
+                                &script_stack,
+                                Evaluate::Index(i as u32),
+                            )?.get_string("for path")?;
+                            self.source_path(path).map_err(|e| e.to_string())?;
+                        }
+                        Ok(Argument::Null)
                     }
                     Command::Not => {
                         let value = self.script_evaluate(&script_stack, Evaluate::Index(0))?;
@@ -2041,6 +2058,13 @@ mod test {
             Ok(())
         }
 
+        fn source_path<P: AsRef<Path>>(&mut self, path: P) -> io::Result<()> {
+            let path = path.as_ref();
+            self.test_what_ran
+                .push(WhatRan::Mocked(format!("sourced{{{:?}}}", path.display())));
+            return Ok(());
+        }
+
         fn script_quit(&mut self, quit: Quit) {
             self.test_what_ran
                 .push(WhatRan::Mocked(format!("quit{{{:?}}}", quit)));
@@ -2484,6 +2508,33 @@ mod test {
             ])
         );
         assert_eq!(result, Ok(Argument::I64(33)));
+    }
+
+    #[test]
+    fn test_script_source_returns_null() {
+        let script = Script {
+            command: Command::Source,
+            arguments: Vec::from([
+                Argument::String("/home/wow/my.pim".to_string()),
+                Argument::String("/great/my-other.pim".to_string()),
+            ]),
+        };
+        let mut test_runner = TestRunner::new();
+
+        let result = script.run(&mut test_runner);
+
+        assert_eq!(
+            test_runner.test_what_ran,
+            Vec::from([
+                WhatRan::Begin(Command::Source),
+                WhatRan::Evaluated(Ok(Argument::String("/home/wow/my.pim".to_string()))),
+                WhatRan::Mocked("sourced{\"/home/wow/my.pim\"}".to_string()),
+                WhatRan::Evaluated(Ok(Argument::String("/great/my-other.pim".to_string()))),
+                WhatRan::Mocked("sourced{\"/great/my-other.pim\"}".to_string()),
+                WhatRan::End(Command::Source),
+            ])
+        );
+        assert_eq!(result, Ok(Argument::Null));
     }
 
     #[test]

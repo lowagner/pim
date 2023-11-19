@@ -2607,7 +2607,6 @@ impl Session {
                     Err(e) => self.message(format!("Error: {}: {:?}", e, path), MessageType::Error),
                 }
             }
-            // TODO: Continue here!
             Cmd::Source(Some(ref path)) => {
                 if let Err(ref e) = self.source_path(path) {
                     self.message(
@@ -2622,6 +2621,7 @@ impl Session {
                     MessageType::Error,
                 );
             }
+            // TODO: Continue here!
             Cmd::Edit(ref paths) => {
                 if paths.is_empty() {
                     self.unimplemented();
