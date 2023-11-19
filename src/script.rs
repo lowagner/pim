@@ -227,6 +227,7 @@ impl fmt::Display for Command {
             Command::ConstVariable => write!(f, "const"),
             Command::CreateAlias => write!(f, "alias"),
             Command::ColorSetting(ColorSetting::UiBackground) => write!(f, "ui-bg"),
+            Command::ColorSetting(ColorSetting::UiGrid) => write!(f, "grid-color"),
             Command::ColorSetting(ColorSetting::Foreground) => write!(f, "fg"),
             Command::ColorSetting(ColorSetting::Background) => write!(f, "bg"),
             Command::StringSetting(StringSetting::Mode) => write!(f, "mode"),
@@ -235,6 +236,7 @@ impl fmt::Display for Command {
             Command::I64Setting(I64Setting::Debug) => write!(f, "debug"),
             Command::I64Setting(I64Setting::UiAnimate) => write!(f, "ui-a"),
             Command::I64Setting(I64Setting::UiChecker) => write!(f, "checker"),
+            Command::I64Setting(I64Setting::UiGrid) => write!(f, "grid"),
             Command::I64Setting(I64Setting::UiScalePercentage) => write!(f, "ui-scale%"),
             Command::I64Setting(I64Setting::UiOffsetX) => write!(f, "ui-x"),
             Command::I64Setting(I64Setting::UiOffsetY) => write!(f, "ui-y"),
@@ -299,6 +301,7 @@ impl FromStr for Command {
             "const" => Ok(Command::ConstVariable),
             "alias" => Ok(Command::CreateAlias),
             "ui-bg" => Ok(Command::ColorSetting(ColorSetting::UiBackground)),
+            "grid-color" => Ok(Command::ColorSetting(ColorSetting::UiGrid)),
             "fg" => Ok(Command::ColorSetting(ColorSetting::Foreground)),
             "bg" => Ok(Command::ColorSetting(ColorSetting::Background)),
             "mode" => Ok(Command::StringSetting(StringSetting::Mode)),
@@ -307,6 +310,7 @@ impl FromStr for Command {
             "debug" => Ok(Command::I64Setting(I64Setting::Debug)),
             "ui-a" => Ok(Command::I64Setting(I64Setting::UiAnimate)),
             "checker" => Ok(Command::I64Setting(I64Setting::UiChecker)),
+            "grid" => Ok(Command::I64Setting(I64Setting::UiGrid)),
             "ui-scale%" => Ok(Command::I64Setting(I64Setting::UiScalePercentage)),
             "ui-x" => Ok(Command::I64Setting(I64Setting::UiOffsetX)),
             "ui-y" => Ok(Command::I64Setting(I64Setting::UiOffsetY)),
@@ -1356,6 +1360,12 @@ impl Variables {
             e.g., `$$ #123` to make the background color #123",
         );
         variables.add_built_in(
+            Command::ColorSetting(ColorSetting::UiGrid),
+            "getter/swapper for the current UI grid color if $0 is null/present, \
+            e.g., `$$ 4` to set the grid color to palette color 4. \
+            e.g., use `grid 16` to enable seeing a 16x16 grid",
+        );
+        variables.add_built_in(
             Command::ColorSetting(ColorSetting::Foreground),
             "getter/swapper for foreground color if $0 is null/present, \
             e.g., `$$ 3` to set foreground color to palette 3",
@@ -1394,6 +1404,11 @@ impl Variables {
             Command::I64Setting(I64Setting::UiChecker),
             "getter/swapper for how big the checkerboard is if $0 is null/present, \
             e.g., `$$ 0` to turn off checkerboard transparency, `$$ 5` to set to 5x5 pixels",
+        );
+        variables.add_built_in(
+            Command::I64Setting(I64Setting::UiGrid),
+            "getter/swapper for the size of a grid if $0 is null/present, \
+            e.g., `$$ 8` to show an 8x8 grid, `$$ off` to hide",
         );
         variables.add_built_in(
             Command::I64Setting(I64Setting::UiScalePercentage),

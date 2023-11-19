@@ -59,9 +59,8 @@ scale             1,2,3,4            UI scale
 animation         on/off             View animation toggle
 animation/delay   1..1000            View animation delay (ms)
 background        #000000..#ffffff   Set background appearance to <color>
-grid              on/off             Grid display
+grid              <d>                If nonzero, the Grid spacing, otherwise hides grid.
 grid/color        #000000..#ffffff   Grid color
-grid/spacing      <d>                Grid spacing
 "#;
 
 #[derive(Copy, Clone, Debug)]
@@ -452,12 +451,11 @@ impl Default for Settings {
                 "scale%" => Value::U32(100),
                 "animation" => Value::Bool(true),
                 "animation/delay" => Value::U32(160),
-                // TODO: add all these to script.rs or delete
 
-                "grid" => Value::Bool(false),
+                "grid" => Value::U32(0),
                 "grid/color" => Value::Rgba8(color::BLUE),
-                "grid/spacing" => Value::U32(8),
 
+                // TODO: add all these to script.rs or delete
                 "p/height" => Value::U32(Session::PALETTE_HEIGHT),
 
                 "debug/crosshair" => Value::Bool(false)
@@ -3090,6 +3088,7 @@ impl Session {
     pub fn get_color_setting(&self, setting: ColorSetting) -> Rgba8 {
         match setting {
             ColorSetting::UiBackground => self.settings["background"].to_rgba8(),
+            ColorSetting::UiGrid => self.settings["grid/color"].to_rgba8(),
             ColorSetting::Foreground => self.fg,
             ColorSetting::Background => self.bg,
         }
@@ -3099,6 +3098,9 @@ impl Session {
         match setting {
             ColorSetting::UiBackground => {
                 self.settings.set("background", Value::Rgba8(color))?;
+            }
+            ColorSetting::UiGrid => {
+                self.settings.set("grid/color", Value::Rgba8(color))?;
             }
             ColorSetting::Foreground => {
                 self.fg = color;
@@ -3148,6 +3150,7 @@ impl Session {
             I64Setting::Debug => self.settings["debug"].is_set() as i64,
             I64Setting::UiAnimate => self.settings["animation"].is_set() as i64,
             I64Setting::UiChecker => self.settings["checker"].to_u64() as i64,
+            I64Setting::UiGrid => self.settings["grid"].to_u64() as i64,
             I64Setting::UiScalePercentage => self.settings["scale%"].to_u64() as i64,
             I64Setting::UiOffsetX => self.offset.x as i64,
             I64Setting::UiOffsetY => self.offset.y as i64,
@@ -3195,6 +3198,13 @@ impl Session {
                     self.settings.set("checker", Value::U32(new_value as u32))?;
                 } else {
                     return Err(format!("invalid value for checkerboard: {}", new_value));
+                }
+            }
+            I64Setting::UiGrid => {
+                if new_value >= 0 {
+                    self.settings.set("grid", Value::U32(new_value as u32))?;
+                } else {
+                    return Err(format!("invalid value for grid: {}", new_value));
                 }
             }
             I64Setting::UiScalePercentage => {

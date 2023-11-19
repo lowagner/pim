@@ -5,7 +5,7 @@ use crate::font::{TextAlign, TextBatch};
 use crate::platform;
 use crate::session;
 use crate::session::{Mode, Session, Tool, VisualState};
-use crate::settings::I64Setting;
+use crate::settings::*;
 use crate::sprite;
 use crate::view::{View, ViewCoords};
 
@@ -546,59 +546,62 @@ fn draw_checker(session: &Session, batch: &mut sprite2d::Batch) {
 }
 
 fn draw_grid(session: &Session, batch: &mut shape2d::Batch) {
-    if session.settings["grid"].is_set() {
-        let color = session.settings["grid/color"].to_rgba8().alpha(0xcc);
-        let g = session.settings["grid/spacing"].to_u64() as u32;
+    let g = session.get_i64_setting(I64Setting::UiGrid);
+    if g <= 0 {
+        return;
+    }
 
-        let v = session.active_view();
-        let t = session.offset + v.offset;
-        let w = v.width();
-        let h = v.height();
-        let m = Matrix4::from_translation(t.extend(0.)) * Matrix4::from_scale(v.zoom as f32);
+    let g = g as u32;
+    let color = session.get_color_setting(ColorSetting::UiGrid).alpha(0xcc);
 
-        // Grid columns.
-        for x in (0..).step_by(g as usize).skip(1).take_while(|x| *x < w) {
-            let h = h as f32;
-            let x = x as f32;
+    let v = session.active_view();
+    let t = session.offset + v.offset;
+    let w = v.width();
+    let h = v.height();
+    let m = Matrix4::from_translation(t.extend(0.)) * Matrix4::from_scale(v.zoom as f32);
 
-            batch.add(Shape::Line(
-                Line::new([x, 0.], [x, h]).transform(m),
-                self::GRID_LAYER,
-                Rotation::ZERO,
-                Stroke::new(1., color.into()),
-            ));
-        }
-        // Grid rows.
-        for y in (0..).step_by(g as usize).skip(1).take_while(|y| *y < h) {
-            let w = w as f32;
-            let y = y as f32;
+    // Grid columns.
+    for x in (0..).step_by(g as usize).skip(1).take_while(|x| *x < w) {
+        let h = h as f32;
+        let x = x as f32;
 
-            batch.add(Shape::Line(
-                Line::new([0., y], [w, y]).transform(m),
-                self::GRID_LAYER,
-                Rotation::ZERO,
-                Stroke::new(1., color.into()),
-            ));
-        }
+        batch.add(Shape::Line(
+            Line::new([x, 0.], [x, h]).transform(m),
+            self::GRID_LAYER,
+            Rotation::ZERO,
+            Stroke::new(1., color.into()),
+        ));
+    }
+    // Grid rows.
+    for y in (0..).step_by(g as usize).skip(1).take_while(|y| *y < h) {
+        let w = w as f32;
+        let y = y as f32;
 
-        // Draw center lines.
-        if w % g == 0 && h % g == 0 {
-            let (w, h) = (w as f32, h as f32);
-            let stroke = Stroke::new(1., color.alpha(0xee).into());
+        batch.add(Shape::Line(
+            Line::new([0., y], [w, y]).transform(m),
+            self::GRID_LAYER,
+            Rotation::ZERO,
+            Stroke::new(1., color.into()),
+        ));
+    }
 
-            batch.add(Shape::Line(
-                Line::new([0., h / 2.], [w, h / 2.]).transform(m),
-                self::GRID_LAYER,
-                Rotation::ZERO,
-                stroke,
-            ));
-            batch.add(Shape::Line(
-                Line::new([w / 2., 0.], [w / 2., h]).transform(m),
-                self::GRID_LAYER,
-                Rotation::ZERO,
-                stroke,
-            ));
-        }
+    // Draw center lines.
+    if w % g == 0 && h % g == 0 {
+        let (w, h) = (w as f32, h as f32);
+        let stroke = Stroke::new(1., color.alpha(0xee).into());
+
+        batch.add(Shape::Line(
+            Line::new([0., h / 2.], [w, h / 2.]).transform(m),
+            self::GRID_LAYER,
+            Rotation::ZERO,
+            stroke,
+        ));
+        batch.add(Shape::Line(
+            Line::new([w / 2., 0.], [w / 2., h]).transform(m),
+            self::GRID_LAYER,
+            Rotation::ZERO,
+            stroke,
+        ));
     }
 }
 

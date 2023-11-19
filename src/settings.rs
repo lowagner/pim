@@ -18,6 +18,8 @@ pub enum I64Setting {
     UiAnimate,
     /// Whether to show a checkerboard for transparent colors.
     UiChecker,
+    /// Whether we show a grid for drawing, if nonzero, and if so, what size.
+    UiGrid,
     /// The interface scale (e.g., for palette boxes and command line), as a percentage (100 = 1x).
     UiScalePercentage,
     /// Offset for the UI, x coordinate.
@@ -65,6 +67,8 @@ pub enum I64Setting {
 pub enum ColorSetting {
     /// Background color for the UI.
     UiBackground,
+    /// If visible, what the grid line color is.
+    UiGrid,
     /// Foreground color for drawing (left click/left mouse button).
     Foreground,
     /// Background color for drawing (right click/right mouse button).
