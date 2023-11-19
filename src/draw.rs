@@ -304,7 +304,7 @@ fn draw_ui(session: &Session, canvas: &mut shape2d::Batch, text: &mut TextBatch)
     }
 }
 
-fn draw_status(session: &Session, canvas: &mut shape2d::Batch, text: &mut TextBatch) {
+fn draw_status(session: &Session, _canvas: &mut shape2d::Batch, text: &mut TextBatch) {
     let view = session.active_view();
     let zoom = view.zoom as f32;
 
@@ -344,7 +344,7 @@ fn draw_status(session: &Session, canvas: &mut shape2d::Batch, text: &mut TextBa
     }
 }
 
-fn draw_switcher(session: &Session, canvas: &mut shape2d::Batch, text: &mut TextBatch) {
+fn draw_switcher(session: &Session, canvas: &mut shape2d::Batch, _text: &mut TextBatch) {
     if session.width >= 400. {
         // Foreground color (session.fg, left click)
         canvas.add(Shape::Rectangle(
@@ -392,7 +392,6 @@ fn draw_meta(session: &Session, canvas: &mut shape2d::Batch, text: &mut TextBatc
         );
     } else if !session.message.is_execution()
         && !session.message.is_debug()
-        && session.settings["ui/message"].is_set()
     {
         let s = format!("{}", &session.message);
         text.add(
