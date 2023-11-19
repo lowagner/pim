@@ -14,7 +14,7 @@ use crate::palette::*;
 use crate::platform::{self, InputState, Key, KeyboardInput, LogicalSize, ModifiersState};
 use crate::script::{
     self, evaluate, get_or_swap_color, Argument, ArgumentResult, Command, Evaluate, Get,
-    OptionalI64For, Quit, Script, ScriptRunner, Serialize, Variables, VoidResult,
+    OptionalI64For, Quit, Script, ScriptRunner, Serialize, StringsFor, Variables, VoidResult,
 };
 use crate::script_runner;
 use crate::settings::*;
@@ -3420,6 +3420,17 @@ impl Session {
             OptionalI64For::FrameAdd => self.add_frame(optional_i64)?,
             OptionalI64For::FrameClone => self.clone_frame(optional_i64)?,
             OptionalI64For::FrameRemove => self.remove_frame(optional_i64)?,
+        }
+        Ok(())
+    }
+
+    pub fn script_strings(&mut self, for_what: StringsFor, strings: Vec<String>) -> VoidResult {
+        match for_what {
+            StringsFor::Source => {
+                for string in strings {
+                    self.source_path(string).map_err(|e| e.to_string())?;
+                }
+            }
         }
         Ok(())
     }

@@ -6,9 +6,7 @@ use claim::assert_ok;
 
 use std::collections::HashMap;
 use std::fmt;
-use std::io;
 use std::mem;
-use std::path::Path;
 use std::str::FromStr;
 
 /*
@@ -65,9 +63,6 @@ pub enum Command {
     /// from earlier arguments since that prevents the last argument from
     /// executing.
     RunAll,
-    /// Evaluates each Argument as a string path to read, returning early if any is an Err.
-    /// Also returns early if any file fails to parse correctly.
-    Source,
 
     // Evaluates the first argument, then uses it as an index into the remaining arguments.
     // TODO: option 1: if 0, don't run anything.  1, 2, etc. index the arguments directly as $1, $2, etc.
@@ -133,6 +128,8 @@ pub enum Command {
     I64Setting(I64Setting),
     /// Commands that take an optional i64 argument.
     UsingOptionalI64(OptionalI64For),
+    /// Commands that take multiple strings.
+    UsingStrings(StringsFor),
 
     /// Setter for the width x height of each frame, using $0 for width and $1 for height.
     /// If either $0 or $1 is null, it keeps that dimension the same; if both are null,
@@ -221,7 +218,6 @@ impl fmt::Display for Command {
             Command::Error => write!(f, "error"),
             Command::PushPop => write!(f, "push-pop"),
             Command::RunAll => write!(f, "run-all"),
-            Command::Source => write!(f, "source"),
             Command::Not => write!(f, "not"),
             Command::If => write!(f, "if"),
             Command::Even => write!(f, "even"),
@@ -265,6 +261,7 @@ impl fmt::Display for Command {
             Command::UsingOptionalI64(OptionalI64For::FrameAdd) => write!(f, "fa"),
             Command::UsingOptionalI64(OptionalI64For::FrameClone) => write!(f, "fc"),
             Command::UsingOptionalI64(OptionalI64For::FrameRemove) => write!(f, "fr"),
+            Command::UsingStrings(StringsFor::Source) => write!(f, "source"),
             Command::FrameResize => write!(f, "f-resize"),
             Command::PaletteColor => write!(f, "pc"),
             Command::PaletteAddColor => write!(f, "p-add"),
@@ -297,7 +294,6 @@ impl FromStr for Command {
             "error" => Ok(Command::Error),
             "push-pop" => Ok(Command::PushPop),
             "run-all" => Ok(Command::RunAll),
-            "source" => Ok(Command::Source),
             "not" => Ok(Command::Not),
             "if" => Ok(Command::If),
             "even" => Ok(Command::Even),
@@ -340,6 +336,7 @@ impl FromStr for Command {
             "fa" => Ok(Command::UsingOptionalI64(OptionalI64For::FrameAdd)),
             "fc" => Ok(Command::UsingOptionalI64(OptionalI64For::FrameClone)),
             "fr" => Ok(Command::UsingOptionalI64(OptionalI64For::FrameRemove)),
+            "source" => Ok(Command::UsingStrings(StringsFor::Source)),
             "f-resize" => Ok(Command::FrameResize),
             "pc" => Ok(Command::PaletteColor),
             "p-add" => Ok(Command::PaletteAddColor),
@@ -380,6 +377,12 @@ pub enum OptionalI64For {
     FrameClone,
     /// Removes/deletes the frame at Some(i64), otherwise the current frame.
     FrameRemove,
+}
+
+#[derive(PartialEq, Debug, Clone, Copy)]
+pub enum StringsFor {
+    /// Path names to source, i.e. for configuration.
+    Source,
 }
 
 #[derive(PartialEq, Debug, Clone, Copy)]
@@ -820,13 +823,18 @@ macro_rules! script_runner {
                         }
                         Ok(value)
                     }
-                    Command::Source => {
+                    Command::UsingStrings(strings_for) => {
+                        let mut strings = vec![];
                         for i in 0..script.arguments.len() {
-                            let path = self.script_evaluate(
+                            if let Some(string) = self.script_evaluate(
                                 &script_stack,
                                 Evaluate::Index(i as u32),
-                            )?.get_string("for path")?;
-                            self.source_path(path).map_err(|e| e.to_string())?;
+                            )?.get_optional_string("for strings command")? {
+                                strings.push(string);
+                            }
+                        }
+                        if strings.len() > 0 {
+                            self.script_strings(*strings_for, strings)?;
                         }
                         Ok(Argument::Null)
                     }
@@ -1541,6 +1549,11 @@ impl Variables {
             e.g., `$$ 0` to remove the first frame",
         );
         variables.add_built_in(
+            Command::UsingStrings(StringsFor::Source),
+            "runs all commands in the files specified by the arguments, \
+            e.g., `$$ 'hi.pim'` to execute 'hi.pim'",
+        );
+        variables.add_built_in(
             Command::FrameResize,
             "sets frame size, or crops to content if no arguments, \
             e.g., `$$ 12 34` to set to 12 pixels wide and 34 pixels high",
@@ -2058,10 +2071,11 @@ mod test {
             Ok(())
         }
 
-        fn source_path<P: AsRef<Path>>(&mut self, path: P) -> io::Result<()> {
-            let path = path.as_ref();
-            self.test_what_ran
-                .push(WhatRan::Mocked(format!("sourced{{{:?}}}", path.display())));
+        fn script_strings(&mut self, for_what: StringsFor, strings: Vec<String>) -> VoidResult {
+            for string in strings {
+                self.test_what_ran
+                    .push(WhatRan::Mocked(format!("{:?}{{{:?}}}", for_what, string)));
+            }
             return Ok(());
         }
 
@@ -2513,7 +2527,7 @@ mod test {
     #[test]
     fn test_script_source_returns_null() {
         let script = Script {
-            command: Command::Source,
+            command: Command::UsingStrings(StringsFor::Source),
             arguments: Vec::from([
                 Argument::String("/home/wow/my.pim".to_string()),
                 Argument::String("/great/my-other.pim".to_string()),
@@ -2526,12 +2540,12 @@ mod test {
         assert_eq!(
             test_runner.test_what_ran,
             Vec::from([
-                WhatRan::Begin(Command::Source),
+                WhatRan::Begin(Command::UsingStrings(StringsFor::Source)),
                 WhatRan::Evaluated(Ok(Argument::String("/home/wow/my.pim".to_string()))),
-                WhatRan::Mocked("sourced{\"/home/wow/my.pim\"}".to_string()),
                 WhatRan::Evaluated(Ok(Argument::String("/great/my-other.pim".to_string()))),
-                WhatRan::Mocked("sourced{\"/great/my-other.pim\"}".to_string()),
-                WhatRan::End(Command::Source),
+                WhatRan::Mocked("Source{\"/home/wow/my.pim\"}".to_string()),
+                WhatRan::Mocked("Source{\"/great/my-other.pim\"}".to_string()),
+                WhatRan::End(Command::UsingStrings(StringsFor::Source)),
             ])
         );
         assert_eq!(result, Ok(Argument::Null));
