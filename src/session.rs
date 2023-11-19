@@ -453,7 +453,6 @@ impl Default for Settings {
                 "animation" => Value::Bool(true),
                 "animation/delay" => Value::U32(160),
                 // TODO: add all these to script.rs or delete
-                "ui/view-info" => Value::Bool(true),
 
                 "grid" => Value::Bool(false),
                 "grid/color" => Value::Rgba8(color::BLUE),

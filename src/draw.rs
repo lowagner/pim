@@ -290,7 +290,7 @@ fn draw_ui(session: &Session, canvas: &mut shape2d::Batch, text: &mut TextBatch)
             ));
         }
 
-        if current_view_frame < usize::MAX && session.settings["ui/view-info"].is_set() {
+        if current_view_frame < usize::MAX {
             // View info, but only for the current view.
             text.add(
                 &format!("{}x{}x{}", v.fw, v.fh, v.animation.len()),
