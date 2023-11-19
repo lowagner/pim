@@ -455,10 +455,7 @@ impl Default for Settings {
                 "grid" => Value::U32(0),
                 "grid/color" => Value::Rgba8(color::BLUE),
 
-                // TODO: add all these to script.rs or delete
-                "p/height" => Value::U32(Session::PALETTE_HEIGHT),
-
-                "debug/crosshair" => Value::Bool(false)
+                "p/height" => Value::U32(Session::PALETTE_HEIGHT)
             },
         }
     }

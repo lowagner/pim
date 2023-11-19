@@ -401,29 +401,6 @@ fn draw_meta(session: &Session, canvas: &mut shape2d::Batch, text: &mut TextBatc
             TextAlign::Left,
         );
     }
-
-    if session.get_i64_setting(I64Setting::Debug) != 0
-        && session.settings["debug/crosshair"].is_set()
-    {
-        canvas.add(Shape::Line(
-            Line::new(
-                [session.width / 2., 0.],
-                [session.width / 2., session.height],
-            ),
-            self::UI_LAYER,
-            Rotation::ZERO,
-            Stroke::new(1.0, color::RED.into()),
-        ));
-        canvas.add(Shape::Line(
-            Line::new(
-                [0., session.height / 2.],
-                [session.width, session.height / 2.],
-            ),
-            self::UI_LAYER,
-            Rotation::ZERO,
-            Stroke::new(1.0, color::RED.into()),
-        ));
-    }
 }
 
 fn draw_overlay(
