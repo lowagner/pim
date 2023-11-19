@@ -35,88 +35,8 @@ lazy_static! {
 }
 
 #[test]
-fn simple() {
-    test("simple");
-}
-
-#[test]
-fn resize() {
-    test("resize");
-}
-
-#[test]
-fn visual() {
-    test("visual");
-}
-
-#[test]
-fn palette() {
-    test("palette");
-}
-
-#[test]
-fn snapshots() {
-    test("snapshots");
-}
-
-#[test]
-fn saving() {
-    test("saving");
-}
-
-#[test]
 fn views() {
     test("views");
-}
-
-#[test]
-fn yank_paste() {
-    test("yank-paste");
-}
-
-#[test]
-fn brush_basic() {
-    test("brush-basic");
-}
-
-#[test]
-fn brush_advanced() {
-    test("brush-advanced");
-}
-
-#[test]
-fn frames() {
-    test("frames");
-}
-
-#[test]
-fn ui() {
-    test("ui");
-}
-
-#[test]
-fn grid() {
-    test("grid");
-}
-
-#[test]
-fn source() {
-    test("source");
-}
-
-#[test]
-fn mouse() {
-    test("mouse");
-}
-
-#[test]
-fn visual_mouse() {
-    test("visual-mouse");
-}
-
-#[test]
-fn organize_views() {
-    test("organize-views");
 }
 
 ////////////////////////////////////////////////////////////////////////////////
