@@ -390,9 +390,7 @@ fn draw_meta(session: &Session, canvas: &mut shape2d::Batch, text: &mut TextBatc
             self::TEXT_LAYER,
             Rgba8::RED,
         );
-    } else if !session.message.is_execution()
-        && !session.message.is_debug()
-    {
+    } else if !session.message.is_execution() && !session.message.is_debug() {
         let s = format!("{}", &session.message);
         text.add(
             &s,
@@ -550,7 +548,7 @@ fn draw_checker(session: &Session, batch: &mut sprite2d::Batch) {
 fn draw_grid(session: &Session, batch: &mut shape2d::Batch) {
     if session.settings["grid"].is_set() {
         let color = session.settings["grid/color"].to_rgba8().alpha(0xcc);
-        let (gx, gy) = session.settings["grid/spacing"].clone().into();
+        let g = session.settings["grid/spacing"].to_u64() as u32;
 
         let v = session.active_view();
         let t = session.offset + v.offset;
@@ -559,7 +557,7 @@ fn draw_grid(session: &Session, batch: &mut shape2d::Batch) {
         let m = Matrix4::from_translation(t.extend(0.)) * Matrix4::from_scale(v.zoom as f32);
 
         // Grid columns.
-        for x in (0..).step_by(gx as usize).skip(1).take_while(|x| *x < w) {
+        for x in (0..).step_by(g as usize).skip(1).take_while(|x| *x < w) {
             let h = h as f32;
             let x = x as f32;
 
@@ -571,7 +569,7 @@ fn draw_grid(session: &Session, batch: &mut shape2d::Batch) {
             ));
         }
         // Grid rows.
-        for y in (0..).step_by(gy as usize).skip(1).take_while(|y| *y < h) {
+        for y in (0..).step_by(g as usize).skip(1).take_while(|y| *y < h) {
             let w = w as f32;
             let y = y as f32;
 
@@ -584,7 +582,7 @@ fn draw_grid(session: &Session, batch: &mut shape2d::Batch) {
         }
 
         // Draw center lines.
-        if w % gx == 0 && h % gy == 0 {
+        if w % g == 0 && h % g == 0 {
             let (w, h) = (w as f32, h as f32);
             let stroke = Stroke::new(1., color.alpha(0xee).into());
 

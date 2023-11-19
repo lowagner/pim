@@ -61,7 +61,7 @@ animation/delay   1..1000            View animation delay (ms)
 background        #000000..#ffffff   Set background appearance to <color>
 grid              on/off             Grid display
 grid/color        #000000..#ffffff   Grid color
-grid/spacing      <x> <y>            Grid spacing
+grid/spacing      <d>                Grid spacing
 "#;
 
 #[derive(Copy, Clone, Debug)]
@@ -456,7 +456,7 @@ impl Default for Settings {
 
                 "grid" => Value::Bool(false),
                 "grid/color" => Value::Rgba8(color::BLUE),
-                "grid/spacing" => Value::U32Tuple(8, 8),
+                "grid/spacing" => Value::U32(8),
 
                 "p/height" => Value::U32(Session::PALETTE_HEIGHT),
 
