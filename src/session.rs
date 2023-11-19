@@ -452,9 +452,8 @@ impl Default for Settings {
                 "input/mouse" => Value::Bool(true),
                 "scale%" => Value::U32(100),
                 "animation" => Value::Bool(true),
-                // TODO: add all these to script.rs
-                // TODO: make this delay per-view:
                 "animation/delay" => Value::U32(160),
+                // TODO: add all these to script.rs
                 "ui/palette" => Value::Bool(true),
                 "ui/status" => Value::Bool(true),
                 "ui/cursor" => Value::Bool(true),
@@ -972,7 +971,7 @@ impl Session {
     pub fn animation_delay(&self) -> time::Duration {
         if self.views.len() == 0 {
             // This should only execute at the start of the program when no views are open.
-            time::Duration::from_millis(self.settings["animation/delay"].to_u64())
+            time::Duration::from_millis(160)
         } else {
             self.active_view().animation.delay
         }
@@ -3185,6 +3184,7 @@ impl Session {
                     0
                 }
             }
+            I64Setting::AnimationDelay => self.animation_delay().as_millis() as i64,
             I64Setting::FrameIndex => self.current_frame() as i64,
             I64Setting::FrameWidth => self.active_view().fw as i64,
             I64Setting::FrameHeight => self.active_view().fh as i64,
@@ -3306,6 +3306,18 @@ impl Session {
                         new_value
                     ));
                 }
+            }
+            I64Setting::AnimationDelay => {
+                if new_value <= 0 {
+                    return Err(format!("invalid delay: {}", new_value));
+                }
+                if self.views.len() == 0 {
+                    // TODO: we could have a `session.animation_delay` variable for this,
+                    //       but i don't know if we actually run into this situation at all.
+                    return Err("session hasn't been populated with a view yet".to_string());
+                }
+                self.active_view_mut().animation.delay =
+                    time::Duration::from_millis(new_value as u64);
             }
             I64Setting::FrameIndex => {
                 let max_frames = self.active_view().animation.len();

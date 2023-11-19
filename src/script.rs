@@ -249,6 +249,7 @@ impl fmt::Display for Command {
             Command::I64Setting(I64Setting::BrushXSymmetry) => write!(f, "b-xsym"),
             Command::I64Setting(I64Setting::BrushYSymmetry) => write!(f, "b-ysym"),
             Command::I64Setting(I64Setting::BrushLineAngle) => write!(f, "b-line"),
+            Command::I64Setting(I64Setting::AnimationDelay) => write!(f, "delay"),
             Command::I64Setting(I64Setting::FrameIndex) => write!(f, "f"),
             Command::I64Setting(I64Setting::FrameWidth) => write!(f, "f-width"),
             Command::I64Setting(I64Setting::FrameHeight) => write!(f, "f-height"),
@@ -320,6 +321,7 @@ impl FromStr for Command {
             "b-xsym" => Ok(Command::I64Setting(I64Setting::BrushXSymmetry)),
             "b-ysym" => Ok(Command::I64Setting(I64Setting::BrushYSymmetry)),
             "b-line" => Ok(Command::I64Setting(I64Setting::BrushLineAngle)),
+            "delay" => Ok(Command::I64Setting(I64Setting::AnimationDelay)),
             "f" => Ok(Command::I64Setting(I64Setting::FrameIndex)),
             "f-width" => Ok(Command::I64Setting(I64Setting::FrameWidth)),
             "f-height" => Ok(Command::I64Setting(I64Setting::FrameHeight)),
@@ -1462,6 +1464,12 @@ impl Variables {
             Command::I64Setting(I64Setting::BrushLineAngle),
             "getter/swapper for line angle brush option if $0 is null/present, \
             e.g., `$$ 30` to set to 30 degrees, `$$ 0` to turn off",
+        );
+        variables.add_built_in(
+            Command::I64Setting(I64Setting::AnimationDelay),
+            "getter/swapper for the current view's animation delay if $0 is null/present, \
+            e.g., `$$ 300` to set the delay to 300 ms, \
+            or `$$` to return the current delay without changing it",
         );
         variables.add_built_in(
             Command::I64Setting(I64Setting::FrameIndex),

@@ -47,6 +47,8 @@ pub enum I64Setting {
     BrushYSymmetry,
     /// Confine line angles to multiples of this value, or 0 for no snapping.
     BrushLineAngle,
+    /// The delay (in milliseconds) for the current view's animation frame.
+    AnimationDelay,
     /// The current frame index.
     FrameIndex,
     /// The width of each frame in the animation, in pixels.
