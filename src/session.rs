@@ -449,12 +449,10 @@ impl Default for Settings {
                 "debug" => Value::Bool(false),
                 "checker" => Value::U32(0),
                 "background" => Value::Rgba8(color::TRANSPARENT),
-                "input/mouse" => Value::Bool(true),
                 "scale%" => Value::U32(100),
                 "animation" => Value::Bool(true),
                 "animation/delay" => Value::U32(160),
-                // TODO: add all these to script.rs
-                "ui/palette" => Value::Bool(true),
+                // TODO: add all these to script.rs or delete
                 "ui/status" => Value::Bool(true),
                 "ui/cursor" => Value::Bool(true),
                 "ui/message" => Value::Bool(true),
@@ -1019,9 +1017,6 @@ impl Session {
     /// when the cursor hasn't moved relative to the session, but things
     /// within the session have moved relative to the cursor.
     fn cursor_dirty(&mut self) {
-        if !self.settings["input/mouse"].is_set() {
-            return;
-        }
         let cursor = self.cursor;
         let palette_hover = self.palette.hover.is_some();
 
@@ -1707,20 +1702,14 @@ impl Session {
 
         match event {
             Event::MouseInput(btn, st) => {
-                if self.settings["input/mouse"].is_set() {
-                    self.handle_mouse_input(btn, st);
-                }
+                self.handle_mouse_input(btn, st);
             }
             Event::MouseWheel(delta, modifiers) => {
-                if self.settings["input/mouse"].is_set() {
-                    self.handle_mouse_wheel(delta, modifiers);
-                }
+                self.handle_mouse_wheel(delta, modifiers);
             }
             Event::CursorMoved(position) => {
-                if self.settings["input/mouse"].is_set() {
-                    let coords = self.window_to_session_coords(position);
-                    self.handle_cursor_moved(coords);
-                }
+                let coords = self.window_to_session_coords(position);
+                self.handle_cursor_moved(coords);
             }
             Event::KeyboardInput(input) => self.handle_keyboard_input(input, exec),
             Event::ReceivedCharacter(c, mods) => self.handle_received_character(c, mods),

@@ -746,6 +746,8 @@ impl<'a> renderer::Renderer<'a> for Renderer {
                     if session.get_i64_setting(I64Setting::UiAnimate) != 0
                         && view.animation.len() > 1
                     {
+                        // TODO: always show the animation on the left (don't let it go OOB);
+                        //       hide frames that would draw over/under it.
                         if let Some(v) = view_data.get_mut(&view.id) {
                             if let Some(tess) = &v.anim_tess {
                                 let bound_layer = pipeline

@@ -493,10 +493,6 @@ fn draw_overlay(
 }
 
 fn draw_palette(session: &Session, batch: &mut shape2d::Batch) {
-    if !session.settings["ui/palette"].is_set() {
-        return;
-    }
-
     let p = &session.palette;
     let height = p.height;
     for (i, color) in p.colors.iter().cloned().enumerate() {
@@ -631,9 +627,6 @@ fn draw_cursor(session: &Session, inverted: &mut sprite::Sprite, batch: &mut spr
 
 fn draw_brush(session: &Session, brush: &Brush, shapes: &mut shape2d::Batch) {
     if session.palette.hover.is_some() {
-        return;
-    }
-    if !session.settings["input/mouse"].is_set() {
         return;
     }
     let v = session.active_view();
