@@ -383,15 +383,13 @@ fn draw_meta(session: &Session, canvas: &mut shape2d::Batch, text: &mut TextBatc
             Rgba8::WHITE,
             TextAlign::Left,
         );
-        if session.settings["ui/cursor"].is_set() {
-            text.glyph(
-                96,
-                MARGIN + session.cmdline.cursor as f32 * self::GLYPH_WIDTH,
-                MARGIN,
-                self::TEXT_LAYER,
-                Rgba8::RED,
-            );
-        }
+        text.glyph(
+            96,
+            MARGIN + session.cmdline.cursor as f32 * self::GLYPH_WIDTH,
+            MARGIN,
+            self::TEXT_LAYER,
+            Rgba8::RED,
+        );
     } else if !session.message.is_execution()
         && !session.message.is_debug()
         && session.settings["ui/message"].is_set()
@@ -608,9 +606,6 @@ fn draw_grid(session: &Session, batch: &mut shape2d::Batch) {
 }
 
 fn draw_cursor(session: &Session, inverted: &mut sprite::Sprite, batch: &mut sprite2d::Batch) {
-    if !session.settings["ui/cursor"].is_set() {
-        return;
-    }
     let v = session.active_view();
     let c = session.cursor;
 
