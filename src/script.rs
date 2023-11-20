@@ -3,6 +3,7 @@ use crate::palette::Palette;
 use crate::settings::*;
 
 use claim::assert_ok;
+use strum_macros::EnumIter;
 
 use std::collections::HashMap;
 use std::fmt;
@@ -264,6 +265,7 @@ impl fmt::Display for Command {
             Command::UsingOptionalI64(OptionalI64For::FrameRemove) => write!(f, "fr"),
             Command::UsingStrings(StringsFor::Source) => write!(f, "source"),
             Command::UsingStrings(StringsFor::Edit) => write!(f, "e"),
+            Command::UsingStrings(StringsFor::Concatenate) => write!(f, "cat"),
             Command::FrameResize => write!(f, "f-resize"),
             Command::PaletteColor => write!(f, "pc"),
             Command::PaletteAddColor => write!(f, "p-add"),
@@ -340,6 +342,7 @@ impl FromStr for Command {
             "fr" => Ok(Command::UsingOptionalI64(OptionalI64For::FrameRemove)),
             "source" => Ok(Command::UsingStrings(StringsFor::Source)),
             "e" => Ok(Command::UsingStrings(StringsFor::Edit)),
+            "cat" => Ok(Command::UsingStrings(StringsFor::Concatenate)),
             "f-resize" => Ok(Command::FrameResize),
             "pc" => Ok(Command::PaletteColor),
             "p-add" => Ok(Command::PaletteAddColor),
@@ -372,7 +375,7 @@ impl FromStr for Command {
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct EmptyCommandParseError;
 
-#[derive(PartialEq, Debug, Clone, Copy)]
+#[derive(Eq, Hash, PartialEq, Debug, Clone, Copy, EnumIter)]
 pub enum OptionalI64For {
     /// Adds a blank frame after Some(i64), otherwise after the current frame.
     FrameAdd,
@@ -382,17 +385,18 @@ pub enum OptionalI64For {
     FrameRemove,
 }
 
-#[derive(PartialEq, Debug, Clone, Copy)]
+#[derive(Eq, Hash, PartialEq, Debug, Clone, Copy, EnumIter)]
 pub enum StringsFor {
     /// Path names to source, i.e. for configuration.
     Source,
     /// Path names to edit, i.e. as images.
     Edit,
-    // TODO: `Concatenate` for combining lots of new images in the horizontal direction into a new view
+    /// Path names of images to concatenate horizontally.
+    Concatenate,
     // TODO: `Append` for appending images in the horizontal direction to the current view
 }
 
-#[derive(PartialEq, Debug, Clone, Copy)]
+#[derive(Eq, Hash, PartialEq, Debug, Clone, Copy, EnumIter)]
 pub enum Quit {
     /// The default, Quit::Safe, via `quit` or `q`, quits this view if saved.
     Safe,
@@ -402,6 +406,7 @@ pub enum Quit {
     Forced,
     /// Force quit all views, via `qa!`.
     AllForced,
+    // TODO: WriteQuit, e.g., wq
 }
 
 #[derive(PartialEq, Debug, Clone)]
@@ -1564,6 +1569,11 @@ impl Variables {
             Command::UsingStrings(StringsFor::Edit),
             "loads all images in the files specified by the arguments, \
             e.g., `$$ 'hi.png' 'hello.png'` to load both files",
+        );
+        variables.add_built_in(
+            Command::UsingStrings(StringsFor::Concatenate),
+            "concatenates all images in the files specified by the arguments, \
+            e.g., `$$ 'hi.png' 'hello.png'` to put them side by side",
         );
         variables.add_built_in(
             Command::FrameResize,
@@ -3592,6 +3602,16 @@ mod test {
             Err("built-in `const` is not reassignable".to_string())
         );
 
+        for color_setting in ColorSetting::iter() {
+            let name = format!("{}", Command::ColorSetting(color_setting));
+            assert_eq!(
+                variables.set(
+                    name.clone(),
+                    Variable::BuiltIn(Command::If, "should not override".to_string())
+                ),
+                Err(format!("built-in `{}` is not reassignable", name))
+            );
+        }
         for string_setting in StringSetting::iter() {
             let name = format!("{}", Command::StringSetting(string_setting));
             assert_eq!(
@@ -3604,6 +3624,26 @@ mod test {
         }
         for i64_setting in I64Setting::iter() {
             let name = format!("{}", Command::I64Setting(i64_setting));
+            assert_eq!(
+                variables.set(
+                    name.clone(),
+                    Variable::BuiltIn(Command::Odd, "should not override".to_string())
+                ),
+                Err(format!("built-in `{}` is not reassignable", name))
+            );
+        }
+        for optional_i64_for in OptionalI64For::iter() {
+            let name = format!("{}", Command::UsingOptionalI64(optional_i64_for));
+            assert_eq!(
+                variables.set(
+                    name.clone(),
+                    Variable::BuiltIn(Command::Odd, "should not override".to_string())
+                ),
+                Err(format!("built-in `{}` is not reassignable", name))
+            );
+        }
+        for strings_for in StringsFor::iter() {
+            let name = format!("{}", Command::UsingStrings(strings_for));
             assert_eq!(
                 variables.set(
                     name.clone(),
@@ -3632,6 +3672,20 @@ mod test {
 
         for setting in I64Setting::iter() {
             let command = Command::I64Setting(setting);
+            let name = format!("{}", command);
+            let command_from_name = Command::from_str(&name).unwrap();
+            assert_eq!(command_from_name, command);
+        }
+
+        for what_for in OptionalI64For::iter() {
+            let command = Command::UsingOptionalI64(what_for);
+            let name = format!("{}", command);
+            let command_from_name = Command::from_str(&name).unwrap();
+            assert_eq!(command_from_name, command);
+        }
+
+        for what_for in StringsFor::iter() {
+            let command = Command::UsingStrings(what_for);
             let name = format!("{}", command);
             let command_from_name = Command::from_str(&name).unwrap();
             assert_eq!(command_from_name, command);

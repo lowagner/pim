@@ -1295,7 +1295,11 @@ impl Session {
     /// loads all files within that directory.
     ///
     /// If a path doesn't exist, creates a blank view for that path.
-    pub fn edit<P: AsRef<Path>>(&mut self, paths: &[P]) {
+    pub fn edit_images<P: AsRef<Path>>(&mut self, paths: &[P]) {
+        if paths.is_empty() {
+            self.message("include file(s) to edit in the command", MessageType::Error);
+            return;
+        }
         match self.edit_internal(paths) {
             Ok((success_count, fail_count)) => {
                 if success_count + fail_count > 1 {
@@ -1344,6 +1348,7 @@ impl Session {
 
                     success_count += 1;
                 }
+                // TODO: don't source here.
                 self.source_dir(path).ok();
             } else {
                 if path.exists() {
@@ -1375,20 +1380,38 @@ impl Session {
         Ok((success_count, fail_count))
     }
 
-    // TODO: based on what's inside this function i'm not sure it's concatenating frames
-    // into one new image, but that would be a useful method (called "cat").
     // TODO: it would also be nice to have a `append` command for adding to the current file.
-    /// Load the given paths into the session as frames in a new view.
-    pub fn edit_frames<P: AsRef<Path>>(&mut self, paths: &[P]) -> io::Result<()> {
+    /// Loads the given paths into the session as frames in a new view.
+    pub fn concatenate_images<P: AsRef<Path>>(&mut self, paths: &[P]) {
+        if paths.is_empty() {
+            self.message(
+                "include files to concatenate in the command",
+                MessageType::Error,
+            );
+            return;
+        }
+        if let Err(e) = self.concatenate_internal(paths) {
+            self.message(
+                format!("Error concatenating image(s): {}", e),
+                MessageType::Error,
+            );
+        }
+    }
+
+    fn concatenate_internal<P: AsRef<Path>>(&mut self, paths: &[P]) -> io::Result<()> {
         let completer = FileCompleter::new(&self.cwd, path::SUPPORTED_READ_FORMATS);
+        // TODO: remove, don't source here.
         let mut dirs = Vec::new();
 
+        // TODO: `fn edit` should use the same logic as here.  we should pull out a common method.
         let mut paths = paths
             .iter()
             .map(|path| {
                 let path = path.as_ref();
 
                 if path.is_dir() {
+                    // TODO: load all pim-able image files in this directory, sorted:
+                    // paths.sort_by(|a, b| a.file_name().cmp(&b.file_name()));
                     dirs.push(path);
                     completer
                         .paths(path)
@@ -1408,9 +1431,8 @@ impl Session {
             .filter(|p| p.file_name().is_some() && p.file_stem().is_some())
             .collect::<Vec<_>>();
 
-        // Sort by filenames. This allows us to combine frames from multiple
-        // locations without worrying about the full path name.
-        paths.sort_by(|a, b| a.file_name().cmp(&b.file_name()));
+        // Do not sort file names, they were added in a specific order so that's
+        // the order they should be concatenated in.
 
         // If our paths list is empty, return early.
         let paths = if let Some(paths) = NonEmpty::from_slice(paths.as_slice()) {
@@ -1427,6 +1449,7 @@ impl Session {
             .into_iter()
             .peekable();
 
+        // TODO: only check the frame height, then push everybody into one big frame.
         // Use the first frame as a reference for what size the rest of
         // the frames should be.
         if let Some((fw, fh, _)) = frames.peek() {
@@ -1441,10 +1464,6 @@ impl Session {
                     format!("frame dimensions must all match {}x{}", fw, fh),
                 ));
             }
-        }
-
-        for dir in dirs.iter() {
-            self.source_dir(dir).ok();
         }
 
         if let Some(id) = self.views.last().map(|v| v.id) {
@@ -2154,6 +2173,7 @@ impl Session {
         let path = path.as_ref();
         debug!("source: {}", path.display());
 
+        // TODO: if `path` is a directory, `source_dir`.
         File::open(path)
             .or_else(|_| File::open(self.proj_dirs.config_dir().join(path)))
             .and_then(|f| self.source_reader(io::BufReader::new(f), path))
@@ -2646,23 +2666,12 @@ impl Session {
                 );
             }
             Cmd::Edit(ref paths) => {
-                if paths.is_empty() {
-                    self.unimplemented();
-                } else {
-                    self.edit(paths);
-                }
+                self.edit_images(paths);
+            }
+            Cmd::EditFrames(ref paths) => {
+                self.concatenate_images(paths);
             }
             // TODO: Continue here!
-            Cmd::EditFrames(ref paths) => {
-                if !paths.is_empty() {
-                    if let Err(e) = self.edit_frames(paths) {
-                        self.message(
-                            format!("Error loading frames(s): {}", e),
-                            MessageType::Error,
-                        );
-                    }
-                }
-            }
             Cmd::Export(scale, path) => {
                 let view = self.active_view();
                 let id = view.id;
@@ -3444,7 +3453,10 @@ impl Session {
                 }
             }
             StringsFor::Edit => {
-                self.edit(&strings);
+                self.edit_images(&strings);
+            }
+            StringsFor::Concatenate => {
+                self.concatenate_images(&strings);
             }
         }
         Ok(())
