@@ -1457,6 +1457,84 @@ impl Session {
         Ok(())
     }
 
+    fn append_internal<P: AsRef<Path>>(&mut self, paths: &[P]) -> io::Result<()> {
+        let completer = FileCompleter::new(&self.cwd, path::SUPPORTED_READ_FORMATS);
+        // TODO: remove, don't source here.
+        let mut dirs = Vec::new();
+
+        // TODO: `fn edit` should use the same logic as here.  we should pull out a common method.
+        let mut paths = paths
+            .iter()
+            .map(|path| {
+                let path = path.as_ref();
+
+                if path.is_dir() {
+                    // TODO: load all pim-able image files in this directory, sorted:
+                    // paths.sort_by(|a, b| a.file_name().cmp(&b.file_name()));
+                    dirs.push(path);
+                    completer
+                        .paths(path)
+                        .map(|paths| paths.map(|p| path.join(p)).collect())
+                } else if path.exists() {
+                    Ok(vec![path.to_path_buf()])
+                } else if !path.exists() && path.with_extension("png").exists() {
+                    Ok(vec![path.with_extension("png")])
+                } else {
+                    Ok(vec![])
+                }
+            })
+            // Collect paths and errors.
+            .collect::<io::Result<Vec<_>>>()?
+            .into_iter()
+            .flatten()
+            .filter(|p| p.file_name().is_some() && p.file_stem().is_some())
+            .collect::<Vec<_>>();
+
+        // Do not sort file names, they were added in a specific order so that's
+        // the order they should be concatenated in.
+
+        // If our paths list is empty, return early.
+        let paths = if let Some(paths) = NonEmpty::from_slice(paths.as_slice()) {
+            paths
+        } else {
+            return Ok(());
+        };
+
+        // Load images and collect errors.
+        let mut frames = paths
+            .iter()
+            .map(crate::io::load_image)
+            .collect::<io::Result<Vec<_>>>()?
+            .into_iter()
+            .peekable();
+
+        // TODO: use the current view frame width as a reference; we should split each loaded
+        // image into that width.  alternatively, it might be easier to just convert into one
+        // long frame and let the user split into frames after that.
+        // Use the first frame as a reference for what size the rest of
+        // the frames should be.
+        if let Some((fw, fh, _)) = frames.peek() {
+            let (fw, fh) = (*fw, *fh);
+
+            if frames.clone().all(|(w, h, _)| w == fw && h == fh) {
+                let frames: Vec<_> = frames.map(|(_, _, pixels)| pixels).collect();
+                self.add_view(FileStatus::Saved(FileStorage::Range(paths)), fw, fh, frames);
+            } else {
+                return Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    format!("frame dimensions must all match {}x{}", fw, fh),
+                ));
+            }
+        }
+
+        if let Some(id) = self.views.last().map(|v| v.id) {
+            self.organize_views();
+            self.edit_view(id);
+        }
+
+        Ok(())
+    }
+
     /// Save the given view to disk with the current file name. Returns
     /// an error if the view has no file name.
     pub fn save_view(&mut self, id: ViewId) -> io::Result<(FileStorage, usize)> {
