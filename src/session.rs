@@ -1404,7 +1404,7 @@ impl Session {
         let mut dirs = Vec::new();
 
         // TODO: `fn edit` should use the same logic as here.  we should pull out a common method.
-        let mut paths = paths
+        let paths = paths
             .iter()
             .map(|path| {
                 let path = path.as_ref();
@@ -1434,37 +1434,20 @@ impl Session {
         // Do not sort file names, they were added in a specific order so that's
         // the order they should be concatenated in.
 
-        // If our paths list is empty, return early.
-        let paths = if let Some(paths) = NonEmpty::from_slice(paths.as_slice()) {
-            paths
+        let range = if let Some(range) = NonEmpty::from_slice(paths.as_slice()) {
+            range
         } else {
+            // If our paths list is empty, don't add another view.
             return Ok(());
         };
 
-        // Load images and collect errors.
-        let mut frames = paths
-            .iter()
-            .map(crate::io::load_image)
-            .collect::<io::Result<Vec<_>>>()?
-            .into_iter()
-            .peekable();
-
-        // TODO: only check the frame height, then push everybody into one big frame.
-        // Use the first frame as a reference for what size the rest of
-        // the frames should be.
-        if let Some((fw, fh, _)) = frames.peek() {
-            let (fw, fh) = (*fw, *fh);
-
-            if frames.clone().all(|(w, h, _)| w == fw && h == fh) {
-                let frames: Vec<_> = frames.map(|(_, _, pixels)| pixels).collect();
-                self.add_view(FileStatus::Saved(FileStorage::Range(paths)), fw, fh, frames);
-            } else {
-                return Err(io::Error::new(
-                    io::ErrorKind::Other,
-                    format!("frame dimensions must all match {}x{}", fw, fh),
-                ));
-            }
-        }
+        let (fw, fh, frame) = crate::io::concatenate_images(&paths)?;
+        self.add_view(
+            FileStatus::Saved(FileStorage::Range(range)),
+            fw,
+            fh,
+            vec![frame],
+        );
 
         if let Some(id) = self.views.last().map(|v| v.id) {
             self.organize_views();
