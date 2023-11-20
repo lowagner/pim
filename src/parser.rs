@@ -10,6 +10,7 @@ use crate::script::{Argument, Command, Script, Use};
 use crate::session::{Direction, Mode, VisualState};
 
 use std::ffi::OsString;
+use std::path::MAIN_SEPARATOR;
 use std::str::FromStr;
 
 pub type Error = memoir::result::Error;
@@ -69,7 +70,9 @@ fn get_argument_parser(lookback: i32) -> Parser<Argument> {
 
             let i64_arg = integer::<i64>().map(Argument::I64).label("<i64>");
             let color_arg = color().map(Argument::Color).label("<color>");
-            let string_arg = quoted().map(Argument::String).label("<string>");
+            let string_arg = peek(implicit_path().or(quoted()))
+                .map(Argument::String)
+                .label("<string>");
             // TODO: maybe look for an optional `-[0-9]+` (e.g., full use `$1-4`) to do lookback -4.
             // if we see a use-case for looking back on arguments not scripted in.
             let use_arg = symbol('$')
@@ -178,6 +181,7 @@ pub fn scale() -> Parser<u32> {
         .map(|(_, scale)| scale)
 }
 
+// TODO: i think we can remove this at some point and use `implicit_path` instead.
 pub fn path() -> Parser<String> {
     token()
         .map(|input: String| {
@@ -202,6 +206,42 @@ pub fn path() -> Parser<String> {
             }
         })
         .label("<path>")
+}
+
+// TODO: rename to `path` eventually.
+fn implicit_path() -> Parser<String> {
+    peek(
+        token()
+            .try_map(|input: String| {
+                let evidence = input.contains(MAIN_SEPARATOR) || input.contains(".");
+
+                // Linux and BSD and MacOS use `~` to infer the home directory of a given user.
+                let maybe_path: Option<OsString> = if cfg!(unix) {
+                    // We have to do this dance because `Path::join` doesn't do what we want
+                    // if the input is for eg. "~/". We also can't use `Path::strip_prefix`
+                    // because it drops our trailing slash.
+                    if input.starts_with('~') {
+                        let base_dirs = dirs::BaseDirs::new().unwrap();
+                        let mut path: OsString = base_dirs.home_dir().into();
+                        path.push(&input['~'.len_utf8()..]);
+                        Some(path)
+                    } else if evidence {
+                        Some(input.clone().into())
+                    } else {
+                        None
+                    }
+                } else if evidence {
+                    Some(input.clone().into())
+                } else {
+                    None
+                };
+                match maybe_path {
+                    None => Err("probably not a path"),
+                    Some(path) => Ok(path.to_str().unwrap().to_string()),
+                }
+            })
+            .label("<path>"),
+    )
 }
 
 // An implementation of `choice` which doesn't require parsing to the end.
@@ -871,5 +911,45 @@ mod test {
                 platform::Key::Control
             )
         );
+    }
+
+    #[test]
+    fn test_implicit_path_parses_directories() {
+        let p = implicit_path();
+
+        if cfg!(unix) {
+            assert_eq!(
+                p.parse("~/hello").unwrap().0,
+                dirs::BaseDirs::new()
+                    .unwrap()
+                    .home_dir()
+                    .to_str()
+                    .unwrap()
+                    .to_string()
+                    + "/hello"
+            );
+
+            assert_eq!(p.parse("hello/"), Ok(("hello/".to_string(), "")));
+        } else {
+            assert_eq!(p.parse("hello\\"), Ok(("hello\\".to_string(), "")));
+        }
+    }
+
+    #[test]
+    fn test_implicit_path_parses_files_with_extensions() {
+        let p = implicit_path();
+        assert_eq!(
+            p.parse("this-is-a-great-file.png"),
+            Ok(("this-is-a-great-file.png".to_string(), ""))
+        );
+        assert_eq!(p.parse(".pimrc hi"), Ok((".pimrc".to_string(), " hi")));
+    }
+
+    #[test]
+    fn test_implicit_path_fails_for_strings_without_separators_or_periods() {
+        let p = implicit_path();
+        assert!(p.parse("hello").is_err());
+        assert!(p.parse("hi-hello").is_err());
+        assert!(p.parse("hi++hello").is_err());
     }
 }
