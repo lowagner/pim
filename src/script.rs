@@ -7,6 +7,7 @@ use claim::assert_ok;
 use std::collections::HashMap;
 use std::fmt;
 use std::mem;
+use std::path::MAIN_SEPARATOR;
 use std::str::FromStr;
 
 /*
@@ -1742,6 +1743,15 @@ impl Variables {
     /// Sets the variable, returning the old value if it was present in the map.
     /// NOTE! Will return an error if the variable was present and const.
     pub fn set(&mut self, name: String, variable: Variable) -> ArgumentResult {
+        if name.contains(MAIN_SEPARATOR) || name.contains(".") {
+            return Err(format!(
+                "variable names should not contain `{}` or `.` which indicate paths",
+                MAIN_SEPARATOR
+            ));
+        }
+        if name.contains(" ") {
+            return Err("variable names should not contain spaces".to_string());
+        }
         match &variable {
             Variable::Alias(alias) => {
                 if name == *alias {
@@ -3796,6 +3806,45 @@ mod test {
             Ok(Argument::I64(456))
         );
         assert_eq!(variables.get(&var_name).to_argument(), Argument::I64(789));
+    }
+
+    #[test]
+    fn test_variables_complains_about_separators() {
+        let mut variables = Variables::new();
+        let name = format!("whatever{}this-is", MAIN_SEPARATOR);
+
+        assert_eq!(
+            variables.set(name.clone(), Variable::Mutable(Argument::I64(3))),
+            Err(format!(
+                "variable names should not contain `{}` or `.` which indicate paths",
+                MAIN_SEPARATOR
+            ))
+        );
+    }
+
+    #[test]
+    fn test_variables_complains_about_periods() {
+        let mut variables = Variables::new();
+        let name = "yoyo.123".to_string();
+
+        assert_eq!(
+            variables.set(name.clone(), Variable::Mutable(Argument::I64(3))),
+            Err(format!(
+                "variable names should not contain `{}` or `.` which indicate paths",
+                MAIN_SEPARATOR
+            ))
+        );
+    }
+
+    #[test]
+    fn test_variables_complains_about_spaces() {
+        let mut variables = Variables::new();
+        let name = "asdf jkl;".to_string();
+
+        assert_eq!(
+            variables.set(name.clone(), Variable::Mutable(Argument::I64(3))),
+            Err("variable names should not contain spaces".to_string())
+        );
     }
 
     #[test]
