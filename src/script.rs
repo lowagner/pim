@@ -1,5 +1,6 @@
 use crate::gfx::Rgba8;
 use crate::palette::Palette;
+use crate::platform::{self, InputState, Key, ModifiersState, MouseButton};
 use crate::settings::*;
 
 use claim::assert_ok;
@@ -467,7 +468,7 @@ pub enum Argument {
     // TODO: we should be able to pause execution, e.g., for an alert box to confirm an action
 
     // An argument that is itself the output of another Script.
-    // Note that these are never memoized and lazily evaluated
+    // Note that these are never memoized and are always lazily evaluated
     // (i.e., only if needed; e.g., `b` will never be evaluated
     // if `a` evaluates to false in `if a b c`), so this script
     // can be called multiple times as a lambda function.
@@ -603,6 +604,24 @@ pub struct Use {
     /// -1 implies looking back one script.
     // Note we're using a negative number to more easily distinguish from index.
     pub lookback: i32,
+}
+
+#[derive(Hash, PartialEq, Debug, Clone, Copy)]
+pub enum Input {
+    // TODO: rename ModifiersState -> Modifiers at some point.
+    /// A special key like the `e` key (ignoring modifiers) or `<home>`, pressed.
+    KeyPressed(ModifiersState, Key),
+    /// A special key like the `e` key (ignoring modifiers) or `<home>`, released.
+    KeyReleased(ModifiersState, Key),
+    /// Mouse button was pressed.
+    MousePressed(ModifiersState, MouseButton),
+    /// Mouse button was released.
+    MouseReleased(ModifiersState, MouseButton),
+    /// Mouse wheel was scrolled.
+    MouseWheel(ModifiersState, f32),
+    /// A key as represented, without modifiers.  We can't handle released state
+    /// here, just the pressed state.
+    Rune(char),
 }
 
 pub type VoidResult = Result<(), String>;
@@ -1257,6 +1276,7 @@ pub fn evaluate(
     }
 }
 
+// TODO: move `variable` stuff into its own variable.rs file.
 #[derive(PartialEq, Debug, Clone)]
 pub enum Variable {
     // A variable that can be reassigned:

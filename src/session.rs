@@ -349,6 +349,7 @@ impl KeyBinding {
                 // Nb. We only check the <ctrl> modifier with characters,
                 // because the others (especially <shift>) will most likely
                 // input a different character.
+                // TODO: we probably should check meta.
                 a == b
                     && self.modes.contains(&mode)
                     && self.state == state
