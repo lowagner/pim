@@ -288,6 +288,7 @@ impl fmt::Display for Command {
             Command::Quit(Quit::AllSafe) => write!(f, "qa"),
             Command::Quit(Quit::Forced) => write!(f, "q!"),
             Command::Quit(Quit::AllForced) => write!(f, "qa!"),
+            Command::Quit(Quit::AfterWrite) => write!(f, "wq"),
         }
     }
 }
@@ -366,6 +367,7 @@ impl FromStr for Command {
             "qa" => Ok(Command::Quit(Quit::AllSafe)),
             "q!" => Ok(Command::Quit(Quit::Forced)),
             "qa!" => Ok(Command::Quit(Quit::AllForced)),
+            "wq" => Ok(Command::Quit(Quit::AfterWrite)),
             name => {
                 if name.len() > 0 {
                     Ok(Command::Evaluate(name.to_string()))
@@ -411,7 +413,8 @@ pub enum Quit {
     Forced,
     /// Force quit all views, via `qa!`.
     AllForced,
-    // TODO: WriteQuit, e.g., wq
+    /// Writes the view before quitting.
+    AfterWrite,
 }
 
 #[derive(PartialEq, Debug, Clone)]
@@ -1677,6 +1680,10 @@ impl Variables {
         variables.add_built_in(
             Command::Quit(Quit::AllForced),
             "quits all views even if they haven't been saved",
+        );
+        variables.add_built_in(
+            Command::Quit(Quit::AfterWrite),
+            "saves the current view before quitting",
         );
         assert_ok!(variables.set(
             "run".to_string(),
@@ -4178,6 +4185,7 @@ mod test {
         assert_eq!(Command::from_str("qa"), Ok(Command::Quit(Quit::AllSafe)));
         assert_eq!(Command::from_str("q!"), Ok(Command::Quit(Quit::Forced)));
         assert_eq!(Command::from_str("qa!"), Ok(Command::Quit(Quit::AllForced)));
+        assert_eq!(Command::from_str("wq"), Ok(Command::Quit(Quit::AfterWrite)));
         assert_eq!(
             Command::from_str("gnarly345"),
             Ok(Command::Evaluate("gnarly345".to_string()))

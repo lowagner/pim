@@ -2778,11 +2778,6 @@ impl Session {
                     Err(e) => self.message(format!("Error: {}", e), MessageType::Error),
                 }
             }
-            Cmd::WriteQuit => {
-                if self.save_view(self.views.active_id).is_ok() {
-                    self.quit_view(self.views.active_id);
-                }
-            }
             Cmd::Map(map) => {
                 let KeyMapping {
                     modifiers,
@@ -2998,6 +2993,10 @@ impl Session {
                     v.paint_color(*color, x, y);
                 }
             }
+            Cmd::WriteQuit => match self.save_view(self.views.active_id) {
+                Ok(_) => self.quit_view(self.views.active_id),
+                Err(e) => self.message(e, MessageType::Error),
+            },
         };
         result
     }
@@ -3570,6 +3569,10 @@ impl Session {
             }
             Quit::Forced => self.quit_view(self.views.active_id),
             Quit::AllForced => self.quit(ExitReason::Normal),
+            Quit::AfterWrite => match self.save_view(self.views.active_id) {
+                Ok(_) => self.quit_view(self.views.active_id),
+                Err(e) => self.message(e, MessageType::Error),
+            },
         }
     }
 }
