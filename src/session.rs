@@ -1434,16 +1434,17 @@ impl Session {
         // Do not sort file names, they were added in a specific order so that's
         // the order they should be concatenated in.
 
-        let range = if let Some(range) = NonEmpty::from_slice(paths.as_slice()) {
-            range
-        } else {
+        if paths.is_empty() {
             // If our paths list is empty, don't add another view.
+            // This can happen if we opened up an empty directory.
             return Ok(());
-        };
+        }
 
         let (fw, fh, frame) = crate::io::concatenate_images(&paths)?;
         self.add_view(
-            FileStatus::Saved(FileStorage::Range(range)),
+            // Don't save as a range; we want to allow the user to
+            // save this as a new file.
+            FileStatus::NoFile,
             fw,
             fh,
             vec![frame],
