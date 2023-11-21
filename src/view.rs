@@ -655,6 +655,7 @@ impl ToString for FileStatus {
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum FileStorage {
     /// Stored as a range of files.
+    // TODO: i think we might be able to remove this.
     Range(NonEmpty<std::path::PathBuf>),
     /// Stored as a single file.
     Single(std::path::PathBuf),

@@ -1519,6 +1519,7 @@ impl Session {
 
             if frames.clone().all(|(w, h, _)| w == fw && h == fh) {
                 let frames: Vec<_> = frames.map(|(_, _, pixels)| pixels).collect();
+                // TODO: don't use Range here.
                 self.add_view(FileStatus::Saved(FileStorage::Range(paths)), fw, fh, frames);
             } else {
                 return Err(io::Error::new(
@@ -2753,11 +2754,12 @@ impl Session {
                     Err(err) => self.message(format!("Error: {}", err), MessageType::Error),
                 }
             }
-            // TODO: Continue here!
             Cmd::WriteFrames(None) => {
                 self.command(Cmd::WriteFrames(Some(".".to_owned())));
             }
             Cmd::WriteFrames(Some(ref dir)) => {
+                // We won't port this to script.rs for now; i don't see a good use case for editing purposes.
+                // one can always use ImageMagick to split into frames.
                 let path = Path::new(dir);
 
                 std::fs::create_dir_all(path).ok();
@@ -2779,6 +2781,7 @@ impl Session {
                     Err(e) => self.message(format!("Error: {}", e), MessageType::Error),
                 }
             }
+            // TODO: Continue here!
             Cmd::Map(map) => {
                 let KeyMapping {
                     modifiers,
