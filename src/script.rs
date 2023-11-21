@@ -606,7 +606,7 @@ pub struct Use {
     pub lookback: i32,
 }
 
-#[derive(Hash, PartialEq, Debug, Clone, Copy)]
+#[derive(PartialEq, Debug, Clone, Copy)]
 pub enum Input {
     // TODO: rename ModifiersState -> Modifiers at some point.
     /// A special key like the `e` key (ignoring modifiers) or `<home>`, pressed.
@@ -619,8 +619,8 @@ pub enum Input {
     MouseReleased(ModifiersState, MouseButton),
     /// Mouse wheel was scrolled.
     MouseWheel(ModifiersState, f32),
-    /// A key as represented, without modifiers.  We can't handle released state
-    /// here, just the pressed state.
+    /// A letter/character/rune, e.g., 'A' or 'ö', without modifiers.
+    /// We can't handle released state here, just the pressed state.
     Rune(char),
 }
 
@@ -1799,6 +1799,7 @@ impl Variables {
     /// Sets the variable, returning the old value if it was present in the map.
     /// NOTE! Will return an error if the variable was present and const.
     pub fn set(&mut self, name: String, variable: Variable) -> ArgumentResult {
+        // TODO: don't let name contain `<` or `>` as these are interpreted as modifiers/keys
         if name.contains(MAIN_SEPARATOR) || name.contains(".") {
             return Err(format!(
                 "variable names should not contain `{}` or `.` which indicate paths",

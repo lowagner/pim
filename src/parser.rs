@@ -6,7 +6,7 @@ use directories as dirs;
 use crate::brush::BrushMode;
 use crate::gfx::Rgba8;
 use crate::platform;
-use crate::script::{Argument, Command, Script, Use};
+use crate::script::{Argument, Command, Script, Use, Input};
 use crate::session::{Direction, Mode, VisualState};
 
 use std::ffi::OsString;
@@ -287,15 +287,26 @@ impl Parse for platform::Key {
                 "down" => platform::Key::Down,
                 "left" => platform::Key::Left,
                 "right" => platform::Key::Right,
+                "backspace" => platform::Key::Backspace,
+                "return" => platform::Key::Return,
+                "space" => platform::Key::Space,
+                "tab" => platform::Key::Tab,
+                "esc" => platform::Key::Escape,
+                "escape" => platform::Key::Escape,
+                "ins" => platform::Key::Insert,
+                "insert" => platform::Key::Insert,
+                "del" => platform::Key::Delete,
+                "delete" => platform::Key::Delete,
+                "home" => platform::Key::Home,
+                "end" => platform::Key::End,
+                "pgdown" => platform::Key::PageDown,
+                "pagedown" => platform::Key::PageDown,
+                "pgup" => platform::Key::PageUp,
+                "pageup" => platform::Key::PageUp,
+                "shift" => platform::Key::Shift,
                 "ctrl" => platform::Key::Control,
                 "alt" => platform::Key::Alt,
-                "shift" => platform::Key::Shift,
                 "meta" => platform::Key::Meta,
-                "space" => platform::Key::Space,
-                "return" => platform::Key::Return,
-                "backspace" => platform::Key::Backspace,
-                "tab" => platform::Key::Tab,
-                "end" => platform::Key::End,
                 other => return Err(format!("unknown key <{}>", other)),
             };
             Ok(key)

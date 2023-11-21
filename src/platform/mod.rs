@@ -163,16 +163,17 @@ pub enum Key {
     Left, Up, Right, Down,
 
     // Control characters.
-    Backspace, Return, Space, Tab,
-    Escape, Insert, Home, Delete, End, PageDown, PageUp,
-
-    // Punctuation.
-    Apostrophe, Grave, Caret, Comma, Period, Colon, Semicolon,
-    LBracket, RBracket,
-    Slash, Backslash,
+    Backspace, Return, Space, Tab, Escape,
+    Insert, Delete, Home, End, PageDown, PageUp,
 
     // Modifiers.
     Shift, Control, Alt, Meta,
+
+    // Punctuation.
+    Apostrophe, Grave, // Backtick
+    Comma, Period, Semicolon,
+    LBracket, RBracket,
+    Slash, Backslash,
 
     // Math keys.
     Equal, Minus,
@@ -201,7 +202,7 @@ impl From<char> for Key {
             '/' => Key::Slash, '[' => Key::LBracket, ']' => Key::RBracket,
             '`' => Key::Grave, ',' => Key::Comma, '.' => Key::Period,
             '=' => Key::Equal, '-' => Key::Minus, '\'' => Key::Apostrophe,
-            ';' => Key::Semicolon, ':' => Key::Colon, ' ' => Key::Space,
+            ';' => Key::Semicolon, ' ' => Key::Space,
             '\\' => Key::Backslash,
 
             _ => Key::Unknown,
@@ -274,9 +275,7 @@ impl fmt::Display for Key {
             Key::PageUp => "<pgup>".fmt(f),
             Key::PageDown => "<pgdown>".fmt(f),
             Key::Grave => "`".fmt(f),
-            Key::Caret => "^".fmt(f),
             Key::End => "<end>".fmt(f),
-            Key::Colon => ":".fmt(f),
             Key::Semicolon => ";".fmt(f),
             Key::Equal => "=".fmt(f),
             Key::Minus => "-".fmt(f),
