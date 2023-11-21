@@ -1463,7 +1463,7 @@ impl Session {
         let mut dirs = Vec::new();
 
         // TODO: `fn edit` should use the same logic as here.  we should pull out a common method.
-        let mut paths = paths
+        let paths = paths
             .iter()
             .map(|path| {
                 let path = path.as_ref();
@@ -1551,12 +1551,7 @@ impl Session {
 
     /// Export a view in a specific format.
     fn export_as(&mut self, id: ViewId, path: &Path, scale: u32) -> io::Result<()> {
-        let ext = path.extension().ok_or_else(|| {
-            io::Error::new(io::ErrorKind::Other, "file path requires an extension")
-        })?;
-        let ext = ext.to_str().ok_or_else(|| {
-            io::Error::new(io::ErrorKind::Other, "file extension is not valid unicode")
-        })?;
+        let ext = get_extension(&path)?;
 
         let written = match ext {
             "gif" => {
@@ -2732,7 +2727,6 @@ impl Session {
             Cmd::EditFrames(ref paths) => {
                 self.concatenate_images(paths);
             }
-            // TODO: Continue here!
             Cmd::Export(scale, path) => {
                 let view = self.active_view();
                 let id = view.id;
@@ -2758,6 +2752,7 @@ impl Session {
                     Err(err) => self.message(format!("Error: {}", err), MessageType::Error),
                 }
             }
+            // TODO: Continue here!
             Cmd::WriteFrames(None) => {
                 self.command(Cmd::WriteFrames(Some(".".to_owned())));
             }
@@ -3523,6 +3518,46 @@ impl Session {
         Ok(())
     }
 
+    fn script_write(&mut self, arg0: Option<String>, arg1: Option<i64>) -> VoidResult {
+        // TODO: clean up `export_as` and `save_view` logic
+        let scale = arg1.unwrap_or(1) as u32;
+        if scale < 1 || scale > 16 {
+            return Err(format!(
+                "invalid scale for writing to file: {}",
+                arg1.unwrap()
+            ));
+        }
+        let arg0 = arg0.as_ref().map(|p| Path::new(p));
+        let rewrite_save_file = scale == 1
+            && arg0.as_ref().map_or(true, |path| {
+                get_extension(&path).map_or(false, |ext| ext == "png")
+            });
+        match arg0 {
+            None => match self.save_view(self.views.active_id) {
+                Ok((storage, written)) => self.message(
+                    format!("\"{}\" {} pixels written", storage, written),
+                    MessageType::Info,
+                ),
+                Err(err) => self.message(format!("Error: {}", err), MessageType::Error),
+            },
+            Some(path) if rewrite_save_file => match self.active_view_mut().save_as(&path.into()) {
+                Ok(written) => self.message(
+                    format!("\"{}\" {} pixels written", path.display(), written),
+                    MessageType::Info,
+                ),
+                Err(err) => self.message(format!("Error: {}", err), MessageType::Error),
+            },
+            Some(path) => {
+                if let Err(err) = self.export_as(self.active_view().id, path, scale) {
+                    self.message(format!("Error: {}", err), MessageType::Error);
+                }
+                // TODO: probably should have an export message otherwise.
+            }
+        }
+        // TODO: clean up self.message above, do it when hearing back from evaluations in script.rs.
+        Ok(())
+    }
+
     pub fn script_quit(&mut self, quit: Quit) {
         match quit {
             Quit::Safe => self.quit_view_safe(self.views.active_id),
@@ -3536,6 +3571,14 @@ impl Session {
             Quit::AllForced => self.quit(ExitReason::Normal),
         }
     }
+}
+
+fn get_extension<'a>(path: &'a Path) -> Result<&'a str, io::Error> {
+    let ext = path
+        .extension()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "file path requires an extension"))?;
+    ext.to_str()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "file extension is not valid unicode"))
 }
 
 #[cfg(test)]

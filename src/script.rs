@@ -195,6 +195,9 @@ pub enum Command {
     // TODO: BrushReset,
     /// Resets settings.
     ResetSettings,
+
+    /// Saves the animation to a file (e.g., for gif, png, etc.).
+    Write,
     /// Versions of quit, see enum `Quit`.
     Quit(Quit),
 }
@@ -280,6 +283,7 @@ impl fmt::Display for Command {
             Command::MouseY => write!(f, "my"),
             Command::Pan => write!(f, "pan"),
             Command::ResetSettings => write!(f, "reset"),
+            Command::Write => write!(f, "w"),
             Command::Quit(Quit::Safe) => write!(f, "q"),
             Command::Quit(Quit::AllSafe) => write!(f, "qa"),
             Command::Quit(Quit::Forced) => write!(f, "q!"),
@@ -357,6 +361,7 @@ impl FromStr for Command {
             "my" => Ok(Command::MouseY),
             "pan" => Ok(Command::Pan),
             "reset" => Ok(Command::ResetSettings),
+            "w" => Ok(Command::Write),
             "q" => Ok(Command::Quit(Quit::Safe)),
             "qa" => Ok(Command::Quit(Quit::AllSafe)),
             "q!" => Ok(Command::Quit(Quit::Forced)),
@@ -1124,6 +1129,14 @@ macro_rules! script_runner {
                             Ok(Argument::Null)
                         }
                     }
+                    Command::Write => {
+                        let arg0 = self
+                            .script_evaluate(&script_stack, Evaluate::Index(0))?.get_optional_string("for path")?;
+                        let arg1 = self
+                            .script_evaluate(&script_stack, Evaluate::Index(1))?.get_optional_i64("for scale")?;
+                        self.script_write(arg0, arg1)?;
+                        Ok(Argument::Null)
+                    }
                     Command::Quit(q) => {
                         self.script_quit(*q);
                         Ok(Argument::Null)
@@ -1644,6 +1657,12 @@ impl Variables {
         );
         variables.add_built_in(Command::ResetSettings, "resets all settings");
         variables.add_built_in(
+            Command::Write,
+            "writes the current image to storage, with optional file name and optional scale, \
+            e.g., `$$` to save to current file, `$$ anim.gif` to save as a gif, and
+            `$$ what.png 3` to save as a 3x-scaled png",
+        );
+        variables.add_built_in(
             Command::Quit(Quit::Safe),
             "quits the current view if it has been saved",
         );
@@ -2108,7 +2127,13 @@ mod test {
                 self.test_what_ran
                     .push(WhatRan::Mocked(format!("{:?}{{{:?}}}", for_what, string)));
             }
-            return Ok(());
+            Ok(())
+        }
+
+        fn script_write(&mut self, arg0: Option<String>, arg1: Option<i64>) -> VoidResult {
+            self.test_what_ran
+                .push(WhatRan::Mocked(format!("write{{{:?}, {:?}}}", arg0, arg1)));
+            Ok(())
         }
 
         fn script_quit(&mut self, quit: Quit) {
@@ -4148,6 +4173,7 @@ mod test {
         assert_eq!(Command::from_str("p-add"), Ok(Command::PaletteAddColor));
         assert_eq!(Command::from_str("p-clear"), Ok(Command::PaletteClear));
         assert_eq!(Command::from_str("p"), Ok(Command::Paint));
+        assert_eq!(Command::from_str("w"), Ok(Command::Write));
         assert_eq!(Command::from_str("q"), Ok(Command::Quit(Quit::Safe)));
         assert_eq!(Command::from_str("qa"), Ok(Command::Quit(Quit::AllSafe)));
         assert_eq!(Command::from_str("q!"), Ok(Command::Quit(Quit::Forced)));
