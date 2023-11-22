@@ -148,6 +148,17 @@ pub enum MouseButton {
     Other(u8),
 }
 
+impl fmt::Display for MouseButton {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            MouseButton::Left => "lmb".fmt(f),
+            MouseButton::Right => "rmb".fmt(f),
+            MouseButton::Middle => "mmb".fmt(f),
+            MouseButton::Other(button) => write!(f, "[{}]", button),
+        }
+    }
+}
+
 /// Symbolic name for a keyboard key.
 #[derive(Debug, Hash, Ord, PartialOrd, PartialEq, Eq, Clone, Copy)]
 #[repr(u32)]
@@ -426,11 +437,11 @@ impl fmt::Display for ModifiersState {
         if self.alt {
             s.push_str("<alt>");
         }
-        if self.meta {
-            s.push_str("<meta>");
-        }
         if self.shift {
             s.push_str("<shift>");
+        }
+        if self.meta {
+            s.push_str("<meta>");
         }
         s.fmt(f)
     }

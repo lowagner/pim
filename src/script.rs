@@ -458,11 +458,11 @@ pub enum Argument {
     I64(i64),
     Color(Rgba8),
     String(String),
-    // TODO: for keys (e.g. a-z, <tab>, <backspace>, <ctrl>, etc.)
-    //      and also mods (<ctrl>a, <alt>c, etc.)
+    // For keys (e.g. <a>-<z>, <tab>, <backspace>, <ctrl>, etc.) and also modifiers
+    // (<shift><ctrl><a>, <alt><c>, etc.)
     // Note that commands that take Input should also take a String that is a single
     // character long, e.g., 'A' or 'ö'.
-    // Input(Input),
+    Input(Input),
 
     // Non-value-based (AKA evaluatable) arguments follow.
     // TODO: we should be able to pause execution, e.g., for an alert box to confirm an action
@@ -571,6 +571,7 @@ impl Argument {
     }
 }
 
+// TODO: move Serialize logic into this fmt::Display for Argument
 impl fmt::Display for Argument {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -578,6 +579,18 @@ impl fmt::Display for Argument {
             Argument::I64(value) => write!(f, "{}", *value),
             Argument::Color(value) => write!(f, "{}", *value),
             Argument::String(value) => write!(f, "'{}'", *value),
+            Argument::Input(Input::KeyPressed(mods, key)) => write!(f, "{}<{}>", mods, key),
+            Argument::Input(Input::KeyReleased(mods, key)) => write!(f, "{}<{}>!", mods, key),
+            Argument::Input(Input::MousePressed(mods, btn)) => write!(f, "{}<{}>", mods, btn),
+            Argument::Input(Input::MouseReleased(mods, btn)) => write!(f, "{}<{}>!", mods, btn),
+            Argument::Input(Input::MouseWheel(mods, val)) => write!(f, "{}<{{{}}}>!", mods, val),
+            Argument::Input(Input::Rune(rune)) => {
+                if *rune == '\'' {
+                    write!(f, "\"'\"")
+                } else {
+                    write!(f, "'{}'", rune)
+                }
+            }
             Argument::Script(script) => {
                 let mut check = write!(f, "{{command: `{}`, arguments: [", script.command);
                 if check.is_err() {
@@ -639,6 +652,18 @@ fn serialize_argument(argument: &Argument, f: &mut fmt::Formatter<'_>) -> fmt::R
         Argument::I64(value) => write!(f, "{}", *value),
         Argument::Color(value) => write!(f, "{}", *value),
         Argument::String(value) => write!(f, "'{}'", *value),
+        Argument::Input(Input::KeyPressed(mods, key)) => write!(f, "{}<{}>", mods, key),
+        Argument::Input(Input::KeyReleased(mods, key)) => write!(f, "{}<{}>!", mods, key),
+        Argument::Input(Input::MousePressed(mods, btn)) => write!(f, "{}<{}>", mods, btn),
+        Argument::Input(Input::MouseReleased(mods, btn)) => write!(f, "{}<{}>!", mods, btn),
+        Argument::Input(Input::MouseWheel(mods, val)) => write!(f, "{}<{{{}}}>!", mods, val),
+        Argument::Input(Input::Rune(rune)) => {
+            if *rune == '\'' {
+                write!(f, "\"'\"")
+            } else {
+                write!(f, "'{}'", rune)
+            }
+        }
         Argument::Script(script) if script.arguments.len() == 0 => {
             write!(f, "{}", script.command)
         }
@@ -655,6 +680,7 @@ fn serialize_argument(argument: &Argument, f: &mut fmt::Formatter<'_>) -> fmt::R
 
 // TODO: we probably can just use fmt::Display for the nice serialization,
 // and fmt::Debug for the debug display version.
+// i.e., use {:?} for scripts, arguments, and ArgumentResult where we currently don't serialize.
 pub enum Serialize<'a> {
     Argument(&'a Argument),
     Script(&'a Script),
