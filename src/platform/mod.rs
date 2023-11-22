@@ -357,6 +357,66 @@ pub struct ModifiersState {
     pub meta: bool,
 }
 
+impl ModifiersState {
+    pub const SHIFT: ModifiersState = ModifiersState {
+        shift: true,
+        ctrl: false,
+        alt: false,
+        meta: false,
+    };
+    pub const CTRL: ModifiersState = ModifiersState {
+        shift: false,
+        ctrl: true,
+        alt: false,
+        meta: false,
+    };
+    pub const ALT: ModifiersState = ModifiersState {
+        shift: false,
+        ctrl: false,
+        alt: true,
+        meta: false,
+    };
+    pub const META: ModifiersState = ModifiersState {
+        shift: false,
+        ctrl: false,
+        alt: false,
+        meta: true,
+    };
+
+    pub const CTRL_SHIFT: ModifiersState = ModifiersState {
+        shift: true,
+        ctrl: true,
+        alt: false,
+        meta: false,
+    };
+    pub const CTRL_ALT: ModifiersState = ModifiersState {
+        shift: false,
+        ctrl: true,
+        alt: true,
+        meta: false,
+    };
+    pub const CTRL_META: ModifiersState = ModifiersState {
+        shift: false,
+        ctrl: true,
+        alt: false,
+        meta: true,
+    };
+
+    pub const CTRL_ALT_SHIFT: ModifiersState = ModifiersState {
+        shift: true,
+        ctrl: true,
+        alt: true,
+        meta: false,
+    };
+
+    pub const CTRL_ALT_SHIFT_META: ModifiersState = ModifiersState {
+        shift: true,
+        ctrl: true,
+        alt: true,
+        meta: true,
+    };
+}
+
 impl fmt::Display for ModifiersState {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut s = String::new();

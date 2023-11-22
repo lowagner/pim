@@ -6,7 +6,7 @@ use directories as dirs;
 use crate::brush::BrushMode;
 use crate::gfx::Rgba8;
 use crate::platform;
-use crate::script::{Argument, Command, Script, Use, Input};
+use crate::script::{Argument, Command, Input, Script, Use};
 use crate::session::{Direction, Mode, VisualState};
 
 use std::ffi::OsString;
@@ -270,6 +270,56 @@ pub fn choose_prefix<T>(choices: Vec<Parser<T>>) -> Parser<T> {
 
 impl Parse for platform::Key {
     fn parser() -> Parser<Self> {
+        get_key_parser(false)
+    }
+}
+
+fn get_key_parser(tag_required: bool) -> Parser<platform::Key> {
+    let tagged_key = between('<', '>', any::<_, String>(letter())).try_map(move |key| {
+        let key = match key.as_str() {
+            "up" => platform::Key::Up,
+            "down" => platform::Key::Down,
+            "left" => platform::Key::Left,
+            "right" => platform::Key::Right,
+            "backspace" => platform::Key::Backspace,
+            "return" => platform::Key::Return,
+            "space" => platform::Key::Space,
+            "tab" => platform::Key::Tab,
+            "esc" => platform::Key::Escape,
+            "escape" => platform::Key::Escape,
+            "ins" => platform::Key::Insert,
+            "insert" => platform::Key::Insert,
+            "del" => platform::Key::Delete,
+            "delete" => platform::Key::Delete,
+            "home" => platform::Key::Home,
+            "end" => platform::Key::End,
+            "pgdown" => platform::Key::PageDown,
+            "pagedown" => platform::Key::PageDown,
+            "pgup" => platform::Key::PageUp,
+            "pageup" => platform::Key::PageUp,
+            "shift" => platform::Key::Shift,
+            "ctrl" => platform::Key::Control,
+            "alt" => platform::Key::Alt,
+            "meta" => platform::Key::Meta,
+            other => {
+                if tag_required {
+                    let key = char::from_str(other);
+                    if key.is_ok() {
+                        let key: platform::Key = key.unwrap().into();
+                        if key != platform::Key::Unknown {
+                            return Ok(key);
+                        }
+                    }
+                }
+                return Err(format!("unknown key <{}>", other));
+            }
+        };
+        Ok(key)
+    });
+
+    if tag_required {
+        tagged_key
+    } else {
         let alphanum = character().try_map(|c| {
             let key: platform::Key = c.into();
 
@@ -280,39 +330,7 @@ impl Parse for platform::Key {
             }
             Ok(key)
         });
-
-        let control = between('<', '>', any::<_, String>(letter())).try_map(|key| {
-            let key = match key.as_str() {
-                "up" => platform::Key::Up,
-                "down" => platform::Key::Down,
-                "left" => platform::Key::Left,
-                "right" => platform::Key::Right,
-                "backspace" => platform::Key::Backspace,
-                "return" => platform::Key::Return,
-                "space" => platform::Key::Space,
-                "tab" => platform::Key::Tab,
-                "esc" => platform::Key::Escape,
-                "escape" => platform::Key::Escape,
-                "ins" => platform::Key::Insert,
-                "insert" => platform::Key::Insert,
-                "del" => platform::Key::Delete,
-                "delete" => platform::Key::Delete,
-                "home" => platform::Key::Home,
-                "end" => platform::Key::End,
-                "pgdown" => platform::Key::PageDown,
-                "pagedown" => platform::Key::PageDown,
-                "pgup" => platform::Key::PageUp,
-                "pageup" => platform::Key::PageUp,
-                "shift" => platform::Key::Shift,
-                "ctrl" => platform::Key::Control,
-                "alt" => platform::Key::Alt,
-                "meta" => platform::Key::Meta,
-                other => return Err(format!("unknown key <{}>", other)),
-            };
-            Ok(key)
-        });
-
-        control.or(alphanum).label("<key>")
+        tagged_key.or(alphanum).label("<key>")
     }
 }
 
@@ -355,6 +373,23 @@ impl Parse for platform::ModifiersState {
                 state
             })
             .label("<mods>")
+    }
+}
+
+impl Parse for Input {
+    fn parser() -> Parser<Self> {
+        // TODO: mouse button
+        // TODO: mouse wheel
+        // Input::Rune(char) is actually taken care of by passing in a string to the `map` command.
+        let modifiers = param::<platform::ModifiersState>();
+        // TODO: the "tag" part of the key should be optional if modifiers were present.
+        let tagged_key = get_key_parser(true);
+        peek(optional(modifiers).then(tagged_key))
+            .map(|(mods, key)| {
+                let mods = mods.unwrap_or_default();
+                Input::KeyPressed(mods, key)
+            })
+            .label("<input>")
     }
 }
 
@@ -962,5 +997,68 @@ mod test {
         assert!(p.parse("hello").is_err());
         assert!(p.parse("hi-hello").is_err());
         assert!(p.parse("hi++hello").is_err());
+    }
+
+    #[test]
+    fn test_input_parser() {
+        let p = param::<Input>();
+
+        assert!(p.parse("<shift>").is_err());
+        assert_eq!(
+            p.parse("<shift><e>"),
+            Ok((
+                Input::KeyPressed(platform::ModifiersState::SHIFT, platform::Key::E),
+                ""
+            ))
+        );
+
+        assert!(p.parse("<shift><ctrl>").is_err());
+        assert_eq!(
+            p.parse("<shift><ctrl><home>..."),
+            Ok((
+                Input::KeyPressed(platform::ModifiersState::CTRL_SHIFT, platform::Key::Home),
+                "..."
+            ))
+        );
+
+        assert!(p.parse("<shift><ctrl><alt>").is_err());
+        assert_eq!(
+            p.parse("<alt><shift><ctrl><pgup>asdf"),
+            Ok((
+                Input::KeyPressed(
+                    platform::ModifiersState::CTRL_ALT_SHIFT,
+                    platform::Key::PageUp
+                ),
+                "asdf"
+            ))
+        );
+
+        assert!(p.parse("<meta><shift><ctrl><alt>").is_err());
+        assert_eq!(
+            p.parse("<alt><meta><shift><ctrl><pagedown>whoa"),
+            Ok((
+                Input::KeyPressed(
+                    platform::ModifiersState::CTRL_ALT_SHIFT_META,
+                    platform::Key::PageDown
+                ),
+                "whoa"
+            ))
+        );
+
+        assert!(p.parse("<hamburger>").is_err());
+        assert_eq!(
+            p.parse("<end>y"),
+            Ok((
+                Input::KeyPressed(platform::ModifiersState::default(), platform::Key::End),
+                "y"
+            ))
+        );
+        assert_eq!(
+            p.parse("<q>soup"),
+            Ok((
+                Input::KeyPressed(platform::ModifiersState::default(), platform::Key::Q),
+                "soup"
+            ))
+        );
     }
 }
