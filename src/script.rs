@@ -1,6 +1,6 @@
 use crate::gfx::Rgba8;
 use crate::palette::Palette;
-use crate::platform::{self, InputState, Key, ModifiersState, MouseButton};
+use crate::platform::{Key, ModifiersState, MouseButton};
 use crate::settings::*;
 
 use claim::assert_ok;
@@ -561,6 +561,26 @@ impl Argument {
         }
     }
 
+    pub fn get_input(&self, what_for: &str) -> InputResult {
+        match self {
+            Argument::String(string) => {
+                // We want only the first char, but only if the string is one char long.
+                let mut chars = string.chars();
+                let rune = chars.next();
+                if rune.is_none() {
+                    return Err(format!("invalid input {}: <empty-string>", what_for));
+                }
+                let rune = rune.unwrap();
+                if chars.next().is_some() {
+                    return Err(format!("invalid input {}: '{}'", what_for, string));
+                }
+                Ok(Input::Rune(rune))
+            }
+            Argument::Input(input) => Ok(input.clone()),
+            result => Err(format!("invalid input {}: {}", what_for, result)),
+        }
+    }
+
     pub fn get_script(&self, what_for: &str) -> ScriptResult {
         // TODO: theoretically we can create everyone as a script if
         // we have an identity command (e.g., `identity $0` resolves to $0).
@@ -630,8 +650,9 @@ pub enum Input {
     MousePressed(ModifiersState, MouseButton),
     /// Mouse button was released.
     MouseReleased(ModifiersState, MouseButton),
-    /// Mouse wheel was scrolled.
-    MouseWheel(ModifiersState, f32),
+    /// Mouse wheel was scrolled.  Multiplies the platform input by 100,
+    /// so e.g., scrolling up/down is +-100.
+    MouseWheel(ModifiersState, i32),
     /// A letter/character/rune, e.g., 'A' or 'ö', without modifiers.
     /// We can't handle released state here, just the pressed state.
     Rune(char),
@@ -643,6 +664,7 @@ pub type I64Result = Result<i64, String>;
 pub type OptionalStringResult = Result<Option<String>, String>;
 pub type ColorResult = Result<Rgba8, String>;
 pub type OptionalColorResult = Result<Option<Rgba8>, String>;
+pub type InputResult = Result<Input, String>;
 pub type StringResult = Result<String, String>;
 pub type ScriptResult = Result<Script, String>;
 
@@ -4283,6 +4305,25 @@ mod test {
         assert_eq!(
             format!("{}", Serialize::Script(&script)),
             "if $0 (p x1 y2 $1) (jangles (fg $2) q $3)".to_string()
+        );
+    }
+
+    #[test]
+    fn test_argument_string_can_become_input() {
+        assert_eq!(
+            Argument::String("a".to_string()).get_input("for stuff"),
+            Ok(Input::Rune('a'))
+        );
+
+        assert_eq!(
+            Argument::String("Ö".to_string()).get_input("for stuff"),
+            Ok(Input::Rune('Ö'))
+        );
+
+        // But only if it's not two chars long:
+        assert_eq!(
+            Argument::String("xy".to_string()).get_input("for stuff"),
+            Err("invalid input for stuff: 'xy'".to_string())
         );
     }
 }
