@@ -580,6 +580,12 @@ impl Argument {
             result => Err(format!("invalid input {}: {}", what_for, result)),
         }
     }
+    pub fn get_optional_input(&self, what_for: &str) -> OptionalInputResult {
+        match self {
+            Argument::Null => Ok(None),
+            arg => Ok(Some(arg.get_input(what_for)?)),
+        }
+    }
 
     pub fn get_script(&self, what_for: &str) -> ScriptResult {
         // TODO: theoretically we can create everyone as a script if
@@ -587,6 +593,13 @@ impl Argument {
         match self {
             Argument::Script(value) => Ok(value.clone()),
             result => Err(format!("invalid script {}: {}", what_for, result)),
+        }
+    }
+
+    pub fn get_optional_script(&self, what_for: &str) -> OptionalScriptResult {
+        match self {
+            Argument::Null => Ok(None),
+            arg => Ok(Some(arg.get_script(what_for)?)),
         }
     }
 }
@@ -665,8 +678,10 @@ pub type OptionalStringResult = Result<Option<String>, String>;
 pub type ColorResult = Result<Rgba8, String>;
 pub type OptionalColorResult = Result<Option<Rgba8>, String>;
 pub type InputResult = Result<Input, String>;
+pub type OptionalInputResult = Result<Option<Input>, String>;
 pub type StringResult = Result<String, String>;
 pub type ScriptResult = Result<Script, String>;
+pub type OptionalScriptResult = Result<Option<Script>, String>;
 
 fn serialize_argument(argument: &Argument, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     match argument {
