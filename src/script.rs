@@ -1848,6 +1848,8 @@ impl Variables {
     /// NOTE! Will return an error if the variable was present and const.
     pub fn set(&mut self, name: String, variable: Variable) -> ArgumentResult {
         // TODO: don't let name contain `<` or `>` as these are interpreted as modifiers/keys
+        //       we can probably get away with only checking the beginning as that's what the parser would do.
+        // TODO: also avoid containing `(`, `)`, `{` `}`, or `[` `]`
         if name.contains(MAIN_SEPARATOR) || name.contains(".") {
             return Err(format!(
                 "variable names should not contain `{}` or `.` which indicate paths",
@@ -4320,10 +4322,15 @@ mod test {
             Ok(Input::Rune('Ö'))
         );
 
-        // But only if it's not two chars long:
+        // But only if it's exactly one char long:
         assert_eq!(
             Argument::String("xy".to_string()).get_input("for stuff"),
             Err("invalid input for stuff: 'xy'".to_string())
+        );
+
+        assert_eq!(
+            Argument::String("".to_string()).get_input("oh no"),
+            Err("invalid input oh no: <empty-string>".to_string())
         );
     }
 }

@@ -78,6 +78,7 @@ fn get_argument_parser(lookback: i32) -> Parser<Argument> {
             let use_arg = symbol('$')
                 .then(natural::<u32>())
                 .map(move |(_symbol, index)| Argument::Use(Use { index, lookback }));
+            let input_arg = param::<Input>().map(Argument::Input).label("<input>");
             // Evaluate any random token as a command in a no-arg Script.
             // This allows things like `bg fg` to switch the background
             // to the foreground color.  E.g., zero-arg functions are
@@ -92,6 +93,7 @@ fn get_argument_parser(lookback: i32) -> Parser<Argument> {
                     .or(color_arg)
                     .or(string_arg)
                     .or(use_arg)
+                    .or(input_arg)
                     .or(zero_arg_script),
             )
             .label("<argument>")
@@ -503,6 +505,7 @@ pub fn tuple<O>(x: Parser<O>, y: Parser<O>) -> Parser<(O, O)> {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::platform::{Key, ModifiersState};
     use crate::script::Serialize;
     use crate::settings::*;
 
@@ -811,6 +814,25 @@ mod test {
                         ],
                     }),
                     Argument::String("asdf".to_string()),
+                ],
+            }
+        );
+    }
+
+    #[test]
+    fn test_script_can_parse_input() {
+        let p = Script::parser();
+
+        let (result, rest) = p.parse("asdf <ctrl><e> <shift><alt><home>").unwrap();
+
+        assert_eq!(rest, "");
+        assert_eq!(
+            result,
+            Script {
+                command: Command::Evaluate("asdf".to_string()),
+                arguments: vec![
+                    Argument::Input(Input::KeyPressed(ModifiersState::CTRL, Key::E)),
+                    Argument::Input(Input::KeyPressed(ModifiersState::ALT_SHIFT, Key::Home)),
                 ],
             }
         );

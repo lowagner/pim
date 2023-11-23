@@ -369,12 +369,6 @@ pub struct ModifiersState {
 }
 
 impl ModifiersState {
-    pub const SHIFT: ModifiersState = ModifiersState {
-        shift: true,
-        ctrl: false,
-        alt: false,
-        meta: false,
-    };
     pub const CTRL: ModifiersState = ModifiersState {
         shift: false,
         ctrl: true,
@@ -387,6 +381,12 @@ impl ModifiersState {
         alt: true,
         meta: false,
     };
+    pub const SHIFT: ModifiersState = ModifiersState {
+        shift: true,
+        ctrl: false,
+        alt: false,
+        meta: false,
+    };
     pub const META: ModifiersState = ModifiersState {
         shift: false,
         ctrl: false,
@@ -394,16 +394,16 @@ impl ModifiersState {
         meta: true,
     };
 
-    pub const CTRL_SHIFT: ModifiersState = ModifiersState {
-        shift: true,
-        ctrl: true,
-        alt: false,
-        meta: false,
-    };
     pub const CTRL_ALT: ModifiersState = ModifiersState {
         shift: false,
         ctrl: true,
         alt: true,
+        meta: false,
+    };
+    pub const CTRL_SHIFT: ModifiersState = ModifiersState {
+        shift: true,
+        ctrl: true,
+        alt: false,
         meta: false,
     };
     pub const CTRL_META: ModifiersState = ModifiersState {
@@ -411,6 +411,13 @@ impl ModifiersState {
         ctrl: true,
         alt: false,
         meta: true,
+    };
+
+    pub const ALT_SHIFT: ModifiersState = ModifiersState {
+        shift: true,
+        ctrl: false,
+        alt: true,
+        meta: false,
     };
 
     pub const CTRL_ALT_SHIFT: ModifiersState = ModifiersState {
