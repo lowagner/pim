@@ -255,7 +255,7 @@ impl<R> View<R> {
             FileStatus::New(ref f) => Some(f),
             FileStatus::Modified(ref f) => Some(f),
             FileStatus::Saved(ref f) => Some(f),
-            FileStatus::NoFile => None,
+            FileStatus::NoFile | FileStatus::NoFileModified => None,
         }
     }
 
@@ -440,8 +440,15 @@ impl<R> View<R> {
     /// View has been modified. Called when using the brush on the view,
     /// or resizing the view.
     pub fn touch(&mut self) {
-        if let FileStatus::Saved(ref f) = self.file_status {
-            self.file_status = FileStatus::Modified(f.clone());
+        match self.file_status {
+            FileStatus::NoFile => {
+                self.file_status = FileStatus::NoFileModified;
+            }
+            FileStatus::Saved(ref f) => {
+                self.file_status = FileStatus::Modified(f.clone());
+            }
+            // These already indicate that they are not saved.
+            FileStatus::NoFileModified | FileStatus::New(_) | FileStatus::Modified(_) => {}
         }
         self.dirty()
     }
@@ -601,7 +608,7 @@ impl View<ViewResource> {
                     self.saved(edit_id, storage.clone());
                 }
             }
-            FileStatus::NoFile => {
+            FileStatus::NoFile | FileStatus::NoFileModified => {
                 self.saved(edit_id, storage.clone());
             }
             FileStatus::Saved(_) => {}
@@ -632,6 +639,9 @@ impl View<ViewResource> {
 pub enum FileStatus {
     /// There is no file being displayed.
     NoFile,
+    /// There is no file (started at FileStatus::NoFile)
+    /// but it has since been modified.
+    NoFileModified,
     /// The file is new and unsaved.
     New(FileStorage),
     /// The file is saved and unmodified.
@@ -640,10 +650,20 @@ pub enum FileStatus {
     Modified(FileStorage),
 }
 
+impl FileStatus {
+    pub fn needs_saving(&self) -> bool {
+        matches!(
+            self,
+            FileStatus::New(_) | FileStatus::Modified(_) | FileStatus::NoFileModified
+        )
+    }
+}
+
 impl ToString for FileStatus {
     fn to_string(&self) -> String {
         match self {
             FileStatus::NoFile => String::new(),
+            FileStatus::NoFileModified => String::new(),
             FileStatus::Saved(ref storage) => format!("{}", storage),
             FileStatus::New(ref storage) => format!("{} [new]", storage),
             FileStatus::Modified(ref storage) => format!("{} [modified]", storage),

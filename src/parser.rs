@@ -22,6 +22,8 @@ impl Parse for Script {
 }
 
 fn get_script_parser(lookback: i32) -> Parser<Script> {
+    // TODO: add some logic for seeing a comma, turning things into a `run-all`.
+    // e.g., `fg (pc 1), bg (pc 2)`
     special_command()
         .skip(optional(whitespace()))
         .then(any::<Argument, Vec<Argument>>(

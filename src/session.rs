@@ -247,6 +247,7 @@ pub enum State {
 #[derive(PartialEq, Eq, Debug, Copy, Clone, Default)]
 pub enum Tool {
     /// The standard drawing tool.
+    /// Note that Erase is an option inside Brush.
     #[default]
     Brush,
     /// Used for filling enclosed regions with color.
@@ -260,13 +261,18 @@ pub enum Tool {
 impl Tool {
     const COUNT: i64 = 4;
 
-    pub fn from_i64(value: i64) -> Result<Tool, String> {
+    pub fn from_i64(mut value: i64) -> Tool {
+        value = value % Tool::COUNT;
+        if value < 0 {
+            // Allow for wrap around; -1 should correspond to the last tool
+            value += Tool::COUNT;
+        }
         match value {
-            0 => Ok(Tool::Brush),
-            1 => Ok(Tool::FloodFill),
-            2 => Ok(Tool::Sampler),
-            3 => Ok(Tool::Pan),
-            _ => Err(format!("invalid tool: {}", value)),
+            0 => Tool::Brush,
+            1 => Tool::FloodFill,
+            2 => Tool::Sampler,
+            3 => Tool::Pan,
+            _ => panic!("value {} should be in 0..{}", value, Tool::COUNT),
         }
     }
 }
@@ -1639,6 +1645,15 @@ impl Session {
         let nframes = frames.len();
         assert!(nframes >= 1);
 
+        // Replace the active view if it's a scratch pad (and hasn't been modified).
+        if let Some(v) = self.views.active() {
+            let id = v.id;
+
+            if v.file_status == FileStatus::NoFile {
+                self.destroy_view(id);
+            }
+        }
+
         let pixels = util::stitch_frames(frames, fw as usize, fh as usize, Rgba8::TRANSPARENT);
         let resource = ViewResource::new(pixels, ViewExtent::new(fw, fh, nframes));
         let delay = self.animation_delay();
@@ -1672,14 +1687,13 @@ impl Session {
     /// Quit view if it has been saved. Otherwise, display an error.
     fn quit_view_safe(&mut self, id: ViewId) {
         let v = self.view(id);
-        match &v.file_status {
-            FileStatus::Modified(_) | FileStatus::New(_) => {
-                self.message(
-                    "Error: no write since last change (enter `:q!` to quit without saving)",
-                    MessageType::Error,
-                );
-            }
-            _ => self.quit_view(id),
+        if v.file_status.needs_saving() {
+            self.message(
+                "Error: no write since last change (enter `:q!` to quit without saving)",
+                MessageType::Error,
+            );
+        } else {
+            self.quit_view(id);
         }
     }
 
@@ -3049,14 +3063,15 @@ impl Session {
     }
 
     fn tool(&mut self, t: Tool) {
-        if std::mem::discriminant(&t) != std::mem::discriminant(&self.tool) {
-            self.prev_tool = Some(self.tool.clone());
+        if t == self.tool {
+            return;
         }
+        self.prev_tool = Some(self.tool);
         self.tool = t;
     }
 
     fn prev_tool(&mut self) {
-        self.tool = self.prev_tool.clone().unwrap_or(Tool::default());
+        self.tool = self.prev_tool.unwrap_or_default();
     }
 
     ///////////////////////////////////////////////////////////////////////////
@@ -3296,11 +3311,7 @@ impl Session {
                 self.offset.y = new_value as f32;
             }
             I64Setting::Tool => {
-                let mut tool = new_value % Tool::COUNT;
-                if tool < 0 {
-                    tool += Tool::COUNT;
-                }
-                self.tool = Tool::from_i64(tool).unwrap();
+                self.tool = Tool::from_i64(new_value);
             }
             I64Setting::PaletteHeight => {
                 if new_value > 0 {
