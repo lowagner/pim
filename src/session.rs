@@ -254,19 +254,7 @@ pub enum Tool {
     /// Used to sample colors.
     Sampler,
     /// Used to pan the workspace.
-    Pan(PanState),
-}
-
-#[derive(PartialEq, Eq, Debug, Clone, Copy)]
-pub enum PanState {
-    Panning,
-    NotPanning,
-}
-
-impl Default for PanState {
-    fn default() -> Self {
-        Self::NotPanning
-    }
+    Pan,
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -1846,22 +1834,6 @@ impl Session {
             return;
         }
 
-        // Pan tool.
-        match &mut self.tool {
-            Tool::Pan(ref mut p) => match (&p, state) {
-                (PanState::Panning, InputState::Released) => {
-                    *p = PanState::NotPanning;
-                    return;
-                }
-                (PanState::NotPanning, InputState::Pressed) => {
-                    *p = PanState::Panning;
-                    return;
-                }
-                _ => {}
-            },
-            _ => {}
-        }
-
         match state {
             InputState::Pressed => {
                 // Click on palette.
@@ -1908,7 +1880,7 @@ impl Session {
                                 Tool::Sampler => {
                                     self.sample_color(button);
                                 }
-                                Tool::Pan(_) => {}
+                                Tool::Pan => {}
                                 Tool::FloodFill => {
                                     // Ignore failures here
                                     let _ = self.script_bucket(
@@ -2020,7 +1992,7 @@ impl Session {
         self.cursor_dirty();
 
         match self.tool {
-            Tool::Pan(PanState::Panning) => {
+            Tool::Pan => {
                 self.pan(cursor.x - prev_cursor.x, cursor.y - prev_cursor.y);
             }
             Tool::Sampler if self.lmb_state == InputState::Pressed => {

@@ -72,14 +72,14 @@ pub mod cursors {
 
     pub fn info(t: &Tool, b: &Brush, m: Mode, in_view: bool, in_selection: bool) -> Option<Cursor> {
         match (m, t) {
-            (Mode::Help, Tool::Pan(_)) => {}
+            (Mode::Help, Tool::Pan) => {}
             (Mode::Help, Tool::Brush) => {}
             (Mode::Help, _) => return None,
             _ => {}
         }
         let cursor = match t {
             Tool::Sampler => self::SAMPLER,
-            Tool::Pan(_) => self::PAN,
+            Tool::Pan => self::PAN,
             Tool::FloodFill => self::FLOOD,
 
             Tool::Brush => match m {

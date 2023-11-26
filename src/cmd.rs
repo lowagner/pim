@@ -4,7 +4,7 @@ use crate::history::History;
 use crate::parser::*;
 use crate::platform;
 use crate::platform::ModifiersState;
-use crate::session::{Direction, Input, Mode, PanState, Tool, VisualState};
+use crate::session::{Direction, Input, Mode, Tool, VisualState};
 use std::collections::HashSet;
 
 use memoir::traits::Parse;
@@ -215,7 +215,7 @@ impl fmt::Display for Cmd {
             Self::QuitAll => write!(f, "Quit all views"),
             Self::Redo => write!(f, "Redo view edit"),
             Self::FrameResize(_, _) => write!(f, "Resize active view frame"),
-            Self::Tool(Tool::Pan(_)) => write!(f, "Pan tool"),
+            Self::Tool(Tool::Pan) => write!(f, "Pan tool"),
             Self::Tool(Tool::Brush) => write!(f, "Brush tool"),
             Self::Tool(Tool::Sampler) => write!(f, "Color sampler tool"),
             Self::Tool(Tool::FloodFill) => write!(f, "Flood fill tool"),
@@ -984,7 +984,7 @@ impl Default for Commands {
             .command("tool", "Switch tool", |p| {
                 p.then(word().label("pan/brush/sampler/.."))
                     .try_map(|(_, t)| match t.as_str() {
-                        "pan" => Ok(Cmd::Tool(Tool::Pan(PanState::default()))),
+                        "pan" => Ok(Cmd::Tool(Tool::Pan)),
                         "brush" => Ok(Cmd::Tool(Tool::Brush)),
                         "sampler" => Ok(Cmd::Tool(Tool::Sampler)),
                         _ => Err(format!("unknown tool {:?}", t)),
