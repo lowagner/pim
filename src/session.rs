@@ -2812,7 +2812,7 @@ impl Session {
                     });
                 }
             }
-            // TODO: Continue here!
+            // Not represented in script.rs; just restart.
             Cmd::MapClear => {
                 self.key_bindings = KeyBindings::default();
             }
@@ -2822,6 +2822,8 @@ impl Session {
             Cmd::Redo => {
                 self.redo(self.views.active_id);
             }
+            // TODO: Continue here!
+            // TODO: try to make `tool` an int for script.rs
             Cmd::Tool(t) => {
                 self.tool(t);
             }
@@ -3502,6 +3504,20 @@ impl Session {
             OptionalI64For::FrameAdd => self.add_frame(optional_i64)?,
             OptionalI64For::FrameClone => self.clone_frame(optional_i64)?,
             OptionalI64For::FrameRemove => self.remove_frame(optional_i64)?,
+            OptionalI64For::Undo => {
+                let amount = get_undo_or_redo_amount(optional_i64, "undo")?;
+                for _i in 0..amount {
+                    // TODO: this should probably return an Err if we try to undo too much
+                    self.undo(self.views.active_id);
+                }
+            }
+            OptionalI64For::Redo => {
+                let amount = get_undo_or_redo_amount(optional_i64, "redo")?;
+                for _i in 0..amount {
+                    // TODO: this should probably return an Err if we try to redo too much
+                    self.redo(self.views.active_id);
+                }
+            }
         }
         Ok(())
     }
@@ -3598,6 +3614,16 @@ fn get_extension<'a>(path: &'a Path) -> Result<&'a str, io::Error> {
         .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "file path requires an extension"))?;
     ext.to_str()
         .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "file extension is not valid unicode"))
+}
+
+fn get_undo_or_redo_amount(optional_i64: Option<i64>, for_what: &str) -> Result<usize, String> {
+    match optional_i64 {
+        Some(value) if value < 0 => {
+            return Err(format!("cannot {} in reverse: {}", for_what, value));
+        }
+        Some(value) => Ok(value as usize),
+        None => Ok(1),
+    }
 }
 
 #[cfg(test)]

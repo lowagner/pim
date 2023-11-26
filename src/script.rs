@@ -273,6 +273,8 @@ impl fmt::Display for Command {
             Command::UsingOptionalI64(OptionalI64For::FrameAdd) => write!(f, "fa"),
             Command::UsingOptionalI64(OptionalI64For::FrameClone) => write!(f, "fc"),
             Command::UsingOptionalI64(OptionalI64For::FrameRemove) => write!(f, "fr"),
+            Command::UsingOptionalI64(OptionalI64For::Undo) => write!(f, "undo"),
+            Command::UsingOptionalI64(OptionalI64For::Redo) => write!(f, "redo"),
             Command::UsingStrings(StringsFor::Source) => write!(f, "source"),
             Command::UsingStrings(StringsFor::Edit) => write!(f, "e"),
             Command::UsingStrings(StringsFor::Concatenate) => write!(f, "cat"),
@@ -353,6 +355,8 @@ impl FromStr for Command {
             "fa" => Ok(Command::UsingOptionalI64(OptionalI64For::FrameAdd)),
             "fc" => Ok(Command::UsingOptionalI64(OptionalI64For::FrameClone)),
             "fr" => Ok(Command::UsingOptionalI64(OptionalI64For::FrameRemove)),
+            "undo" => Ok(Command::UsingOptionalI64(OptionalI64For::Undo)),
+            "redo" => Ok(Command::UsingOptionalI64(OptionalI64For::Redo)),
             "source" => Ok(Command::UsingStrings(StringsFor::Source)),
             "e" => Ok(Command::UsingStrings(StringsFor::Edit)),
             "cat" => Ok(Command::UsingStrings(StringsFor::Concatenate)),
@@ -405,6 +409,10 @@ pub enum OptionalI64For {
     FrameClone,
     /// Removes/deletes the frame at Some(i64), otherwise the current frame.
     FrameRemove,
+    /// Repeats undo the specified number of times, or 1.
+    Undo,
+    /// Repeats redo the specified number of times, or 1.
+    Redo,
 }
 
 #[derive(Eq, Hash, PartialEq, Debug, Clone, Copy, EnumIter)]
@@ -1720,6 +1728,16 @@ impl Variables {
             Command::UsingOptionalI64(OptionalI64For::FrameRemove),
             "removes the frame at index $0, or the current frame if $0 is null, \
             e.g., `$$ 0` to remove the first frame",
+        );
+        variables.add_built_in(
+            Command::UsingOptionalI64(OptionalI64For::Undo),
+            "calls undo with an optional number of times to repeat, defaulting to 1, \
+            e.g., `$$` to undo once",
+        );
+        variables.add_built_in(
+            Command::UsingOptionalI64(OptionalI64For::Redo),
+            "calls redo with an optional number of times to repeat, defaulting to 1, \
+            e.g., `$$ 2` to redo two times",
         );
         variables.add_built_in(
             Command::UsingStrings(StringsFor::Source),

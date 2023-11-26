@@ -61,6 +61,8 @@ pub enum I64Setting {
     /// Changing this does *not* affect the width of the image, and
     /// requires that the desired number of frames divides the image width.
     ImageSplit,
+    // TODO: add History; return the current view's EditId, and if the argument
+    //       is present, also restore the view to that EditId.
 }
 
 #[derive(Eq, Hash, PartialEq, Debug, Clone, Copy, EnumIter)]
