@@ -13,7 +13,7 @@ use crate::message::*;
 use crate::palette::*;
 use crate::platform::{self, InputState, Key, KeyboardInput, LogicalSize, ModifiersState};
 use crate::script::{
-    self, evaluate, get_or_swap_color, Argument, ArgumentResult, Command, Evaluate, Get,
+    self, evaluate, get_or_swap_color, Argument, ArgumentResult, Command, Evaluate, Get, Map,
     OptionalI64For, Quit, Script, ScriptRunner, Serialize, StringsFor, Variables, VoidResult,
 };
 use crate::script_runner;
@@ -2782,7 +2782,6 @@ impl Session {
                     Err(e) => self.message(format!("Error: {}", e), MessageType::Error),
                 }
             }
-            // TODO: Continue here!
             Cmd::Map(map) => {
                 let KeyMapping {
                     modifiers,
@@ -2813,6 +2812,7 @@ impl Session {
                     });
                 }
             }
+            // TODO: Continue here!
             Cmd::MapClear => {
                 self.key_bindings = KeyBindings::default();
             }
@@ -3520,6 +3520,16 @@ impl Session {
                 self.concatenate_images(&strings);
             }
         }
+        Ok(())
+    }
+
+    pub fn map_input(
+        &mut self,
+        modes: Vec<Mode>,
+        input: script::Input,
+        script: Script,
+    ) -> VoidResult {
+        // TODO: need to add self.key_bindings with the Script.
         Ok(())
     }
 

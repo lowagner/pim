@@ -1,6 +1,7 @@
 use crate::gfx::Rgba8;
 use crate::palette::Palette;
 use crate::platform::{Key, ModifiersState, MouseButton};
+use crate::session::Mode;
 use crate::settings::*;
 
 use claim::assert_ok;
@@ -121,7 +122,11 @@ pub enum Command {
     /// Note that the alias is constant, but what the variable it points to can change.
     CreateAlias,
 
-    // TODO: Map: uses mode $0, with keybinding at $1, to evaluate command at $2.  optional command at $3 for release
+    /// Uses $0 for the input binding, to run the script at $1 on press and
+    /// with an optional script at $2 for release.
+    // TODO: we should pass the result of `$1` on press into the release script as an argument.
+    // TODO: we should come up with some "hold" input/script that fires while you're holding a key down.
+    Map(Map),
     /// Getter/swapper for various settings that are colors.  These can be set via palette index (i64)
     /// or via a color argument (Rgba8).
     ColorSetting(ColorSetting),
@@ -234,6 +239,7 @@ impl fmt::Display for Command {
             Command::SetVariable => write!(f, "set"),
             Command::ConstVariable => write!(f, "const"),
             Command::CreateAlias => write!(f, "alias"),
+            Command::Map(Map::AllModes) => write!(f, "map"),
             Command::ColorSetting(ColorSetting::UiBackground) => write!(f, "ui-bg"),
             Command::ColorSetting(ColorSetting::UiGrid) => write!(f, "grid-color"),
             Command::ColorSetting(ColorSetting::Foreground) => write!(f, "fg"),
@@ -313,6 +319,7 @@ impl FromStr for Command {
             "set" => Ok(Command::SetVariable),
             "const" => Ok(Command::ConstVariable),
             "alias" => Ok(Command::CreateAlias),
+            "map" => Ok(Command::Map(Map::AllModes)),
             "ui-bg" => Ok(Command::ColorSetting(ColorSetting::UiBackground)),
             "grid-color" => Ok(Command::ColorSetting(ColorSetting::UiGrid)),
             "fg" => Ok(Command::ColorSetting(ColorSetting::Foreground)),
@@ -382,6 +389,13 @@ impl FromStr for Command {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct EmptyCommandParseError;
+
+#[derive(Eq, Hash, PartialEq, Debug, Clone, Copy, EnumIter)]
+pub enum Map {
+    /// Effectively all modes.
+    AllModes,
+    // TODO: Normal/Selection/Etc.
+}
 
 #[derive(Eq, Hash, PartialEq, Debug, Clone, Copy, EnumIter)]
 pub enum OptionalI64For {
@@ -669,6 +683,16 @@ pub enum Input {
     /// A letter/character/rune, e.g., 'A' or 'ö', without modifiers.
     /// We can't handle released state here, just the pressed state.
     Rune(char),
+}
+
+impl Input {
+    pub fn pressed_to_released(&self) -> InputResult {
+        match self {
+            Input::KeyPressed(mods, key) => Ok(Input::KeyReleased(*mods, *key)),
+            Input::MousePressed(mods, btn) => Ok(Input::MouseReleased(*mods, *btn)),
+            input => Err(format!("{:?} doesn't have a released version", input)),
+        }
+    }
 }
 
 pub type VoidResult = Result<(), String>;
@@ -996,6 +1020,38 @@ macro_rules! script_runner {
                     Command::SetVariable => self.variables.set_from_script(&script),
                     Command::ConstVariable => self.variables.set_from_script(&script),
                     Command::CreateAlias => self.variables.set_from_script(&script),
+                    Command::Map(map) => {
+                        let input = self.script_evaluate(
+                            &script_stack,
+                            Evaluate::Index(0),
+                        )?.get_input("for input mapping")?;
+                        let input_script = self.script_evaluate(
+                            &script_stack,
+                            Evaluate::Index(1),
+                        )?.get_script("for input script")?;
+                        let optional_released_script = self.script_evaluate(
+                            &script_stack,
+                            Evaluate::Index(2),
+                        )?.get_optional_script("for input-released mapping")?;
+
+                        let modes = match map {
+                            // TODO: add Selection modes to Map::AllModes
+                            Map::AllModes => vec![Mode::Normal, Mode::Command],
+                        };
+
+                        // TODO: add tests for all these cases.
+                        if let Some(released_script) = optional_released_script {
+                            // First get `released` version before we map anything,
+                            // in case there's an error in the conversion (e.g.,
+                            // the input may not support a released version).
+                            let released = input.pressed_to_released()?;
+                            self.map_input(modes.clone(), input, input_script)?;
+                            self.map_input(modes, released, released_script)?;
+                        } else {
+                            self.map_input(modes, input, input_script)?;
+                        }
+                        Ok(Argument::Null)
+                    },
                     Command::ColorSetting(setting) => {
                         let optional_color = self.script_evaluate(
                             &script_stack,
@@ -1489,6 +1545,12 @@ impl Variables {
             Command::CreateAlias,
             "creates an alias with name $0 that evaluates name $1 when called, \
             e.g., `$$ 'fgc' 'fg'` to add `fgc` as an alias for `fg`",
+        );
+        variables.add_built_in(
+            Command::Map(Map::AllModes),
+            "adds input $0 mapping with script $1 on press, optional $2 on release, \
+            to all modes, e.g., `$$ <ctrl><z> undo` to undo, or \
+            `$$ <shift><p> (p cx cy #123456) (p cx cy #654321)` to paint",
         );
         variables.add_built_in(
             Command::ColorSetting(ColorSetting::UiBackground),
@@ -2220,6 +2282,14 @@ mod test {
                 self.test_what_ran
                     .push(WhatRan::Mocked(format!("{:?}{{{:?}}}", for_what, string)));
             }
+            Ok(())
+        }
+
+        pub fn map_input(&mut self, modes: Vec<Mode>, input: Input, script: Script) -> VoidResult {
+            self.test_what_ran.push(WhatRan::Mocked(format!(
+                "map{:?}{{{:?} -> {:?}}}",
+                modes, input, script
+            )));
             Ok(())
         }
 
@@ -3774,6 +3844,13 @@ mod test {
 
     #[test]
     fn test_commands_can_be_printed_and_unprinted() {
+        for map in Map::iter() {
+            let command = Command::Map(map);
+            let name = format!("{}", command);
+            let command_from_name = Command::from_str(&name).unwrap();
+            assert_eq!(command_from_name, command);
+        }
+
         for setting in ColorSetting::iter() {
             let command = Command::ColorSetting(setting);
             let name = format!("{}", command);
