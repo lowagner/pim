@@ -270,6 +270,7 @@ impl fmt::Display for Command {
             Command::I64Setting(I64Setting::FrameWidth) => write!(f, "f-width"),
             Command::I64Setting(I64Setting::FrameHeight) => write!(f, "f-height"),
             Command::I64Setting(I64Setting::ImageSplit) => write!(f, "split"),
+            Command::I64Setting(I64Setting::History) => write!(f, "history"),
             Command::UsingOptionalI64(OptionalI64For::FrameAdd) => write!(f, "fa"),
             Command::UsingOptionalI64(OptionalI64For::FrameClone) => write!(f, "fc"),
             Command::UsingOptionalI64(OptionalI64For::FrameRemove) => write!(f, "fr"),
@@ -352,6 +353,7 @@ impl FromStr for Command {
             "f-width" => Ok(Command::I64Setting(I64Setting::FrameWidth)),
             "f-height" => Ok(Command::I64Setting(I64Setting::FrameHeight)),
             "split" => Ok(Command::I64Setting(I64Setting::ImageSplit)),
+            "history" => Ok(Command::I64Setting(I64Setting::History)),
             "fa" => Ok(Command::UsingOptionalI64(OptionalI64For::FrameAdd)),
             "fc" => Ok(Command::UsingOptionalI64(OptionalI64For::FrameClone)),
             "fr" => Ok(Command::UsingOptionalI64(OptionalI64For::FrameRemove)),
@@ -1713,6 +1715,11 @@ impl Variables {
             "getter/swapper for the number of animation frames if $0 is null/present, \
             without resizing the image; i.e., the desired amount must divide the image width. \
             e.g., `$$ 2` to split the image into 2 animation frames.",
+        );
+        variables.add_built_in(
+            Command::I64Setting(I64Setting::History),
+            "getter/swapper for the current view's history ID, \
+            e.g., `$$` get the current ID which can be used to restore it later.",
         );
         variables.add_built_in(
             Command::UsingOptionalI64(OptionalI64For::FrameAdd),

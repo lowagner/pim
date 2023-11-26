@@ -25,7 +25,7 @@ use crate::gfx::rect::Rect;
 use crate::gfx::shape2d::{Fill, Rotation, Shape, Stroke};
 use crate::gfx::{Lyza, Point, Rgb8, Rgba8, ZDepth};
 use crate::view::path;
-use crate::view::resource::ViewResource;
+use crate::view::resource::{EditId, ViewResource};
 use crate::view::{
     self, FileStatus, FileStorage, View, ViewCoords, ViewExtent, ViewId, ViewManager, ViewOp,
     ViewState,
@@ -3256,6 +3256,7 @@ impl Session {
             I64Setting::FrameWidth => self.active_view().fw as i64,
             I64Setting::FrameHeight => self.active_view().fh as i64,
             I64Setting::ImageSplit => self.active_view().animation.len() as i64,
+            I64Setting::History => self.active_view().current_edit() as i64,
         }
     }
 
@@ -3412,6 +3413,9 @@ impl Session {
                     ));
                 }
             }
+            I64Setting::History => {
+                self.active_view_mut().restore(new_value as EditId);
+            }
         }
         Ok(())
     }
@@ -3505,6 +3509,8 @@ impl Session {
             OptionalI64For::FrameClone => self.clone_frame(optional_i64)?,
             OptionalI64For::FrameRemove => self.remove_frame(optional_i64)?,
             OptionalI64For::Undo => {
+                // TODO: return the current history ID before the undo.
+                // We'll need to return an `ArgumentResult` here instead of VoidResult.
                 let amount = get_undo_or_redo_amount(optional_i64, "undo")?;
                 for _i in 0..amount {
                     // TODO: this should probably return an Err if we try to undo too much
@@ -3512,6 +3518,7 @@ impl Session {
                 }
             }
             OptionalI64For::Redo => {
+                // TODO: return the current history ID before the redo.
                 let amount = get_undo_or_redo_amount(optional_i64, "redo")?;
                 for _i in 0..amount {
                     // TODO: this should probably return an Err if we try to redo too much
