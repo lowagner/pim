@@ -1,7 +1,7 @@
 use crate::gfx::Rgba8;
 use crate::palette::Palette;
 use crate::platform::{Key, ModifiersState, MouseButton};
-use crate::session::Mode;
+use crate::session::Tool;
 use crate::settings::*;
 
 use claim::assert_ok;
@@ -254,6 +254,7 @@ impl fmt::Display for Command {
             Command::I64Setting(I64Setting::UiScalePercentage) => write!(f, "ui-scale%"),
             Command::I64Setting(I64Setting::UiOffsetX) => write!(f, "ui-x"),
             Command::I64Setting(I64Setting::UiOffsetY) => write!(f, "ui-y"),
+            Command::I64Setting(I64Setting::Tool) => write!(f, "t"),
             Command::I64Setting(I64Setting::PaletteHeight) => write!(f, "p-height"),
             Command::I64Setting(I64Setting::UiZoom) => write!(f, "zoom"),
             Command::I64Setting(I64Setting::ViewIndex) => write!(f, "v"),
@@ -337,6 +338,7 @@ impl FromStr for Command {
             "ui-scale%" => Ok(Command::I64Setting(I64Setting::UiScalePercentage)),
             "ui-x" => Ok(Command::I64Setting(I64Setting::UiOffsetX)),
             "ui-y" => Ok(Command::I64Setting(I64Setting::UiOffsetY)),
+            "t" => Ok(Command::I64Setting(I64Setting::Tool)),
             "p-height" => Ok(Command::I64Setting(I64Setting::PaletteHeight)),
             "zoom" => Ok(Command::I64Setting(I64Setting::UiZoom)),
             "v" => Ok(Command::I64Setting(I64Setting::ViewIndex)),
@@ -1634,6 +1636,12 @@ impl Variables {
             e.g., `$$ 45` to set Y pixel offset to 45",
         );
         variables.add_built_in(
+            Command::I64Setting(I64Setting::Tool),
+            "getter/swapper for the current tool if $0 is null/present, \
+            e.g., `$$ pant` to set to \"pan\"; also buckett, samplert, brusht \
+            (remove final t for what tool it is)",
+        );
+        variables.add_built_in(
             Command::I64Setting(I64Setting::PaletteHeight),
             "getter/swapper for current palette height if $0 is null/present, \
             e.g., `$$ 5` to set show 5 colors squares vertically",
@@ -1866,8 +1874,10 @@ impl Variables {
         assert_ok!(variables.set("off".to_string(), Variable::Const(Argument::I64(0))));
         assert_ok!(variables.set("true".to_string(), Variable::Const(Argument::I64(1))));
         assert_ok!(variables.set("false".to_string(), Variable::Const(Argument::I64(0))));
-        // TODO: add `normal` as a Const variable to the string "normal",
-        // same for other modes that you can set.
+        // TODO: consider how convenient for users it is to add `m` when `normal` might suffice, then maybe...
+        // TODO: add `normalm` as a Const variable to the string "normal",
+        // same for other modes that you can set, with `m` as a suffix.
+        // TODO: link `normal` as a command to `mode normalm`.
         // TODO: add `home` as a const variable to the home directory
 
         assert_ok!(variables.set(
@@ -1914,6 +1924,23 @@ impl Variables {
                 command: Command::I64Setting(I64Setting::ImageSplit),
                 arguments: vec![Argument::I64(1)],
             }))
+        ));
+        assert_ok!(variables.set("tool".to_string(), Variable::Alias("t".to_string())));
+        assert_ok!(variables.set(
+            "brusht".to_string(),
+            Variable::Const(Argument::I64(Tool::Brush as i64))
+        ));
+        assert_ok!(variables.set(
+            "buckett".to_string(),
+            Variable::Const(Argument::I64(Tool::FloodFill as i64))
+        ));
+        assert_ok!(variables.set(
+            "samplert".to_string(),
+            Variable::Const(Argument::I64(Tool::Sampler as i64))
+        ));
+        assert_ok!(variables.set(
+            "pant".to_string(),
+            Variable::Const(Argument::I64(Tool::Pan as i64))
         ));
         assert_ok!(variables.set("view".to_string(), Variable::Alias("v".to_string())));
         assert_ok!(variables.set("quit".to_string(), Variable::Alias("q".to_string())));
@@ -2044,6 +2071,7 @@ mod test {
     use super::*;
     use crate::gfx::Point;
     use crate::message::*;
+    use crate::session::Mode;
     use crate::view::ViewExtent;
     use std::collections::HashSet;
     use strum::IntoEnumIterator;

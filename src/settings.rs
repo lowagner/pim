@@ -12,6 +12,8 @@ pub enum StringSetting {
 
 #[derive(Eq, Hash, PartialEq, Debug, Clone, Copy, EnumIter)]
 pub enum I64Setting {
+    // TODO: Pan sensitivity.  add PanPixelsX and PanPixelsY, and add a built-in command
+    //       to set both via a single `pan-sensitivity Z` script `(run-all (pansx $0) (pansy $0))`
     /// Whether in debug mode or not.
     Debug,
     /// Animate the frames in the UI; boolean (0 or 1).
@@ -26,6 +28,8 @@ pub enum I64Setting {
     UiOffsetX,
     /// Offset for the UI, y coordinate.
     UiOffsetY,
+    /// The current tool (see session::Tool).
+    Tool,
     /// Height of the palette, as the number of colors it supports vertically.
     PaletteHeight,
     /// Zoom for the UI, roughly 1 to 128.
@@ -35,6 +39,7 @@ pub enum I64Setting {
     // TODO: ViewAnimationDelay -- delay in ms for the current animation frame
     /// X-Ray mode to show the color of the pixel below your cursor; boolean (0 or 1)
     CursorXRay,
+    // TODO: BrushOn as an integer, stacked so that multiple inputs can request brush down.
     /// Size of the brush, in pixels.
     BrushSize,
     /// Erase pixels with the brush; boolean (0 or 1).

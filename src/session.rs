@@ -244,7 +244,7 @@ pub enum State {
 }
 
 /// An editing tool.
-#[derive(PartialEq, Eq, Debug, Clone, Default)]
+#[derive(PartialEq, Eq, Debug, Copy, Clone, Default)]
 pub enum Tool {
     /// The standard drawing tool.
     #[default]
@@ -255,6 +255,20 @@ pub enum Tool {
     Sampler,
     /// Used to pan the workspace.
     Pan,
+}
+
+impl Tool {
+    const COUNT: i64 = 4;
+
+    pub fn from_i64(value: i64) -> Result<Tool, String> {
+        match value {
+            0 => Ok(Tool::Brush),
+            1 => Ok(Tool::FloodFill),
+            2 => Ok(Tool::Sampler),
+            3 => Ok(Tool::Pan),
+            _ => Err(format!("invalid tool: {}", value)),
+        }
+    }
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -2794,8 +2808,6 @@ impl Session {
             Cmd::Redo => {
                 self.redo(self.views.active_id);
             }
-            // TODO: Continue here!
-            // TODO: try to make `tool` an int for script.rs
             Cmd::Tool(t) => {
                 self.tool(t);
             }
@@ -2805,6 +2817,7 @@ impl Session {
             Cmd::Crop(_) => {
                 self.unimplemented();
             }
+            // TODO: Continue here!
             Cmd::SelectionMove(x, y) => {
                 if let Some(ref mut s) = self.selection {
                     s.translate(x, y);
@@ -3206,6 +3219,7 @@ impl Session {
             I64Setting::UiScalePercentage => self.settings["scale%"].to_u64() as i64,
             I64Setting::UiOffsetX => self.offset.x as i64,
             I64Setting::UiOffsetY => self.offset.y as i64,
+            I64Setting::Tool => self.tool as i64,
             I64Setting::PaletteHeight => self.palette.height as i64,
             I64Setting::UiZoom => self.active_view().zoom as i64,
             I64Setting::ViewIndex => self.views.active_id.0 as i64,
@@ -3280,6 +3294,13 @@ impl Session {
             }
             I64Setting::UiOffsetY => {
                 self.offset.y = new_value as f32;
+            }
+            I64Setting::Tool => {
+                let mut tool = new_value % Tool::COUNT;
+                if tool < 0 {
+                    tool += Tool::COUNT;
+                }
+                self.tool = Tool::from_i64(tool).unwrap();
             }
             I64Setting::PaletteHeight => {
                 if new_value > 0 {
