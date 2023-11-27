@@ -427,9 +427,11 @@ pub enum StringsFor {
     Source,
     /// Path names to edit, i.e. as images.
     Edit,
-    /// Path names of images to concatenate horizontally.
+    /// Path names of images to concatenate horizontally into one new image.
     Concatenate,
     // TODO: `Append` for appending images in the horizontal direction to the current view
+    // TODO: `Stack` for concatenating images vertically into one new image
+    // TODO: `Layer` for appending images in the vertical direction to the current view
 }
 
 #[derive(Eq, Hash, PartialEq, Debug, Clone, Copy, EnumIter)]

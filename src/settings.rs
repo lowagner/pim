@@ -66,6 +66,8 @@ pub enum I64Setting {
     /// Changing this does *not* affect the width of the image, and
     /// requires that the desired number of frames divides the image width.
     ImageSplit,
+    // TODO: ImageLayer - do layers as vertical, unless rx has a better idea
+    // we can split vertically, etc.
     /// The current view's history ID.
     History,
 }
