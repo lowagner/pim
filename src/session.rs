@@ -2972,6 +2972,7 @@ impl Session {
                     self.active_view_mut().touch();
                 }
             }
+            // DONE - script.rs already has these.
             Cmd::PaintLine(rgba, x1, y1, x2, y2) => {
                 let mut stroke = vec![];
                 Brush::line(Point2::new(x1, y1), Point2::new(x2, y2), &mut stroke);
@@ -2979,7 +2980,6 @@ impl Session {
                     self.active_view_mut().paint_color(rgba, pt.x, pt.y);
                 }
             }
-            // DONE - script.rs already has these.
             Cmd::PaintColor(rgba, x, y) => {
                 self.active_view_mut().paint_color(rgba, x, y);
             }
@@ -3146,6 +3146,19 @@ impl Session {
                 Ok(Argument::Color(target_color))
             }
         }
+    }
+
+    pub fn script_line(&mut self, x0: i64, y0: i64, x1: i64, y1: i64, color: Rgba8) -> VoidResult {
+        let mut stroke = vec![];
+        Brush::line(
+            Point2::new(x0 as i32, y0 as i32),
+            Point2::new(x1 as i32, y1 as i32),
+            &mut stroke,
+        );
+        for point in stroke {
+            self.active_view_mut().paint_color(color, point.x, point.y);
+        }
+        Ok(())
     }
 
     pub fn add_view_colors(&mut self) {

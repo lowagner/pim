@@ -190,6 +190,10 @@ pub enum Command {
     /// color, and `bucket 11 12 #123456` to flood-fill the pixels starting at (11, 12) with
     /// #123456.  Note that an integer for the color also works as an index to the palette.
     Bucket,
+    /// Uses ($0, $1) for (x0, y0) and $2, $3 for (x1, y1), and an optional $4 for the color
+    /// of the line to draw (defaults to foreground color).  If any of $0-$3 are null, we'll
+    /// use the corresponding mouse position (X or Y).
+    Line,
     // TODO: Sample, $0 for x and $1 for y, to get the color on the grid.
     /// Returns the current mouse x-position, in pixel coordinates relative to the drawing.
     MouseX,
@@ -201,7 +205,7 @@ pub enum Command {
     // TODO: BrushReset,
     /// Resets settings.
     ResetSettings,
-
+    // TODO: maybe have a `PreviouslyUsedTool` command to use `session.prev_tool()`
     /// Saves the animation to a file (e.g., for gif, png, etc.).
     Write,
     /// Versions of quit, see enum `Quit`.
@@ -290,6 +294,7 @@ impl fmt::Display for Command {
             Command::PaletteClear => write!(f, "p-clear"),
             Command::Paint => write!(f, "p"),
             Command::Bucket => write!(f, "b"),
+            Command::Line => write!(f, "l"),
             Command::MouseX => write!(f, "mx"),
             Command::MouseY => write!(f, "my"),
             Command::Pan => write!(f, "pan"),
@@ -374,6 +379,7 @@ impl FromStr for Command {
             "p-clear" => Ok(Command::PaletteClear),
             "p" => Ok(Command::Paint),
             "b" => Ok(Command::Bucket),
+            "l" => Ok(Command::Line),
             "mx" => Ok(Command::MouseX),
             "my" => Ok(Command::MouseY),
             "pan" => Ok(Command::Pan),
@@ -1255,6 +1261,29 @@ macro_rules! script_runner {
 
                         self.script_bucket(x, y, color)
                     }
+                    Command::Line => {
+                        let coords = self.get_active_view_mouse_coords();
+                        let x0 = self
+                            .script_evaluate(&script_stack, Evaluate::Index(0))?
+                            .get_optional_i64("for line start coordinate")?.unwrap_or(coords.x as i64);
+                        let y0 = self
+                            .script_evaluate(&script_stack, Evaluate::Index(1))?
+                            .get_optional_i64("for line start coordinate")?.unwrap_or(coords.y as i64);
+                        let x1 = self
+                            .script_evaluate(&script_stack, Evaluate::Index(2))?
+                            .get_optional_i64("for line end coordinate")?.unwrap_or(coords.x as i64);
+                        let y1 = self
+                            .script_evaluate(&script_stack, Evaluate::Index(3))?
+                            .get_optional_i64("for line end coordinate")?.unwrap_or(coords.y as i64);
+
+                        let mut color = self.fg; // default to foreground color
+                        let color_arg = self.script_evaluate(&script_stack, Evaluate::Index(4))?
+                            .get_optional_color(&self.palette)?;
+                        get_or_swap_color(&mut color, color_arg);
+
+                        self.script_line(x0, y0, x1, y1, color)?;
+                        Ok(Argument::Null)
+                    }
                     Command::MouseX => {
                         let coords = self.get_active_view_mouse_coords();
                         Ok(Argument::I64(coords.point.x as i64))
@@ -1813,13 +1842,18 @@ impl Variables {
         );
         variables.add_built_in(
             Command::Paint,
-            "paints coordinates ($0, $1) with color $2, defaulting to foreground, \
+            "paints coordinates ($0, $1) with optional color $2, defaulting to foreground, \
             e.g., `$$ 3 4 #765432` to paint coordinate (3, 4) color #765432",
         );
         variables.add_built_in(
             Command::Bucket,
-            "flood-fills starting at coordinates ($0, $1) with color $2, defaulting \
+            "flood-fills starting at coordinates ($0, $1) with optional color $2, defaulting \
             to foreground, e.g., `$$ 3 4 #765432` to start flood-filling at (3, 4)",
+        );
+        variables.add_built_in(
+            Command::Line,
+            "draws a line starting at ($0, $1) going to ($2, $3) with optional color $4, defaulting \
+            to foreground, e.g., `$$ 3 4 15 16 #765432` to draw from (3, 4) to (15, 16)",
         );
         variables.add_built_in(
             Command::MouseX,
@@ -1906,6 +1940,7 @@ impl Variables {
         assert_ok!(variables.set("background".to_string(), Variable::Alias("bg".to_string())));
         assert_ok!(variables.set("paint".to_string(), Variable::Alias("p".to_string())));
         assert_ok!(variables.set("bucket".to_string(), Variable::Alias("b".to_string())));
+        assert_ok!(variables.set("line".to_string(), Variable::Alias("l".to_string())));
         assert_ok!(variables.set("mouse-x".to_string(), Variable::Alias("mx".to_string())));
         assert_ok!(variables.set("mouse-y".to_string(), Variable::Alias("my".to_string())));
         assert_ok!(variables.set("cursor-x".to_string(), Variable::Alias("mx".to_string())));
@@ -2235,6 +2270,14 @@ mod test {
                 .push(WhatRan::Mocked(format!("b {} {} {}", x, y, color)));
             // In the implementation, return the color that was under the cursor.
             Ok(Argument::Color(Self::PAINT_RETURN_COLOR))
+        }
+
+        fn script_line(&mut self, x0: i64, y0: i64, x1: i64, y1: i64, color: Rgba8) -> VoidResult {
+            self.test_what_ran.push(WhatRan::Mocked(format!(
+                "l {} {} {} {} {}",
+                x0, y0, x1, y1, color
+            )));
+            Ok(())
         }
 
         fn add_view_colors(&mut self) {

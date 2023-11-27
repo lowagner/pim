@@ -24,6 +24,10 @@ impl Parse for Script {
 fn get_script_parser(lookback: i32) -> Parser<Script> {
     // TODO: add some logic for seeing a comma, turning things into a `run-all`.
     // e.g., `fg (pc 1), bg (pc 2)`
+    // TODO: i think it might be better to convert it into an arguments vector.
+    // ideally we make it possible to run something on pressing a button, e.g.,
+    // `f0, f1, (f2 arg0 arg1), ...` and then use those to populate the arguments
+    // for the script on release, e.g., $0 -> f0's result, $1 -> f1's result, etc.
     special_command()
         .skip(optional(whitespace()))
         .then(any::<Argument, Vec<Argument>>(
