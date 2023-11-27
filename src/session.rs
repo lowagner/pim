@@ -14,7 +14,7 @@ use crate::palette::*;
 use crate::platform::{self, InputState, Key, KeyboardInput, LogicalSize, ModifiersState};
 use crate::script::{
     self, evaluate, Argument, ArgumentResult, Command, Evaluate, Get, Map, OptionalI64For, Quit,
-    Script, ScriptRunner, Serialize, StringsFor, Variables, VoidResult,
+    Script, ScriptRunner, Serialize, StringsFor, TwoI64sFor, Variables, VoidResult,
 };
 use crate::script_runner;
 use crate::settings::*;
@@ -3561,6 +3561,19 @@ impl Session {
             }
         }
         Ok(())
+    }
+
+    pub fn script_two_i64s(&mut self, for_what: TwoI64sFor, x: i64, y: i64) -> ArgumentResult {
+        match for_what {
+            TwoI64sFor::Pan => {
+                // TODO: add I64Setting for PanPixelsX/Y sensitivity instead of PAN_PIXELS
+                self.pan(
+                    (-Self::PAN_PIXELS * x) as f32,
+                    (-Self::PAN_PIXELS * y) as f32,
+                );
+            }
+        }
+        Ok(Argument::Null)
     }
 
     pub fn map_input(

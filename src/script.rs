@@ -109,6 +109,7 @@ pub enum Command {
     // TODO: we should define a way to evaluate something and put its value into a variable;
     //       everything below is lazily evaluated.  e.g., `set-val 'my-var' (...)`
     //       or maybe `set-eval 'my-var' (...)`
+    // TODO: convert these to `NamedScript(NamedScript)` command, e.g., with a String and a Script as arguments.
     /// Sets a variable with name $0 to the value at $1, allowing future changes.
     /// E.g., `:set 'my-mut' 123` will set `my-mut` to evaluate to 123.
     /// You can also define lambda functions with e.g., `:set 'my-fn' (fg $0)`
@@ -138,6 +139,8 @@ pub enum Command {
     UsingOptionalI64(OptionalI64For),
     /// Commands that take multiple strings.
     UsingStrings(StringsFor),
+    /// Commands that take two integers which will default to 0 if the arguments are Null.
+    UsingTwoI64s(TwoI64sFor),
 
     /// Setter for the width x height of each frame, using $0 for width and $1 for height.
     /// If either $0 or $1 is null, it keeps that dimension the same; if both are null,
@@ -199,8 +202,6 @@ pub enum Command {
     MouseX,
     /// Returns the current mouse y-position, in pixel coordinates relative to the drawing.
     MouseY,
-    /// Moves the view by ($0, $1).
-    Pan,
 
     // TODO: BrushReset,
     /// Resets settings.
@@ -284,6 +285,7 @@ impl fmt::Display for Command {
             Command::UsingStrings(StringsFor::Source) => write!(f, "source"),
             Command::UsingStrings(StringsFor::Edit) => write!(f, "e"),
             Command::UsingStrings(StringsFor::Concatenate) => write!(f, "cat"),
+            Command::UsingTwoI64s(TwoI64sFor::Pan) => write!(f, "pan"),
             Command::FrameResize => write!(f, "f-resize"),
             Command::PaletteColor => write!(f, "pc"),
             Command::PaletteAddColor => write!(f, "p-add"),
@@ -297,7 +299,6 @@ impl fmt::Display for Command {
             Command::Line => write!(f, "l"),
             Command::MouseX => write!(f, "mx"),
             Command::MouseY => write!(f, "my"),
-            Command::Pan => write!(f, "pan"),
             Command::ResetSettings => write!(f, "reset"),
             Command::Write => write!(f, "w"),
             Command::Quit(Quit::Safe) => write!(f, "q"),
@@ -369,6 +370,7 @@ impl FromStr for Command {
             "source" => Ok(Command::UsingStrings(StringsFor::Source)),
             "e" => Ok(Command::UsingStrings(StringsFor::Edit)),
             "cat" => Ok(Command::UsingStrings(StringsFor::Concatenate)),
+            "pan" => Ok(Command::UsingTwoI64s(TwoI64sFor::Pan)),
             "f-resize" => Ok(Command::FrameResize),
             "pc" => Ok(Command::PaletteColor),
             "p-add" => Ok(Command::PaletteAddColor),
@@ -382,7 +384,6 @@ impl FromStr for Command {
             "l" => Ok(Command::Line),
             "mx" => Ok(Command::MouseX),
             "my" => Ok(Command::MouseY),
-            "pan" => Ok(Command::Pan),
             "reset" => Ok(Command::ResetSettings),
             "w" => Ok(Command::Write),
             "q" => Ok(Command::Quit(Quit::Safe)),
@@ -434,6 +435,13 @@ pub enum StringsFor {
     /// Path names of images to concatenate horizontally.
     Concatenate,
     // TODO: `Append` for appending images in the horizontal direction to the current view
+}
+
+#[derive(Eq, Hash, PartialEq, Debug, Clone, Copy, EnumIter)]
+pub enum TwoI64sFor {
+    /// Distance in X and Y to pan.
+    Pan,
+    // TODO: move FrameResize here, too
 }
 
 #[derive(Eq, Hash, PartialEq, Debug, Clone, Copy, EnumIter)]
@@ -537,7 +545,7 @@ impl Argument {
 
     // TODO: probably should have `to_X` versions where we consume this argument.
     //       e.g., this is probably most important for String and Script.
-    /// Returns an i64 if possible, coercing Null to 0.
+    /// Returns an i64 if possible.
     pub fn get_i64(&self, what_for: &str) -> I64Result {
         match self {
             Argument::I64(value) => Ok(*value),
@@ -967,21 +975,6 @@ macro_rules! script_runner {
                         }
                         Ok(value)
                     }
-                    Command::UsingStrings(strings_for) => {
-                        let mut strings = vec![];
-                        for i in 0..script.arguments.len() {
-                            if let Some(string) = self.script_evaluate(
-                                &script_stack,
-                                Evaluate::Index(i as u32),
-                            )?.get_optional_string("for strings command")? {
-                                strings.push(string);
-                            }
-                        }
-                        if strings.len() > 0 {
-                            self.script_strings(*strings_for, strings)?;
-                        }
-                        Ok(Argument::Null)
-                    }
                     Command::Not => {
                         let value = self.script_evaluate(&script_stack, Evaluate::Index(0))?;
                         Ok(Argument::I64(if value.is_truthy() { 0 } else { 1 }))
@@ -1117,6 +1110,33 @@ macro_rules! script_runner {
                         self.script_optional_i64(*for_what, optional_i64)?;
                         Ok(Argument::Null)
                     }
+                    Command::UsingStrings(strings_for) => {
+                        let mut strings = vec![];
+                        for i in 0..script.arguments.len() {
+                            if let Some(string) = self.script_evaluate(
+                                &script_stack,
+                                Evaluate::Index(i as u32),
+                            )?.get_optional_string("for strings command")? {
+                                strings.push(string);
+                            }
+                        }
+                        if strings.len() > 0 {
+                            self.script_strings(*strings_for, strings)?;
+                        }
+                        Ok(Argument::Null)
+                    }
+                    Command::UsingTwoI64s(for_what) => {
+                        let x = self
+                            .script_evaluate(&script_stack, Evaluate::Index(0))?
+                            .get_optional_i64("for coordinate X")?
+                            .unwrap_or_default();
+                        let y = self
+                            .script_evaluate(&script_stack, Evaluate::Index(1))?
+                            .get_optional_i64("for coordinate Y")?
+                            .unwrap_or_default();
+
+                        self.script_two_i64s(*for_what, x, y)
+                    }
                     Command::FrameResize => {
                         let optional_width = self
                             .script_evaluate(&script_stack, Evaluate::Index(0))?
@@ -1126,15 +1146,14 @@ macro_rules! script_runner {
                             .get_optional_i64("for frame height")?;
                         let old_width = self.get_i64_setting(I64Setting::FrameWidth);
                         let old_height = self.get_i64_setting(I64Setting::FrameHeight);
-                        if optional_width.is_some() && optional_height.is_some() {
-                            self.resize_frames(optional_width.unwrap(), optional_height.unwrap())?;
-                        } else if optional_width.is_some() {
-                            self.resize_frames(optional_width.unwrap(), old_height)?;
-                        } else if optional_height.is_some() {
-                            self.resize_frames(old_width, optional_height.unwrap())?;
-                        } else {
+                        if optional_width.is_none() && optional_height.is_none() {
                             // TODO: Crop to content
                             return Err(format!("{} without arguments is not yet implemented", command));
+                        } else {
+                            self.resize_frames(
+                                optional_width.unwrap_or(old_width),
+                                optional_height.unwrap_or(old_height)
+                            )?;
                         }
                         Ok(Argument::I64(old_width * old_height))
                     }
@@ -1285,6 +1304,8 @@ macro_rules! script_runner {
                         self.script_line(x0, y0, x1, y1, color)?;
                         Ok(Argument::Null)
                     }
+                    // TODO: these could probably get moved into I64Settings.
+                    //       they would just have errors when trying to assign.
                     Command::MouseX => {
                         let coords = self.get_active_view_mouse_coords();
                         Ok(Argument::I64(coords.point.x as i64))
@@ -1292,16 +1313,6 @@ macro_rules! script_runner {
                     Command::MouseY => {
                         let coords = self.get_active_view_mouse_coords();
                         Ok(Argument::I64(coords.point.y as i64))
-                    }
-                    Command::Pan => {
-                        let x = self
-                            .script_evaluate(&script_stack, Evaluate::Index(0))?
-                            .get_i64("for pan coordinate X")?;
-                        let y = self
-                            .script_evaluate(&script_stack, Evaluate::Index(1))?
-                            .get_i64("for pan coordinate Y")?;
-                        self.pan((-Self::PAN_PIXELS * x) as f32, (-Self::PAN_PIXELS * y) as f32);
-                        Ok(Argument::Null)
                     }
                     Command::ResetSettings => {
                         if let Err(e) = self.reset() {
@@ -1786,6 +1797,11 @@ impl Variables {
             e.g., `$$ 'hi.png' 'hello.png'` to put them side by side",
         );
         variables.add_built_in(
+            Command::UsingTwoI64s(TwoI64sFor::Pan),
+            "moves the view horizontally+vertically, \
+            e.g., `$$ 11 23` pans (11, 23) in (X, Y) coordinates",
+        );
+        variables.add_built_in(
             Command::FrameResize,
             "sets frame size, or crops to content if no arguments, \
             e.g., `$$ 12 34` to set to 12 pixels wide and 34 pixels high",
@@ -1851,11 +1867,6 @@ impl Variables {
             Command::MouseY,
             "returns the mouse Y position for the current view. \
             e.g., `p 3 $$` paints the foreground color at coordinates (3, mouse-y)",
-        );
-        variables.add_built_in(
-            Command::Pan,
-            "moves the view horizontally+vertically, \
-            e.g., `$$ 11 23` pans (11, 23) in (X, Y) coordinates",
         );
         variables.add_built_in(Command::ResetSettings, "resets all settings");
         variables.add_built_in(
@@ -2343,11 +2354,6 @@ mod test {
             Point::new(7733.0, 6644.0)
         }
 
-        fn pan(&mut self, x: f32, y: f32) {
-            self.test_what_ran
-                .push(WhatRan::Mocked(format!("pan {} {}", x, y)));
-        }
-
         pub fn script_optional_i64(
             &mut self,
             for_what: OptionalI64For,
@@ -2358,6 +2364,12 @@ mod test {
                 for_what, optional_i64
             )));
             Ok(())
+        }
+
+        pub fn script_two_i64s(&mut self, for_what: TwoI64sFor, x: i64, y: i64) -> ArgumentResult {
+            self.test_what_ran
+                .push(WhatRan::Mocked(format!("{:?}{{{}, {}}}", for_what, x, y,)));
+            Ok(Argument::Null)
         }
 
         fn script_strings(&mut self, for_what: StringsFor, strings: Vec<String>) -> VoidResult {
@@ -3923,6 +3935,16 @@ mod test {
                 Err(format!("built-in `{}` is not reassignable", name))
             );
         }
+        for what_for in TwoI64sFor::iter() {
+            let name = format!("{}", Command::UsingTwoI64s(what_for));
+            assert_eq!(
+                variables.set(
+                    name.clone(),
+                    Variable::BuiltIn(Command::Odd, "should not override".to_string())
+                ),
+                Err(format!("built-in `{}` is not reassignable", name))
+            );
+        }
     }
 
     #[test]
@@ -3964,6 +3986,13 @@ mod test {
 
         for what_for in StringsFor::iter() {
             let command = Command::UsingStrings(what_for);
+            let name = format!("{}", command);
+            let command_from_name = Command::from_str(&name).unwrap();
+            assert_eq!(command_from_name, command);
+        }
+
+        for what_for in TwoI64sFor::iter() {
+            let command = Command::UsingTwoI64s(what_for);
             let name = format!("{}", command);
             let command_from_name = Command::from_str(&name).unwrap();
             assert_eq!(command_from_name, command);
