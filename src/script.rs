@@ -1153,10 +1153,15 @@ macro_rules! script_runner {
                                 index
                             }
                         };
-                        let color_arg = self.script_evaluate(&script_stack, Evaluate::Index(1))?.get_optional_color(&self.palette)?;
-                        // TODO: do something special after mutating the color, e.g., to check if
-                        // we already have that color somewhere else.
-                        Ok(Argument::Color(get_or_swap_color(&mut self.palette.colors[palette_index], color_arg)))
+                        let old_color = self.palette.colors[palette_index];
+                        let color_arg = self.script_evaluate(&script_stack, Evaluate::Index(1))?
+                            .get_optional_color(&self.palette)?;
+                        if let Some(color) = color_arg {
+                            // TODO: do something special after mutating the color, e.g., to check if
+                            // we already have that color somewhere else.
+                            self.palette.colors[palette_index] = color;
+                        }
+                        Ok(Argument::Color(old_color))
                     }
                     Command::PaletteAddColor => {
                         let color = self.script_evaluate(&script_stack, Evaluate::Index(0))?.get_color(&self.palette)?;
@@ -1240,10 +1245,9 @@ macro_rules! script_runner {
                         let y = self
                             .script_evaluate(&script_stack, Evaluate::Index(1))?
                             .get_i64("for paint coordinate")?;
-
-                        let mut color = self.fg; // default to foreground color
-                        let color_arg = self.script_evaluate(&script_stack, Evaluate::Index(2))?.get_optional_color(&self.palette)?;
-                        get_or_swap_color(&mut color, color_arg);
+                        let color = self.script_evaluate(&script_stack, Evaluate::Index(2))?
+                            .get_optional_color(&self.palette)?
+                            .unwrap_or(self.fg); // default to foreground color
 
                         self.script_paint(x, y, color)
                     }
@@ -1254,10 +1258,9 @@ macro_rules! script_runner {
                         let y = self
                             .script_evaluate(&script_stack, Evaluate::Index(1))?
                             .get_i64("for bucket coordinate")?;
-
-                        let mut color = self.fg; // default to foreground color
-                        let color_arg = self.script_evaluate(&script_stack, Evaluate::Index(2))?.get_optional_color(&self.palette)?;
-                        get_or_swap_color(&mut color, color_arg);
+                        let color = self.script_evaluate(&script_stack, Evaluate::Index(2))?
+                            .get_optional_color(&self.palette)?
+                            .unwrap_or(self.fg); // default to foreground color
 
                         self.script_bucket(x, y, color)
                     }
@@ -1275,11 +1278,9 @@ macro_rules! script_runner {
                         let y1 = self
                             .script_evaluate(&script_stack, Evaluate::Index(3))?
                             .get_optional_i64("for line end coordinate")?.unwrap_or(coords.y as i64);
-
-                        let mut color = self.fg; // default to foreground color
-                        let color_arg = self.script_evaluate(&script_stack, Evaluate::Index(4))?
-                            .get_optional_color(&self.palette)?;
-                        get_or_swap_color(&mut color, color_arg);
+                        let color = self.script_evaluate(&script_stack, Evaluate::Index(4))?
+                            .get_optional_color(&self.palette)?
+                            .unwrap_or(self.fg); // default to foreground color
 
                         self.script_line(x0, y0, x1, y1, color)?;
                         Ok(Argument::Null)
@@ -1327,20 +1328,6 @@ macro_rules! script_runner {
             }
         }
     };
-}
-
-// TODO: can we remove this?
-/// Essentially a getter/swapper for color, with a Null argument making
-/// this behave as a getter and a non-Null argument as a swapper, i.e.,
-/// we return the old value as we swap in the new value.
-pub fn get_or_swap_color(maybe_set_color: &mut Rgba8, optional_color: Option<Rgba8>) -> Rgba8 {
-    match optional_color {
-        None => maybe_set_color.clone(),
-        Some(mut color) => {
-            mem::swap(&mut color, maybe_set_color);
-            color
-        }
-    }
 }
 
 pub enum Evaluate<'a> {
@@ -4357,60 +4344,6 @@ mod test {
             Ok(Argument::String("hello".to_string()))
         );
         assert_eq!(variables.get(&alias_name).to_argument(), aliased_value);
-    }
-
-    #[test]
-    fn test_get_or_swap_color_works_with_pure_colors() {
-        // The color we'll try to modify.
-        let mut color = Rgba8 {
-            r: 255,
-            g: 254,
-            b: 253,
-            a: 255,
-        };
-        let mut trailing_color = color;
-
-        // Test once:
-        let mut new_color = Rgba8 {
-            r: 53,
-            g: 27,
-            b: 13,
-            a: 0xff,
-        };
-        assert_eq!(
-            get_or_swap_color(&mut color, Some(new_color)),
-            trailing_color
-        );
-        assert_eq!(color, new_color);
-        trailing_color = color;
-
-        // Test again:
-        new_color = Rgba8 {
-            r: 101,
-            g: 1,
-            b: 77,
-            a: 0xff,
-        };
-        assert_eq!(
-            get_or_swap_color(&mut color, Some(new_color)),
-            trailing_color
-        );
-        assert_eq!(color, new_color);
-    }
-
-    #[test]
-    fn test_get_or_swap_color_returns_current_color_with_null_argument() {
-        // The color we'll try to modify.
-        let mut color = Rgba8 {
-            r: 255,
-            g: 254,
-            b: 253,
-            a: 255,
-        };
-        let initial_color = color;
-
-        assert_eq!(get_or_swap_color(&mut color, None), initial_color);
-        assert_eq!(color, initial_color);
     }
 
     #[test]

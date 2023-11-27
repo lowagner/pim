@@ -28,6 +28,7 @@ fn get_script_parser(lookback: i32) -> Parser<Script> {
     // ideally we make it possible to run something on pressing a button, e.g.,
     // `f0, f1, (f2 arg0 arg1), ...` and then use those to populate the arguments
     // for the script on release, e.g., $0 -> f0's result, $1 -> f1's result, etc.
+    // i.e., make it a `Script` without a command.
     special_command()
         .skip(optional(whitespace()))
         .then(any::<Argument, Vec<Argument>>(
