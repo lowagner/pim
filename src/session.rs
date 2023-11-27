@@ -172,7 +172,7 @@ impl Selection {
     /// Resize the selection by a certain amount.
     pub fn resize(&mut self, x: i32, y: i32) {
         self.0.x2 += x;
-        self.0.y2 += y;
+        self.0.y2 -= y;
     }
 }
 
