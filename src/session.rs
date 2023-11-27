@@ -3572,6 +3572,23 @@ impl Session {
                     (-Self::PAN_PIXELS * y) as f32,
                 );
             }
+            TwoI64sFor::FrameResize => {
+                let old_width = self.get_i64_setting(I64Setting::FrameWidth);
+                let old_height = self.get_i64_setting(I64Setting::FrameHeight);
+                if x > 0 || y > 0 {
+                    self.resize_frames(
+                        if x > 0 { x } else { old_width },
+                        if y > 0 { y } else { old_height },
+                    )?;
+                } else {
+                    // TODO: Crop to content
+                    return Err(format!(
+                        "{} without arguments is not yet implemented",
+                        Command::UsingTwoI64s(for_what)
+                    ));
+                }
+                return Ok(Argument::I64(old_width * old_height));
+            }
         }
         Ok(Argument::Null)
     }

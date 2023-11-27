@@ -142,11 +142,6 @@ pub enum Command {
     /// Commands that take two integers which will default to 0 if the arguments are Null.
     UsingTwoI64s(TwoI64sFor),
 
-    /// Setter for the width x height of each frame, using $0 for width and $1 for height.
-    /// If either $0 or $1 is null, it keeps that dimension the same; if both are null,
-    /// it crops the frames to content.  Returns the number of pixels in one frame, i.e.,
-    /// width * height, from *before* the operation.
-    FrameResize,
     // TODO: some of these frame manipulation methods can't be used together unless
     //      we maybe handle the effects after every action.
     // TODO: FrameSwap, "fs" with two indices
@@ -286,7 +281,7 @@ impl fmt::Display for Command {
             Command::UsingStrings(StringsFor::Edit) => write!(f, "e"),
             Command::UsingStrings(StringsFor::Concatenate) => write!(f, "cat"),
             Command::UsingTwoI64s(TwoI64sFor::Pan) => write!(f, "pan"),
-            Command::FrameResize => write!(f, "f-resize"),
+            Command::UsingTwoI64s(TwoI64sFor::FrameResize) => write!(f, "f-resize"),
             Command::PaletteColor => write!(f, "pc"),
             Command::PaletteAddColor => write!(f, "p-add"),
             Command::PaletteAddGradient => write!(f, "p-gradient"),
@@ -371,7 +366,7 @@ impl FromStr for Command {
             "e" => Ok(Command::UsingStrings(StringsFor::Edit)),
             "cat" => Ok(Command::UsingStrings(StringsFor::Concatenate)),
             "pan" => Ok(Command::UsingTwoI64s(TwoI64sFor::Pan)),
-            "f-resize" => Ok(Command::FrameResize),
+            "f-resize" => Ok(Command::UsingTwoI64s(TwoI64sFor::FrameResize)),
             "pc" => Ok(Command::PaletteColor),
             "p-add" => Ok(Command::PaletteAddColor),
             "p-gradient" => Ok(Command::PaletteAddGradient),
@@ -441,7 +436,11 @@ pub enum StringsFor {
 pub enum TwoI64sFor {
     /// Distance in X and Y to pan.
     Pan,
-    // TODO: move FrameResize here, too
+    /// Setter for the width x height of each frame, using $0 for width and $1 for height.
+    /// If either $0 or $1 is null or 0, it keeps that dimension the same; if both are null,
+    /// it crops the frames to content.  Returns the number of pixels in one frame, i.e.,
+    /// width * height, from *before* the operation.
+    FrameResize,
 }
 
 #[derive(Eq, Hash, PartialEq, Debug, Clone, Copy, EnumIter)]
@@ -1137,26 +1136,6 @@ macro_rules! script_runner {
 
                         self.script_two_i64s(*for_what, x, y)
                     }
-                    Command::FrameResize => {
-                        let optional_width = self
-                            .script_evaluate(&script_stack, Evaluate::Index(0))?
-                            .get_optional_i64("for frame width")?;
-                        let optional_height = self
-                            .script_evaluate(&script_stack, Evaluate::Index(1))?
-                            .get_optional_i64("for frame height")?;
-                        let old_width = self.get_i64_setting(I64Setting::FrameWidth);
-                        let old_height = self.get_i64_setting(I64Setting::FrameHeight);
-                        if optional_width.is_none() && optional_height.is_none() {
-                            // TODO: Crop to content
-                            return Err(format!("{} without arguments is not yet implemented", command));
-                        } else {
-                            self.resize_frames(
-                                optional_width.unwrap_or(old_width),
-                                optional_height.unwrap_or(old_height)
-                            )?;
-                        }
-                        Ok(Argument::I64(old_width * old_height))
-                    }
                     Command::PaletteColor => {
                         // TODO: pull out palette_index logic into a helper function
                         //       so we can re-use it for PaletteRepaint
@@ -1802,7 +1781,7 @@ impl Variables {
             e.g., `$$ 11 23` pans (11, 23) in (X, Y) coordinates",
         );
         variables.add_built_in(
-            Command::FrameResize,
+            Command::UsingTwoI64s(TwoI64sFor::FrameResize),
             "sets frame size, or crops to content if no arguments, \
             e.g., `$$ 12 34` to set to 12 pixels wide and 34 pixels high",
         );
@@ -2336,12 +2315,6 @@ mod test {
                 "set{:?}({} -> {})",
                 setting, old_value, new_value
             )));
-            Ok(())
-        }
-
-        fn resize_frames(&mut self, width: i64, height: i64) -> Result<(), String> {
-            self.test_what_ran
-                .push(WhatRan::Mocked(format!("f/resize {} {}", width, height)));
             Ok(())
         }
 
