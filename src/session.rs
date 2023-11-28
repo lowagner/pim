@@ -2831,7 +2831,6 @@ impl Session {
             Cmd::Crop(_) => {
                 self.unimplemented();
             }
-            // TODO: Continue here!
             Cmd::SelectionMove(x, y) => {
                 if let Some(ref mut s) = self.selection {
                     s.translate(x, y);
@@ -2842,6 +2841,7 @@ impl Session {
                     s.resize(x, y);
                 }
             }
+            // TODO: Continue here!
             Cmd::SelectionExpand => {
                 let v = self.active_view();
                 let (fw, fh) = (v.fw as i32, v.fh as i32);
@@ -3588,6 +3588,16 @@ impl Session {
                     ));
                 }
                 return Ok(Argument::I64(old_width * old_height));
+            }
+            TwoI64sFor::SelectionMove => {
+                if let Some(ref mut s) = self.selection {
+                    s.translate(x as i32, y as i32);
+                }
+            }
+            TwoI64sFor::SelectionResize => {
+                if let Some(ref mut s) = self.selection {
+                    s.resize(x as i32, y as i32);
+                }
             }
         }
         Ok(Argument::Null)

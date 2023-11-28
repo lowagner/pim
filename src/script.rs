@@ -134,6 +134,7 @@ pub enum Command {
     /// Getter/swapper for various settings that are strings.
     StringSetting(StringSetting),
     /// Getter/swapper for various settings that are ints (or booleans).
+    // TODO: probably can switch to I32Setting everywhere (e.g., Argument::I32)
     I64Setting(I64Setting),
     /// Commands that take an optional i64 argument.
     UsingOptionalI64(OptionalI64For),
@@ -282,6 +283,8 @@ impl fmt::Display for Command {
             Command::UsingStrings(StringsFor::Concatenate) => write!(f, "cat"),
             Command::UsingTwoI64s(TwoI64sFor::Pan) => write!(f, "pan"),
             Command::UsingTwoI64s(TwoI64sFor::FrameResize) => write!(f, "f-resize"),
+            Command::UsingTwoI64s(TwoI64sFor::SelectionMove) => write!(f, "s-move"),
+            Command::UsingTwoI64s(TwoI64sFor::SelectionResize) => write!(f, "s-resize"),
             Command::PaletteColor => write!(f, "pc"),
             Command::PaletteAddColor => write!(f, "p-add"),
             Command::PaletteAddGradient => write!(f, "p-gradient"),
@@ -367,6 +370,8 @@ impl FromStr for Command {
             "cat" => Ok(Command::UsingStrings(StringsFor::Concatenate)),
             "pan" => Ok(Command::UsingTwoI64s(TwoI64sFor::Pan)),
             "f-resize" => Ok(Command::UsingTwoI64s(TwoI64sFor::FrameResize)),
+            "s-move" => Ok(Command::UsingTwoI64s(TwoI64sFor::SelectionMove)),
+            "s-resize" => Ok(Command::UsingTwoI64s(TwoI64sFor::SelectionResize)),
             "pc" => Ok(Command::PaletteColor),
             "p-add" => Ok(Command::PaletteAddColor),
             "p-gradient" => Ok(Command::PaletteAddGradient),
@@ -443,6 +448,10 @@ pub enum TwoI64sFor {
     /// it crops the frames to content.  Returns the number of pixels in one frame, i.e.,
     /// width * height, from *before* the operation.
     FrameResize,
+    /// Move the selection (i.e., for Visual mode).
+    SelectionMove,
+    /// Resize the selection (i.e., for Visual mode), by deltas based on $0 and $1.
+    SelectionResize,
 }
 
 #[derive(Eq, Hash, PartialEq, Debug, Clone, Copy, EnumIter)]
@@ -1786,6 +1795,16 @@ impl Variables {
             Command::UsingTwoI64s(TwoI64sFor::FrameResize),
             "sets frame size, or crops to content if no arguments, \
             e.g., `$$ 12 34` to set to 12 pixels wide and 34 pixels high",
+        );
+        variables.add_built_in(
+            Command::UsingTwoI64s(TwoI64sFor::SelectionMove),
+            "moves the selection box by ($0, $1) with defaults of 0, \
+            e.g., `$$ 7 -9` to move +7 in X and -9 in Y",
+        );
+        variables.add_built_in(
+            Command::UsingTwoI64s(TwoI64sFor::SelectionResize),
+            "deltas the selection box size by ($0, $1) with defaults of 0, \
+            e.g., `$$ 5 -3` to increase 5 in width and decrease 3 in height",
         );
         variables.add_built_in(
             Command::PaletteColor,
