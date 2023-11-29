@@ -201,9 +201,6 @@ pub enum Command {
     /// Returns the current mouse y-position, in pixel coordinates relative to the drawing.
     MouseY,
 
-    // TODO: BrushReset,
-    /// Resets settings.
-    ResetSettings,
     // TODO: maybe have a `PreviouslyUsedTool` command to use `session.prev_tool()`
     /// Saves the animation to a file (e.g., for gif, png, etc.).
     Write,
@@ -275,6 +272,7 @@ impl fmt::Display for Command {
             Command::I64Setting(I64Setting::FrameHeight) => write!(f, "f-height"),
             Command::I64Setting(I64Setting::ImageSplit) => write!(f, "split"),
             Command::I64Setting(I64Setting::History) => write!(f, "history"),
+            Command::WithoutArguments(ZeroArgumentsFor::Reset) => write!(f, "reset"),
             Command::WithoutArguments(ZeroArgumentsFor::SelectionExpand) => write!(f, "s-expand"),
             Command::UsingOptionalI64(OptionalI64For::FrameAdd) => write!(f, "fa"),
             Command::UsingOptionalI64(OptionalI64For::FrameClone) => write!(f, "fc"),
@@ -300,7 +298,6 @@ impl fmt::Display for Command {
             Command::Line => write!(f, "l"),
             Command::MouseX => write!(f, "mx"),
             Command::MouseY => write!(f, "my"),
-            Command::ResetSettings => write!(f, "reset"),
             Command::Write => write!(f, "w"),
             Command::Quit(Quit::Safe) => write!(f, "q"),
             Command::Quit(Quit::AllSafe) => write!(f, "qa"),
@@ -363,6 +360,7 @@ impl FromStr for Command {
             "f-height" => Ok(Command::I64Setting(I64Setting::FrameHeight)),
             "split" => Ok(Command::I64Setting(I64Setting::ImageSplit)),
             "history" => Ok(Command::I64Setting(I64Setting::History)),
+            "reset" => Ok(Command::WithoutArguments(ZeroArgumentsFor::Reset)),
             "s-expand" => Ok(Command::WithoutArguments(ZeroArgumentsFor::SelectionExpand)),
             "fa" => Ok(Command::UsingOptionalI64(OptionalI64For::FrameAdd)),
             "fc" => Ok(Command::UsingOptionalI64(OptionalI64For::FrameClone)),
@@ -388,7 +386,6 @@ impl FromStr for Command {
             "l" => Ok(Command::Line),
             "mx" => Ok(Command::MouseX),
             "my" => Ok(Command::MouseY),
-            "reset" => Ok(Command::ResetSettings),
             "w" => Ok(Command::Write),
             "q" => Ok(Command::Quit(Quit::Safe)),
             "qa" => Ok(Command::Quit(Quit::AllSafe)),
@@ -421,7 +418,9 @@ pub enum ZeroArgumentsFor {
     // TODO: move PaletteSort here
     // TODO: move PaletteClear here
     // TODO: move MouseX/Y here
-    // TODO: move ResetSettings here, rename to Reset
+    // TODO: BrushReset,
+    /// Resets settings.
+    Reset,
     SelectionExpand,
 }
 
@@ -1331,15 +1330,6 @@ macro_rules! script_runner {
                         let coords = self.get_active_view_mouse_coords();
                         Ok(Argument::I64(coords.point.y as i64))
                     }
-                    Command::ResetSettings => {
-                        if let Err(e) = self.reset() {
-                            self.message(format!("Error: {}", e), MessageType::Error);
-                            Err(format!("{}", e))
-                        } else {
-                            self.message("Settings reset to default values", MessageType::Okay);
-                            Ok(Argument::Null)
-                        }
-                    }
                     Command::Write => {
                         let arg0 = self
                             .script_evaluate(&script_stack, Evaluate::Index(0))?.get_optional_string("for path")?;
@@ -1774,6 +1764,10 @@ impl Variables {
             e.g., `$$` get the current ID which can be used to restore it later.",
         );
         variables.add_built_in(
+            Command::WithoutArguments(ZeroArgumentsFor::Reset),
+            "`$$` resets all settings",
+        );
+        variables.add_built_in(
             Command::WithoutArguments(ZeroArgumentsFor::SelectionExpand),
             "`$$` expands selection to fill the overlapped frames",
         );
@@ -1899,7 +1893,6 @@ impl Variables {
             "returns the mouse Y position for the current view. \
             e.g., `p 3 $$` paints the foreground color at coordinates (3, mouse-y)",
         );
-        variables.add_built_in(Command::ResetSettings, "resets all settings");
         variables.add_built_in(
             Command::Write,
             "writes the current image to storage, with optional file name and optional scale, \
@@ -2367,11 +2360,6 @@ mod test {
                 "set{:?}({} -> {})",
                 setting, old_value, new_value
             )));
-            Ok(())
-        }
-
-        // This can be return something else for an error.
-        fn reset(&mut self) -> Result<(), String> {
             Ok(())
         }
 
