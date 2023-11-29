@@ -1,5 +1,8 @@
 use strum_macros::EnumIter;
 
+// TODO: move this file to another (e.g., like command.rs).
+// TODO: move other things like UsingOptionalI64 there too.
+
 #[derive(Eq, Hash, PartialEq, Debug, Clone, Copy, EnumIter)]
 pub enum StringSetting {
     /// Current mode (e.g., normal, command, etc.).

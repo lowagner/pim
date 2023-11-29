@@ -136,6 +136,8 @@ pub enum Command {
     /// Getter/swapper for various settings that are ints (or booleans).
     // TODO: probably can switch to I32Setting everywhere (e.g., Argument::I32)
     I64Setting(I64Setting),
+    /// Commands that don't take any arguments.
+    WithoutArguments(ZeroArgumentsFor),
     /// Commands that take an optional i64 argument.
     UsingOptionalI64(OptionalI64For),
     /// Commands that take multiple strings.
@@ -273,6 +275,7 @@ impl fmt::Display for Command {
             Command::I64Setting(I64Setting::FrameHeight) => write!(f, "f-height"),
             Command::I64Setting(I64Setting::ImageSplit) => write!(f, "split"),
             Command::I64Setting(I64Setting::History) => write!(f, "history"),
+            Command::WithoutArguments(ZeroArgumentsFor::SelectionExpand) => write!(f, "s-expand"),
             Command::UsingOptionalI64(OptionalI64For::FrameAdd) => write!(f, "fa"),
             Command::UsingOptionalI64(OptionalI64For::FrameClone) => write!(f, "fc"),
             Command::UsingOptionalI64(OptionalI64For::FrameRemove) => write!(f, "fr"),
@@ -360,6 +363,7 @@ impl FromStr for Command {
             "f-height" => Ok(Command::I64Setting(I64Setting::FrameHeight)),
             "split" => Ok(Command::I64Setting(I64Setting::ImageSplit)),
             "history" => Ok(Command::I64Setting(I64Setting::History)),
+            "s-expand" => Ok(Command::WithoutArguments(ZeroArgumentsFor::SelectionExpand)),
             "fa" => Ok(Command::UsingOptionalI64(OptionalI64For::FrameAdd)),
             "fc" => Ok(Command::UsingOptionalI64(OptionalI64For::FrameClone)),
             "fr" => Ok(Command::UsingOptionalI64(OptionalI64For::FrameRemove)),
@@ -413,6 +417,15 @@ pub enum Map {
 }
 
 #[derive(Eq, Hash, PartialEq, Debug, Clone, Copy, EnumIter)]
+pub enum ZeroArgumentsFor {
+    // TODO: move PaletteSort here
+    // TODO: move PaletteClear here
+    // TODO: move MouseX/Y here
+    // TODO: move ResetSettings here, rename to Reset
+    SelectionExpand,
+}
+
+#[derive(Eq, Hash, PartialEq, Debug, Clone, Copy, EnumIter)]
 pub enum OptionalI64For {
     /// Adds a blank frame after Some(i64), otherwise after the current frame.
     FrameAdd,
@@ -424,6 +437,7 @@ pub enum OptionalI64For {
     Undo,
     /// Repeats redo the specified number of times, or 1.
     Redo,
+    // TODO: Colors, e.g., Red, etc. with 0 to 10
 }
 
 #[derive(Eq, Hash, PartialEq, Debug, Clone, Copy, EnumIter)]
@@ -453,6 +467,15 @@ pub enum TwoI64sFor {
     /// Resize the selection (i.e., for Visual mode), by deltas based on $0 and $1.
     SelectionResize,
 }
+
+/*
+/// like TwoI64s but defaulting to mouse coordinates instead of 0 for the I64s.
+#[derive(Eq, Hash, PartialEq, Debug, Clone, Copy, EnumIter)]
+pub enum CoordinatesFor {
+    // TODO: this should have two optional i64 coordinates but default to mouse coordinates.
+    // TODO: SelectionCorner - snaps the closest selection corner to coordinates ($0, $1)
+}
+*/
 
 #[derive(Eq, Hash, PartialEq, Debug, Clone, Copy, EnumIter)]
 pub enum Quit {
@@ -1113,6 +1136,10 @@ macro_rules! script_runner {
                         }
                         Ok(Argument::I64(old_value))
                     }
+                    Command::WithoutArguments(for_what) => {
+                        // Classic taste, but zero arguments.
+                        self.script_zero(*for_what)
+                    }
                     Command::UsingOptionalI64(for_what) => {
                         let optional_i64 = self
                             .script_evaluate(&script_stack, Evaluate::Index(0))?
@@ -1747,6 +1774,10 @@ impl Variables {
             e.g., `$$` get the current ID which can be used to restore it later.",
         );
         variables.add_built_in(
+            Command::WithoutArguments(ZeroArgumentsFor::SelectionExpand),
+            "`$$` expands selection to fill the overlapped frames",
+        );
+        variables.add_built_in(
             Command::UsingOptionalI64(OptionalI64For::FrameAdd),
             "adds a blank frame after index $0, or the current frame if $0 is null, \
             e.g., `$$ -1` to add a frame at the end",
@@ -2346,6 +2377,12 @@ mod test {
 
         pub fn get_active_view_mouse_coords(&self) -> Point<ViewExtent, f32> {
             Point::new(7733.0, 6644.0)
+        }
+
+        pub fn script_zero(&mut self, for_what: ZeroArgumentsFor) -> ArgumentResult {
+            self.test_what_ran
+                .push(WhatRan::Mocked(format!("{:?}", for_what)));
+            Ok(Argument::Null)
         }
 
         pub fn script_optional_i64(
@@ -3909,6 +3946,16 @@ mod test {
                 Err(format!("built-in `{}` is not reassignable", name))
             );
         }
+        for what_for in ZeroArgumentsFor::iter() {
+            let name = format!("{}", Command::WithoutArguments(what_for));
+            assert_eq!(
+                variables.set(
+                    name.clone(),
+                    Variable::BuiltIn(Command::Even, "should not override".to_string())
+                ),
+                Err(format!("built-in `{}` is not reassignable", name))
+            );
+        }
         for optional_i64_for in OptionalI64For::iter() {
             let name = format!("{}", Command::UsingOptionalI64(optional_i64_for));
             assert_eq!(
@@ -3966,6 +4013,13 @@ mod test {
 
         for setting in I64Setting::iter() {
             let command = Command::I64Setting(setting);
+            let name = format!("{}", command);
+            let command_from_name = Command::from_str(&name).unwrap();
+            assert_eq!(command_from_name, command);
+        }
+
+        for what_for in ZeroArgumentsFor::iter() {
+            let command = Command::WithoutArguments(what_for);
             let name = format!("{}", command);
             let command_from_name = Command::from_str(&name).unwrap();
             assert_eq!(command_from_name, command);

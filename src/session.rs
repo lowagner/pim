@@ -15,6 +15,7 @@ use crate::platform::{self, InputState, Key, KeyboardInput, LogicalSize, Modifie
 use crate::script::{
     self, evaluate, Argument, ArgumentResult, Command, Evaluate, Get, Map, OptionalI64For, Quit,
     Script, ScriptRunner, Serialize, StringsFor, TwoI64sFor, Variables, VoidResult,
+    ZeroArgumentsFor,
 };
 use crate::script_runner;
 use crate::settings::*;
@@ -695,6 +696,7 @@ impl Session {
         self.settings = Settings::default();
         self.tool = Tool::default();
 
+        // TODO: should this even be done?
         self.source_reader(io::BufReader::new(data::CONFIG), "<init>")
     }
 
@@ -2841,35 +2843,8 @@ impl Session {
                     s.resize(x, y);
                 }
             }
+            Cmd::SelectionExpand => self.expand_selection(),
             // TODO: Continue here!
-            Cmd::SelectionExpand => {
-                let v = self.active_view();
-                let (fw, fh) = (v.fw as i32, v.fh as i32);
-                let (vw, vh) = (v.width() as i32, v.fh as i32);
-
-                if let Some(ref mut selection) = self.selection {
-                    let r = Rect::origin(vw, vh);
-                    let s = selection.bounds();
-                    let min = s.min();
-                    let max = s.max();
-
-                    // If the selection is within the view rectangle, expand it,
-                    // otherwise do nothing.
-                    if r.contains(min) && r.contains(max.map(|n| n - 1)) {
-                        let x1 = if min.x % fw == 0 {
-                            min.x - fw
-                        } else {
-                            min.x - min.x % fw
-                        };
-                        let x2 = max.x + (fw - max.x % fw);
-                        let y2 = fh;
-
-                        *selection = Selection::from(Rect::new(x1, 0, x2, y2).intersection(r));
-                    }
-                } else {
-                    self.selection = Some(Selection::new(0, 0, fw, fh));
-                }
-            }
             Cmd::SelectionOffset(mut x, mut y) => {
                 if let Some(s) = &mut self.selection {
                     let r = s.abs().bounds();
@@ -3513,7 +3488,43 @@ impl Session {
 
         self.check_selection();
         self.organize_views();
-        return Ok(());
+        Ok(())
+    }
+
+    pub fn script_zero(&mut self, for_what: ZeroArgumentsFor) -> ArgumentResult {
+        match for_what {
+            ZeroArgumentsFor::SelectionExpand => self.expand_selection(),
+        }
+        Ok(Argument::Null)
+    }
+
+    fn expand_selection(&mut self) {
+        let v = self.active_view();
+        let (fw, fh) = (v.fw as i32, v.fh as i32);
+        let (vw, vh) = (v.width() as i32, v.fh as i32);
+
+        if let Some(ref mut selection) = self.selection {
+            let r = Rect::origin(vw, vh);
+            let s = selection.bounds();
+            let min = s.min();
+            let max = s.max();
+
+            // If the selection is within the view rectangle, expand it,
+            // otherwise do nothing.
+            if r.contains(min) && r.contains(max.map(|n| n - 1)) {
+                let x1 = if min.x % fw == 0 {
+                    min.x - fw
+                } else {
+                    min.x - min.x % fw
+                };
+                let x2 = max.x + (fw - max.x % fw);
+                let y2 = fh;
+
+                *selection = Selection::from(Rect::new(x1, 0, x2, y2).intersection(r));
+            }
+        } else {
+            self.selection = Some(Selection::new(0, 0, fw, fh));
+        }
     }
 
     pub fn script_optional_i64(
