@@ -29,6 +29,7 @@ fn get_script_parser(lookback: i32) -> Parser<Script> {
     // `f0, f1, (f2 arg0 arg1), ...` and then use those to populate the arguments
     // for the script on release, e.g., $0 -> f0's result, $1 -> f1's result, etc.
     // i.e., make it a `Script` without a command.
+    // TODO: if we do something like `-cmd` then convert to something like (* -1 cmd)
     special_command()
         .skip(optional(whitespace()))
         .then(any::<Argument, Vec<Argument>>(

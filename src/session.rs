@@ -2861,7 +2861,7 @@ impl Session {
                     }
                 }
             }
-            // TODO: Continue here!
+            // Not ported to script.rs; just use `s-move fw` or `s-move -fw`
             Cmd::SelectionJump(dir) => {
                 // TODO: Test this across layers.
                 let v = self.active_view();
@@ -2876,6 +2876,7 @@ impl Session {
                     }
                 }
             }
+            // TODO: Continue here!
             Cmd::SelectionPaste => {
                 if let (Mode::Visual(VisualState::Pasting), Some(s)) = (self.mode, self.selection) {
                     self.active_view_mut().paste(s.abs().bounds());
@@ -3629,6 +3630,8 @@ impl Session {
             TwoI64sFor::SelectionMove => {
                 if let Some(ref mut s) = self.selection {
                     s.translate(x as i32, y as i32);
+                    // TODO: wrap around if s.0.x >= width of drawing
+                    // TODO: wrap around if s.0.y >= height of drawing
                 }
             }
         }
