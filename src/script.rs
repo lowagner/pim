@@ -284,8 +284,9 @@ impl fmt::Display for Command {
             Command::UsingStrings(StringsFor::Concatenate) => write!(f, "cat"),
             Command::UsingTwoI64s(TwoI64sFor::Pan) => write!(f, "pan"),
             Command::UsingTwoI64s(TwoI64sFor::FrameResize) => write!(f, "f-resize"),
+            Command::UsingTwoI64s(TwoI64sFor::SelectionDelta) => write!(f, "s-delta"),
+            Command::UsingTwoI64s(TwoI64sFor::SelectionDeltaSymmetric) => write!(f, "s-delta2"),
             Command::UsingTwoI64s(TwoI64sFor::SelectionMove) => write!(f, "s-move"),
-            Command::UsingTwoI64s(TwoI64sFor::SelectionResize) => write!(f, "s-resize"),
             Command::PaletteColor => write!(f, "pc"),
             Command::PaletteAddColor => write!(f, "p-add"),
             Command::PaletteAddGradient => write!(f, "p-gradient"),
@@ -372,8 +373,9 @@ impl FromStr for Command {
             "cat" => Ok(Command::UsingStrings(StringsFor::Concatenate)),
             "pan" => Ok(Command::UsingTwoI64s(TwoI64sFor::Pan)),
             "f-resize" => Ok(Command::UsingTwoI64s(TwoI64sFor::FrameResize)),
+            "s-delta" => Ok(Command::UsingTwoI64s(TwoI64sFor::SelectionDelta)),
+            "s-delta2" => Ok(Command::UsingTwoI64s(TwoI64sFor::SelectionDeltaSymmetric)),
             "s-move" => Ok(Command::UsingTwoI64s(TwoI64sFor::SelectionMove)),
-            "s-resize" => Ok(Command::UsingTwoI64s(TwoI64sFor::SelectionResize)),
             "pc" => Ok(Command::PaletteColor),
             "p-add" => Ok(Command::PaletteAddColor),
             "p-gradient" => Ok(Command::PaletteAddGradient),
@@ -461,10 +463,14 @@ pub enum TwoI64sFor {
     /// it crops the frames to content.  Returns the number of pixels in one frame, i.e.,
     /// width * height, from *before* the operation.
     FrameResize,
+    /// Expand (or shrink) the selection (i.e., for Visual mode), by deltas based on $0 and $1.
+    /// Only moves the right/bottom sides of the selection box.
+    SelectionDelta,
+    /// Expand (or shrink) the selection in a symmetric way via $0 (width) and $1 (height).
+    SelectionDeltaSymmetric,
     /// Move the selection (i.e., for Visual mode).
     SelectionMove,
-    /// Resize the selection (i.e., for Visual mode), by deltas based on $0 and $1.
-    SelectionResize,
+    // TODO: add SelectionResize that does absolute values
 }
 
 /*
@@ -1822,14 +1828,19 @@ impl Variables {
             e.g., `$$ 12 34` to set to 12 pixels wide and 34 pixels high",
         );
         variables.add_built_in(
+            Command::UsingTwoI64s(TwoI64sFor::SelectionDelta),
+            "expand or shrink the selection box by ($0, $1) with defaults of 0, \
+            e.g., `$$ 5 -3` to increase 5 in width and decrease 3 in height",
+        );
+        variables.add_built_in(
+            Command::UsingTwoI64s(TwoI64sFor::SelectionDeltaSymmetric),
+            "expand or shrink the selection box in a symmetric way by 2*($0, $1) with defaults of 0, \
+            e.g., `$$ -4 +11` to shrink by 8 in width and expand by 22 in height",
+        );
+        variables.add_built_in(
             Command::UsingTwoI64s(TwoI64sFor::SelectionMove),
             "moves the selection box by ($0, $1) with defaults of 0, \
             e.g., `$$ 7 -9` to move +7 in X and -9 in Y",
-        );
-        variables.add_built_in(
-            Command::UsingTwoI64s(TwoI64sFor::SelectionResize),
-            "deltas the selection box size by ($0, $1) with defaults of 0, \
-            e.g., `$$ 5 -3` to increase 5 in width and decrease 3 in height",
         );
         variables.add_built_in(
             Command::PaletteColor,

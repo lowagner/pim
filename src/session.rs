@@ -2844,7 +2844,6 @@ impl Session {
                 }
             }
             Cmd::SelectionExpand => self.expand_selection(),
-            // TODO: Continue here!
             Cmd::SelectionOffset(mut x, mut y) => {
                 if let Some(s) = &mut self.selection {
                     let r = s.abs().bounds();
@@ -2862,6 +2861,7 @@ impl Session {
                     }
                 }
             }
+            // TODO: Continue here!
             Cmd::SelectionJump(dir) => {
                 // TODO: Test this across layers.
                 let v = self.active_view();
@@ -3607,14 +3607,28 @@ impl Session {
                 }
                 return Ok(Argument::I64(old_width * old_height));
             }
+            TwoI64sFor::SelectionDelta => {
+                if let Some(ref mut s) = self.selection {
+                    s.resize(x as i32, y as i32);
+                }
+            }
+            TwoI64sFor::SelectionDeltaSymmetric => {
+                if let Some(s) = &mut self.selection {
+                    let mut x = x as i32;
+                    let mut y = y as i32;
+                    let r = s.abs().bounds();
+                    if r.width() <= 2 && x < 0 {
+                        x = 0;
+                    }
+                    if r.height() <= 2 && y < 0 {
+                        y = 0;
+                    }
+                    *s = Selection::from(s.bounds().expand(x, y, x, y));
+                }
+            }
             TwoI64sFor::SelectionMove => {
                 if let Some(ref mut s) = self.selection {
                     s.translate(x as i32, y as i32);
-                }
-            }
-            TwoI64sFor::SelectionResize => {
-                if let Some(ref mut s) = self.selection {
-                    s.resize(x as i32, y as i32);
                 }
             }
         }
