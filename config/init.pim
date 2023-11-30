@@ -41,6 +41,8 @@ map         <backspace>   :f/remove                                 --  Remove a
 map/normal  h             :f/prev                                   --  Navigate to previous frame
 map/normal  l             :f/next                                   --  Navigate to next frame
 
+-- TODO: map/visual <delete> :selection/erase
+
 map/visual  j             :selection/move    0 -1
 map/visual  k             :selection/move    0  1
 map/visual  h             :selection/move   -1  0

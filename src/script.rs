@@ -276,6 +276,7 @@ impl fmt::Display for Command {
             Command::WithoutArguments(ZeroArgumentsFor::SelectionExpand) => write!(f, "s-expand"),
             Command::WithoutArguments(ZeroArgumentsFor::SelectionErase) => write!(f, "erase"),
             Command::WithoutArguments(ZeroArgumentsFor::SelectionCopy) => write!(f, "copy"),
+            Command::WithoutArguments(ZeroArgumentsFor::SelectionCut) => write!(f, "cut"),
             Command::WithoutArguments(ZeroArgumentsFor::SelectionPaste) => write!(f, "paste"),
             Command::WithoutArguments(ZeroArgumentsFor::SelectionMirrorX) => write!(f, "mirrorx"),
             Command::WithoutArguments(ZeroArgumentsFor::SelectionMirrorY) => write!(f, "mirrory"),
@@ -370,6 +371,7 @@ impl FromStr for Command {
             "s-expand" => Ok(Command::WithoutArguments(ZeroArgumentsFor::SelectionExpand)),
             "erase" => Ok(Command::WithoutArguments(ZeroArgumentsFor::SelectionErase)),
             "copy" => Ok(Command::WithoutArguments(ZeroArgumentsFor::SelectionCopy)),
+            "cut" => Ok(Command::WithoutArguments(ZeroArgumentsFor::SelectionCut)),
             "paste" => Ok(Command::WithoutArguments(ZeroArgumentsFor::SelectionPaste)),
             "mirrorx" => Ok(Command::WithoutArguments(
                 ZeroArgumentsFor::SelectionMirrorX,
@@ -433,7 +435,6 @@ pub enum Map {
 pub enum ZeroArgumentsFor {
     // TODO: move PaletteSort here
     // TODO: move PaletteClear here
-    // TODO: move MouseX/Y here
     // TODO: BrushReset,
     /// Resets settings.
     Reset,
@@ -443,6 +444,9 @@ pub enum ZeroArgumentsFor {
     SelectionErase,
     /// Copies what is in the selection to the selection clipboard.
     SelectionCopy,
+    /// Copies what is in the selection to the selection clipboard
+    /// and erases what was there.
+    SelectionCut,
     /// Pastes what is in the selection clipboard.
     SelectionPaste,
     /// Pastes what is in the selection clipboard flipped horizontally.
@@ -1352,14 +1356,16 @@ macro_rules! script_runner {
                         self.script_line(x0, y0, x1, y1, color)?;
                         Ok(Argument::Null)
                     }
-                    // TODO: these could probably get moved into I64Settings.
-                    //       they would just have errors when trying to assign.
                     Command::MouseX => {
                         let coords = self.get_active_view_mouse_coords();
+                        // TODO: do something fun with Argument 0 if it's an I64 -- e.g., add a random
+                        // offset from -I64 to I64
                         Ok(Argument::I64(coords.point.x as i64))
                     }
                     Command::MouseY => {
                         let coords = self.get_active_view_mouse_coords();
+                        // TODO: do something fun with Argument 0 if it's an I64 -- e.g., add a random
+                        // offset from -I64 to I64
                         Ok(Argument::I64(coords.point.y as i64))
                     }
                     Command::Write => {
@@ -1812,6 +1818,10 @@ impl Variables {
             "`$$` copies the selection",
         );
         variables.add_built_in(
+            Command::WithoutArguments(ZeroArgumentsFor::SelectionCut),
+            "`$$` copies the selection and clears the area",
+        );
+        variables.add_built_in(
             Command::WithoutArguments(ZeroArgumentsFor::SelectionPaste),
             "`$$` pastes what was copied in a previous selection",
         );
@@ -2034,6 +2044,7 @@ impl Variables {
         assert_ok!(variables.set("fh".to_string(), Variable::Alias("f-height".to_string())));
         assert_ok!(variables.set("s-erase".to_string(), Variable::Alias("erase".to_string())));
         assert_ok!(variables.set("s-copy".to_string(), Variable::Alias("copy".to_string())));
+        assert_ok!(variables.set("s-cut".to_string(), Variable::Alias("cut".to_string())));
         assert_ok!(variables.set("s-yank".to_string(), Variable::Alias("copy".to_string())));
         assert_ok!(variables.set("yank".to_string(), Variable::Alias("copy".to_string())));
         assert_ok!(variables.set("s-paste".to_string(), Variable::Alias("paste".to_string())));

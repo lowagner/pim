@@ -1573,6 +1573,8 @@ impl Session {
                 // `view.save_gif` would work because View derefs the inner Resource,
                 // but `view.resource.save_gif` makes it clear that `view.animation.delay`
                 // isn't available in the resource itself, so we need to supply it.
+                // TODO: maybe just pass in `view.animation` so we have access to delay
+                //       as well as animation.len()
                 view.resource
                     .save_gif(path, view.animation.delay, &palette, scale)?
             }
@@ -2974,7 +2976,6 @@ impl Session {
             Cmd::SelectionFlip(dir) => {
                 self.flip_selection(dir);
             }
-            // TODO: Continue here!
             Cmd::SelectionCut => {
                 // To mimick the behavior of `vi`, we yank the selection
                 // before deleting it.
@@ -2982,6 +2983,7 @@ impl Session {
                     self.command(Cmd::SelectionErase);
                 }
             }
+            // TODO: Continue here!
             Cmd::SelectionFill(color) => {
                 if let Some(s) = self.selection {
                     self.effects
@@ -3559,6 +3561,11 @@ impl Session {
             }
             ZeroArgumentsFor::SelectionCopy => {
                 self.yank_selection();
+            }
+            ZeroArgumentsFor::SelectionCut => {
+                if self.yank_selection().is_some() {
+                    self.erase_selection();
+                }
             }
             ZeroArgumentsFor::SelectionPaste => {
                 self.paste_selection();
