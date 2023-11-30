@@ -1735,8 +1735,23 @@ impl Session {
         }
     }
 
-    /// Yank the selection.
+    fn paste_selection(&mut self) -> Option<Rect<i32>> {
+        if let (Mode::Visual(VisualState::Pasting), Some(s)) = (self.mode, self.selection) {
+            let bounds = s.abs().bounds();
+            self.active_view_mut().paste(bounds);
+            Some(bounds)
+        } else {
+            // TODO: if there is a previous copied selection, we can paste even if we're not in visual mode
+            //       e.g., paste to mouse cursor.
+            None
+        }
+    }
+
     fn yank_selection(&mut self) -> Option<Rect<i32>> {
+        // TODO: copy the yanked pixels into their own buffer.
+        //       use that buffer when pasting.
+        // TODO: longer term, keep track of last Z yanks (e.g., Z = 10, maybe make it a setting),
+        //       allow pasting from any of these.
         if let (Mode::Visual(VisualState::Selecting { .. }), Some(s)) = (self.mode, self.selection)
         {
             let v = self.active_view_mut();
@@ -2876,7 +2891,6 @@ impl Session {
                     }
                 }
             }
-            // TODO: Continue here!
             Cmd::SelectionPaste => {
                 if let (Mode::Visual(VisualState::Pasting), Some(s)) = (self.mode, self.selection) {
                     self.active_view_mut().paste(s.abs().bounds());
@@ -2884,6 +2898,7 @@ impl Session {
                     // TODO: Enter paste mode?
                 }
             }
+            // TODO: Continue here!
             Cmd::SelectionYank => {
                 self.yank_selection();
             }
@@ -3494,6 +3509,9 @@ impl Session {
 
     pub fn script_zero(&mut self, for_what: ZeroArgumentsFor) -> ArgumentResult {
         match for_what {
+            ZeroArgumentsFor::Paste => {
+                self.paste_selection();
+            }
             ZeroArgumentsFor::Reset => {
                 if let Err(e) = self.reset() {
                     self.message(format!("Error: {}", e), MessageType::Error);

@@ -343,7 +343,7 @@ impl<T> Rect<T> {
         self.y2 > other.y1 && self.y1 < other.y2 && self.x1 < other.x2 && self.x2 > other.x1
     }
 
-    /// Return the absolute rectangle.
+    /// Returns a rectangle in standard form with x1 <= x2 and y1 <= y2.
     ///
     /// # Examples
     ///
@@ -356,6 +356,7 @@ impl<T> Rect<T> {
     /// let r = Rect::new(-1, -1, 1, 1).abs();
     /// assert_eq!(r, Rect::new(-1, -1, 1, 1));
     /// ```
+    // TODO: rename to `standard_form`
     pub fn abs(&self) -> Rect<T>
     where
         T: Ord + Copy,

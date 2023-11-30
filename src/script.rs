@@ -272,6 +272,7 @@ impl fmt::Display for Command {
             Command::I64Setting(I64Setting::FrameHeight) => write!(f, "f-height"),
             Command::I64Setting(I64Setting::ImageSplit) => write!(f, "split"),
             Command::I64Setting(I64Setting::History) => write!(f, "history"),
+            Command::WithoutArguments(ZeroArgumentsFor::Paste) => write!(f, "paste"),
             Command::WithoutArguments(ZeroArgumentsFor::Reset) => write!(f, "reset"),
             Command::WithoutArguments(ZeroArgumentsFor::SelectionExpand) => write!(f, "s-expand"),
             Command::UsingOptionalI64(OptionalI64For::FrameAdd) => write!(f, "fa"),
@@ -361,6 +362,7 @@ impl FromStr for Command {
             "f-height" => Ok(Command::I64Setting(I64Setting::FrameHeight)),
             "split" => Ok(Command::I64Setting(I64Setting::ImageSplit)),
             "history" => Ok(Command::I64Setting(I64Setting::History)),
+            "paste" => Ok(Command::WithoutArguments(ZeroArgumentsFor::Paste)),
             "reset" => Ok(Command::WithoutArguments(ZeroArgumentsFor::Reset)),
             "s-expand" => Ok(Command::WithoutArguments(ZeroArgumentsFor::SelectionExpand)),
             "fa" => Ok(Command::UsingOptionalI64(OptionalI64For::FrameAdd)),
@@ -421,8 +423,11 @@ pub enum ZeroArgumentsFor {
     // TODO: move PaletteClear here
     // TODO: move MouseX/Y here
     // TODO: BrushReset,
+    /// Pastes what is in the selection clipboard.
+    Paste,
     /// Resets settings.
     Reset,
+    /// Expands the selection to the encompassing frame(s).
     SelectionExpand,
 }
 
@@ -1770,6 +1775,10 @@ impl Variables {
             e.g., `$$` get the current ID which can be used to restore it later.",
         );
         variables.add_built_in(
+            Command::WithoutArguments(ZeroArgumentsFor::Paste),
+            "`$$` pastes what was copied in a previous selection",
+        );
+        variables.add_built_in(
             Command::WithoutArguments(ZeroArgumentsFor::Reset),
             "`$$` resets all settings",
         );
@@ -1988,6 +1997,14 @@ impl Variables {
         assert_ok!(variables.set("fh".to_string(), Variable::Alias("f-height".to_string())));
         assert_ok!(variables.set("slice".to_string(), Variable::Alias("split".to_string())));
         assert_ok!(variables.set("edit".to_string(), Variable::Alias("e".to_string())));
+        assert_ok!(variables.set(
+            "s-symdelta".to_string(),
+            Variable::Alias("s-delta2".to_string())
+        ));
+        assert_ok!(variables.set(
+            "s-deltasym".to_string(),
+            Variable::Alias("s-delta2".to_string())
+        ));
         assert_ok!(variables.set(
             "merge".to_string(),
             Variable::Const(Argument::Script(Script {
