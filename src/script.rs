@@ -276,6 +276,8 @@ impl fmt::Display for Command {
             Command::WithoutArguments(ZeroArgumentsFor::SelectionExpand) => write!(f, "s-expand"),
             Command::WithoutArguments(ZeroArgumentsFor::SelectionCopy) => write!(f, "copy"),
             Command::WithoutArguments(ZeroArgumentsFor::SelectionPaste) => write!(f, "paste"),
+            Command::WithoutArguments(ZeroArgumentsFor::SelectionMirrorX) => write!(f, "mirrorx"),
+            Command::WithoutArguments(ZeroArgumentsFor::SelectionMirrorY) => write!(f, "mirrory"),
             Command::UsingOptionalI64(OptionalI64For::FrameAdd) => write!(f, "fa"),
             Command::UsingOptionalI64(OptionalI64For::FrameClone) => write!(f, "fc"),
             Command::UsingOptionalI64(OptionalI64For::FrameRemove) => write!(f, "fr"),
@@ -367,6 +369,12 @@ impl FromStr for Command {
             "s-expand" => Ok(Command::WithoutArguments(ZeroArgumentsFor::SelectionExpand)),
             "copy" => Ok(Command::WithoutArguments(ZeroArgumentsFor::SelectionCopy)),
             "paste" => Ok(Command::WithoutArguments(ZeroArgumentsFor::SelectionPaste)),
+            "mirrorx" => Ok(Command::WithoutArguments(
+                ZeroArgumentsFor::SelectionMirrorX,
+            )),
+            "mirrory" => Ok(Command::WithoutArguments(
+                ZeroArgumentsFor::SelectionMirrorY,
+            )),
             "fa" => Ok(Command::UsingOptionalI64(OptionalI64For::FrameAdd)),
             "fc" => Ok(Command::UsingOptionalI64(OptionalI64For::FrameClone)),
             "fr" => Ok(Command::UsingOptionalI64(OptionalI64For::FrameRemove)),
@@ -433,6 +441,11 @@ pub enum ZeroArgumentsFor {
     SelectionCopy,
     /// Pastes what is in the selection clipboard.
     SelectionPaste,
+    /// Pastes what is in the selection clipboard flipped horizontally.
+    SelectionMirrorX,
+    /// Pastes what is in the selection clipboard flipped vertically.
+    SelectionMirrorY,
+    // TODO: SelectionSwap (pastes what was in the selection clipboard and moves what was in the current selection into the clipboard)
 }
 
 #[derive(Eq, Hash, PartialEq, Debug, Clone, Copy, EnumIter)]
@@ -1795,6 +1808,14 @@ impl Variables {
             "`$$` pastes what was copied in a previous selection",
         );
         variables.add_built_in(
+            Command::WithoutArguments(ZeroArgumentsFor::SelectionMirrorX),
+            "`$$` pastes a horizontally flipped version of the clipboard selection",
+        );
+        variables.add_built_in(
+            Command::WithoutArguments(ZeroArgumentsFor::SelectionMirrorY),
+            "`$$` pastes a vertically flipped version of the clipboard selection",
+        );
+        variables.add_built_in(
             Command::UsingOptionalI64(OptionalI64For::FrameAdd),
             "adds a blank frame after index $0, or the current frame if $0 is null, \
             e.g., `$$ -1` to add a frame at the end",
@@ -2007,6 +2028,10 @@ impl Variables {
         assert_ok!(variables.set("s-yank".to_string(), Variable::Alias("copy".to_string())));
         assert_ok!(variables.set("yank".to_string(), Variable::Alias("copy".to_string())));
         assert_ok!(variables.set("s-paste".to_string(), Variable::Alias("paste".to_string())));
+        assert_ok!(variables.set("s-mirrorx".to_string(), Variable::Alias("mirrorx".to_string())));
+        assert_ok!(variables.set("s-mirrory".to_string(), Variable::Alias("mirrory".to_string())));
+        assert_ok!(variables.set("s-flipx".to_string(), Variable::Alias("mirrorx".to_string())));
+        assert_ok!(variables.set("s-flipy".to_string(), Variable::Alias("mirrory".to_string())));
         assert_ok!(variables.set("slice".to_string(), Variable::Alias("split".to_string())));
         assert_ok!(variables.set("edit".to_string(), Variable::Alias("e".to_string())));
         assert_ok!(variables.set(

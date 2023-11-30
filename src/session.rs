@@ -2,7 +2,7 @@
 //! Session
 use crate::autocomplete::FileCompleter;
 use crate::brush::{self, Brush, BrushState};
-use crate::cmd::{self, Cmd, CommandLine, KeyMapping, Op, Value};
+use crate::cmd::{self, Axis, Cmd, CommandLine, KeyMapping, Op, Value};
 use crate::color;
 use crate::data;
 use crate::event::{Event, TimedEvent};
@@ -1735,15 +1735,32 @@ impl Session {
         }
     }
 
-    fn paste_selection(&mut self) -> Option<Rect<i32>> {
-        if let (Mode::Visual(VisualState::Pasting), Some(s)) = (self.mode, self.selection) {
-            let bounds = s.abs().bounds();
-            self.active_view_mut().paste(bounds);
-            Some(bounds)
+    fn expand_selection(&mut self) {
+        let v = self.active_view();
+        let (fw, fh) = (v.fw as i32, v.fh as i32);
+        let (vw, vh) = (v.width() as i32, v.fh as i32);
+
+        if let Some(ref mut selection) = self.selection {
+            let r = Rect::origin(vw, vh);
+            let s = selection.bounds();
+            let min = s.min();
+            let max = s.max();
+
+            // If the selection is within the view rectangle, expand it,
+            // otherwise do nothing.
+            if r.contains(min) && r.contains(max.map(|n| n - 1)) {
+                let x1 = if min.x % fw == 0 {
+                    min.x - fw
+                } else {
+                    min.x - min.x % fw
+                };
+                let x2 = max.x + (fw - max.x % fw);
+                let y2 = fh;
+
+                *selection = Selection::from(Rect::new(x1, 0, x2, y2).intersection(r));
+            }
         } else {
-            // TODO: if there is a previous copied selection, we can paste even if we're not in visual mode
-            //       e.g., paste to mouse cursor.
-            None
+            self.selection = Some(Selection::new(0, 0, fw, fh));
         }
     }
 
@@ -1769,6 +1786,44 @@ impl Session {
             }
         }
         None
+    }
+
+    fn paste_selection(&mut self) -> Option<Rect<i32>> {
+        if let (Mode::Visual(VisualState::Pasting), Some(s)) = (self.mode, self.selection) {
+            let bounds = s.abs().bounds();
+            self.active_view_mut().paste(bounds);
+            Some(bounds)
+        } else {
+            // TODO: if there is a previous copied selection, we can paste even if we're not in visual mode
+            //       e.g., paste to mouse cursor.
+            None
+        }
+    }
+
+    fn flip_selection(&mut self, axis: Axis) {
+        if let (Mode::Visual(VisualState::Selecting { .. }), Some(s)) = (self.mode, self.selection)
+        {
+            let v = self.active_view_mut();
+            let s = s.abs().bounds();
+
+            if s.intersects(v.layer_bounds()) {
+                let s = s.intersection(v.layer_bounds());
+
+                // The flip operation works by copying the flipped image into
+                // the paste buffer, and pasting.
+                v.flip(s, axis);
+                v.paste(s);
+
+                self.selection = Some(Selection::from(s));
+                self.switch_mode(Mode::Visual(VisualState::Pasting));
+            }
+            // Note that the effects generated here will be processed *before* the
+            // view operations.
+            // TODO: switch to self.erase_selection
+            self.command(Cmd::SelectionErase);
+            // TODO: i think we can just `switch_mode` here.
+            self.toggle_mode(Mode::Visual(VisualState::Selecting { dragging: false }));
+        }
     }
 
     fn undo(&mut self, id: ViewId) {
@@ -2901,33 +2956,10 @@ impl Session {
             Cmd::SelectionYank => {
                 self.yank_selection();
             }
-            // TODO: Continue here!
             Cmd::SelectionFlip(dir) => {
-                if let (Mode::Visual(VisualState::Selecting { .. }), Some(s)) =
-                    (self.mode, self.selection)
-                {
-                    let v = self.active_view_mut();
-                    let s = s.abs().bounds();
-
-                    if s.intersects(v.layer_bounds()) {
-                        let s = s.intersection(v.layer_bounds());
-
-                        // The flip operation works by copying the flipped image into
-                        // the paste buffer, and pasting.
-                        v.flip(s, dir);
-                        v.paste(s);
-
-                        self.selection = Some(Selection::from(s));
-                        self.switch_mode(Mode::Visual(VisualState::Pasting));
-                    }
-                    // Note that the effects generated here will be processed *before* the
-                    // view operations.
-                    self.command(Cmd::SelectionErase);
-                    self.command(Cmd::Mode(Mode::Visual(VisualState::Selecting {
-                        dragging: false,
-                    })));
-                }
+                self.flip_selection(dir);
             }
+            // TODO: Continue here!
             Cmd::SelectionCut => {
                 // To mimick the behavior of `vi`, we yank the selection
                 // before deleting it.
@@ -3525,37 +3557,14 @@ impl Session {
             ZeroArgumentsFor::SelectionPaste => {
                 self.paste_selection();
             }
+            ZeroArgumentsFor::SelectionMirrorX => {
+                self.flip_selection(Axis::Horizontal);
+            }
+            ZeroArgumentsFor::SelectionMirrorY => {
+                self.flip_selection(Axis::Vertical);
+            }
         }
         Ok(Argument::Null)
-    }
-
-    fn expand_selection(&mut self) {
-        let v = self.active_view();
-        let (fw, fh) = (v.fw as i32, v.fh as i32);
-        let (vw, vh) = (v.width() as i32, v.fh as i32);
-
-        if let Some(ref mut selection) = self.selection {
-            let r = Rect::origin(vw, vh);
-            let s = selection.bounds();
-            let min = s.min();
-            let max = s.max();
-
-            // If the selection is within the view rectangle, expand it,
-            // otherwise do nothing.
-            if r.contains(min) && r.contains(max.map(|n| n - 1)) {
-                let x1 = if min.x % fw == 0 {
-                    min.x - fw
-                } else {
-                    min.x - min.x % fw
-                };
-                let x2 = max.x + (fw - max.x % fw);
-                let y2 = fh;
-
-                *selection = Selection::from(Rect::new(x1, 0, x2, y2).intersection(r));
-            }
-        } else {
-            self.selection = Some(Selection::new(0, 0, fw, fh));
-        }
     }
 
     pub fn script_optional_i64(
