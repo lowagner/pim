@@ -18,7 +18,7 @@ chrono = "0.4.31"
 claim = "0.5.0"
 glfw = { version = "0.41.0", optional = true }
 raw-window-handle = { version = "0.3.4", optional = true }
-snap = "0.2.5"
+snap = "1.1.0"
 log = { version = "0.4.20", features = ["std"] }
 directories = "2.0.2"
 seahash = "4.1.0"

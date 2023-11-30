@@ -188,7 +188,10 @@ impl ViewResource {
 
         let (snapshot, pixels) = self.layer.current_snapshot();
         let extent = snapshot.extent;
+        // TODO: extent.nframes is not accurately reflecting view.animation.len(),
+        //       at least not when we do a `e asdf.png` then `slice 2` (or split)
         let nframes = extent.nframes;
+        print!("nframes = {}\n", nframes);
 
         // Create a color palette for the gif, where the zero index is used
         // for transparency.
@@ -256,6 +259,7 @@ pub struct LayerResource {
     /// Non empty list of view snapshots.
     snapshots: NonEmpty<Snapshot>,
     /// Current layer snapshot.
+    // TODO: rename to `snapshot_id` or `snapshot_index`, maybe with `current` prefix.
     snapshot: usize,
     /// Current layer pixels. We keep a separate decompressed
     /// cache of the view pixels for performance reasons.
@@ -445,13 +449,13 @@ pub struct Compressed<T>(T);
 
 impl Compressed<Box<[u8]>> {
     fn from(input: &[Rgba8]) -> snap::Result<Self> {
-        let mut enc = snap::Encoder::new();
+        let mut enc = snap::raw::Encoder::new();
         let bytes = util::align_u8(input);
         enc.compress_vec(bytes).map(|v| Self(v.into_boxed_slice()))
     }
 
     fn decompress(&self) -> snap::Result<Vec<u8>> {
-        let mut dec = snap::Decoder::new();
+        let mut dec = snap::raw::Decoder::new();
         dec.decompress_vec(&self.0)
     }
 }
