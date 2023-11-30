@@ -13,9 +13,9 @@ use crate::message::*;
 use crate::palette::*;
 use crate::platform::{self, InputState, Key, KeyboardInput, LogicalSize, ModifiersState};
 use crate::script::{
-    self, evaluate, Argument, ArgumentResult, Command, Evaluate, Get, Map, OptionalI64For, Quit,
-    Script, ScriptRunner, Serialize, StringsFor, TwoI64sFor, Variables, VoidResult,
-    ZeroArgumentsFor,
+    self, evaluate, Argument, ArgumentResult, Command, Evaluate, Get, Map, OptionalColorFor,
+    OptionalI64For, Quit, Script, ScriptRunner, Serialize, StringsFor, TwoI64sFor, Variables,
+    VoidResult, ZeroArgumentsFor,
 };
 use crate::script_runner;
 use crate::settings::*;
@@ -2983,7 +2983,6 @@ impl Session {
                     self.command(Cmd::SelectionErase);
                 }
             }
-            // TODO: Continue here!
             Cmd::SelectionFill(color) => {
                 if let Some(s) = self.selection {
                     self.effects
@@ -2997,7 +2996,6 @@ impl Session {
                     self.active_view_mut().touch();
                 }
             }
-            // DONE - script.rs already has these.
             Cmd::SelectionErase => {
                 self.erase_selection();
             }
@@ -3608,6 +3606,29 @@ impl Session {
             }
         }
         Ok(())
+    }
+
+    pub fn script_optional_color(
+        &mut self,
+        for_what: OptionalColorFor,
+        optional_color: Option<Rgba8>,
+    ) -> ArgumentResult {
+        match for_what {
+            OptionalColorFor::SelectionClear => {
+                if let Some(s) = self.selection {
+                    self.effects
+                        .push(Effect::ViewPaintFinal(vec![Shape::Rectangle(
+                            s.abs().bounds().map(|n| n as f32),
+                            ZDepth::default(),
+                            Rotation::ZERO,
+                            Stroke::NONE,
+                            Fill::Solid(optional_color.unwrap_or(Rgba8::TRANSPARENT).into()),
+                        )]));
+                    self.active_view_mut().touch();
+                }
+            }
+        }
+        Ok(Argument::Null)
     }
 
     pub fn script_strings(&mut self, for_what: StringsFor, strings: Vec<String>) -> VoidResult {

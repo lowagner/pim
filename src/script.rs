@@ -138,8 +138,10 @@ pub enum Command {
     I64Setting(I64Setting),
     /// Commands that don't take any arguments.
     WithoutArguments(ZeroArgumentsFor),
-    /// Commands that take an optional i64 argument.
+    /// Commands that take an optional i64 argument (but aren't an I64Setting).
     UsingOptionalI64(OptionalI64For),
+    /// Commands which take an optional color argument (but aren't a ColorSetting).
+    UsingOptionalColor(OptionalColorFor),
     /// Commands that take multiple strings.
     UsingStrings(StringsFor),
     /// Commands that take two integers which will default to 0 if the arguments are Null.
@@ -285,6 +287,7 @@ impl fmt::Display for Command {
             Command::UsingOptionalI64(OptionalI64For::FrameRemove) => write!(f, "fr"),
             Command::UsingOptionalI64(OptionalI64For::Undo) => write!(f, "undo"),
             Command::UsingOptionalI64(OptionalI64For::Redo) => write!(f, "redo"),
+            Command::UsingOptionalColor(OptionalColorFor::SelectionClear) => write!(f, "clear"),
             Command::UsingStrings(StringsFor::Source) => write!(f, "source"),
             Command::UsingStrings(StringsFor::Edit) => write!(f, "e"),
             Command::UsingStrings(StringsFor::Concatenate) => write!(f, "cat"),
@@ -384,6 +387,9 @@ impl FromStr for Command {
             "fr" => Ok(Command::UsingOptionalI64(OptionalI64For::FrameRemove)),
             "undo" => Ok(Command::UsingOptionalI64(OptionalI64For::Undo)),
             "redo" => Ok(Command::UsingOptionalI64(OptionalI64For::Redo)),
+            "clear" => Ok(Command::UsingOptionalColor(
+                OptionalColorFor::SelectionClear,
+            )),
             "source" => Ok(Command::UsingStrings(StringsFor::Source)),
             "e" => Ok(Command::UsingStrings(StringsFor::Edit)),
             "cat" => Ok(Command::UsingStrings(StringsFor::Concatenate)),
@@ -441,6 +447,7 @@ pub enum ZeroArgumentsFor {
     /// Expands the selection to the encompassing frame(s).
     SelectionExpand,
     /// Erases what's in the selection.
+    // TODO: i think we can delete this and just use selection-clear.
     SelectionErase,
     /// Copies what is in the selection to the selection clipboard.
     SelectionCopy,
@@ -469,6 +476,13 @@ pub enum OptionalI64For {
     /// Repeats redo the specified number of times, or 1.
     Redo,
     // TODO: Colors, e.g., Red, etc. with 0 to 10
+}
+
+#[derive(Eq, Hash, PartialEq, Debug, Clone, Copy, EnumIter)]
+pub enum OptionalColorFor {
+    /// Uses an optional color at $0 (defaulting to transparent) to
+    /// erase everything in the selection and replace all pixels with.
+    SelectionClear,
 }
 
 #[derive(Eq, Hash, PartialEq, Debug, Clone, Copy, EnumIter)]
@@ -1179,8 +1193,14 @@ macro_rules! script_runner {
                         let optional_i64 = self
                             .script_evaluate(&script_stack, Evaluate::Index(0))?
                             .get_optional_i64("for optional i64 command")?;
+                        // TODO: return ArgumentResult here:
                         self.script_optional_i64(*for_what, optional_i64)?;
                         Ok(Argument::Null)
+                    }
+                    Command::UsingOptionalColor(for_what) => {
+                        let optional = self.script_evaluate(&script_stack, Evaluate::Index(0))?
+                            .get_optional_color(&self.palette)?;
+                        self.script_optional_color(*for_what, optional)
                     }
                     Command::UsingStrings(strings_for) => {
                         let mut strings = vec![];
@@ -1859,6 +1879,12 @@ impl Variables {
             e.g., `$$ 2` to redo two times",
         );
         variables.add_built_in(
+            Command::UsingOptionalColor(OptionalColorFor::SelectionClear),
+            "uses an optional color at $0 (defaulting to transparent) to \
+            erase everything in the selection and to replace all pixels, \
+            e.g., `$$ #123` to fill with color #123",
+        );
+        variables.add_built_in(
             Command::UsingStrings(StringsFor::Source),
             "runs all commands in the files specified by the arguments, \
             e.g., `$$ 'hi.pim'` to execute 'hi.pim'",
@@ -2042,6 +2068,7 @@ impl Variables {
         assert_ok!(variables.set("f-remove".to_string(), Variable::Alias("fr".to_string())));
         assert_ok!(variables.set("fw".to_string(), Variable::Alias("f-width".to_string())));
         assert_ok!(variables.set("fh".to_string(), Variable::Alias("f-height".to_string())));
+        assert_ok!(variables.set("s-clear".to_string(), Variable::Alias("clear".to_string())));
         assert_ok!(variables.set("s-erase".to_string(), Variable::Alias("erase".to_string())));
         assert_ok!(variables.set("s-copy".to_string(), Variable::Alias("copy".to_string())));
         assert_ok!(variables.set("s-cut".to_string(), Variable::Alias("cut".to_string())));
@@ -2476,13 +2503,21 @@ mod test {
         pub fn script_optional_i64(
             &mut self,
             for_what: OptionalI64For,
-            optional_i64: Option<i64>,
+            optional: Option<i64>,
         ) -> VoidResult {
-            self.test_what_ran.push(WhatRan::Mocked(format!(
-                "{:?}{{{:?}}}",
-                for_what, optional_i64
-            )));
+            self.test_what_ran
+                .push(WhatRan::Mocked(format!("{:?}{{{:?}}}", for_what, optional)));
             Ok(())
+        }
+
+        pub fn script_optional_color(
+            &mut self,
+            for_what: OptionalColorFor,
+            optional: Option<Rgba8>,
+        ) -> ArgumentResult {
+            self.test_what_ran
+                .push(WhatRan::Mocked(format!("{:?}{{{:?}}}", for_what, optional)));
+            Ok(Argument::Null)
         }
 
         pub fn script_two_i64s(&mut self, for_what: TwoI64sFor, x: i64, y: i64) -> ArgumentResult {
@@ -4054,6 +4089,16 @@ mod test {
                 Err(format!("built-in `{}` is not reassignable", name))
             );
         }
+        for for_what in OptionalColorFor::iter() {
+            let name = format!("{}", Command::UsingOptionalColor(for_what));
+            assert_eq!(
+                variables.set(
+                    name.clone(),
+                    Variable::BuiltIn(Command::Odd, "should not override".to_string())
+                ),
+                Err(format!("built-in `{}` is not reassignable", name))
+            );
+        }
         for strings_for in StringsFor::iter() {
             let name = format!("{}", Command::UsingStrings(strings_for));
             assert_eq!(
@@ -4115,6 +4160,13 @@ mod test {
 
         for what_for in OptionalI64For::iter() {
             let command = Command::UsingOptionalI64(what_for);
+            let name = format!("{}", command);
+            let command_from_name = Command::from_str(&name).unwrap();
+            assert_eq!(command_from_name, command);
+        }
+
+        for what_for in OptionalColorFor::iter() {
+            let command = Command::UsingOptionalColor(what_for);
             let name = format!("{}", command);
             let command_from_name = Command::from_str(&name).unwrap();
             assert_eq!(command_from_name, command);
