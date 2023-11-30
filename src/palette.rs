@@ -7,7 +7,7 @@ use std::fs::File;
 use std::io::Write;
 
 pub struct Palette {
-    pub colors: ArrayVec<[Rgba8; 256]>,
+    pub colors: ArrayVec<Rgba8, 256>,
     pub hover: Option<Rgba8>,
     pub cellsize: f32,
     pub height: usize,

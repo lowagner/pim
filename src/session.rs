@@ -1699,7 +1699,7 @@ impl Session {
         }
     }
 
-    fn colors(&self) -> ArrayVec<[Rgba8; 256]> {
+    fn colors(&self) -> ArrayVec<Rgba8, 256> {
         let mut palette = self.palette.colors.clone();
 
         palette.push(self.fg);
