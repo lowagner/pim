@@ -274,6 +274,7 @@ impl fmt::Display for Command {
             Command::I64Setting(I64Setting::History) => write!(f, "history"),
             Command::WithoutArguments(ZeroArgumentsFor::Reset) => write!(f, "reset"),
             Command::WithoutArguments(ZeroArgumentsFor::SelectionExpand) => write!(f, "s-expand"),
+            Command::WithoutArguments(ZeroArgumentsFor::SelectionCopy) => write!(f, "copy"),
             Command::WithoutArguments(ZeroArgumentsFor::SelectionPaste) => write!(f, "paste"),
             Command::UsingOptionalI64(OptionalI64For::FrameAdd) => write!(f, "fa"),
             Command::UsingOptionalI64(OptionalI64For::FrameClone) => write!(f, "fc"),
@@ -364,6 +365,7 @@ impl FromStr for Command {
             "history" => Ok(Command::I64Setting(I64Setting::History)),
             "reset" => Ok(Command::WithoutArguments(ZeroArgumentsFor::Reset)),
             "s-expand" => Ok(Command::WithoutArguments(ZeroArgumentsFor::SelectionExpand)),
+            "copy" => Ok(Command::WithoutArguments(ZeroArgumentsFor::SelectionCopy)),
             "paste" => Ok(Command::WithoutArguments(ZeroArgumentsFor::SelectionPaste)),
             "fa" => Ok(Command::UsingOptionalI64(OptionalI64For::FrameAdd)),
             "fc" => Ok(Command::UsingOptionalI64(OptionalI64For::FrameClone)),
@@ -427,6 +429,8 @@ pub enum ZeroArgumentsFor {
     Reset,
     /// Expands the selection to the encompassing frame(s).
     SelectionExpand,
+    /// Copies what is in the selection to the selection clipboard.
+    SelectionCopy,
     /// Pastes what is in the selection clipboard.
     SelectionPaste,
 }
@@ -1783,6 +1787,10 @@ impl Variables {
             "`$$` expands selection to fill the overlapped frames",
         );
         variables.add_built_in(
+            Command::WithoutArguments(ZeroArgumentsFor::SelectionCopy),
+            "`$$` copies the selection",
+        );
+        variables.add_built_in(
             Command::WithoutArguments(ZeroArgumentsFor::SelectionPaste),
             "`$$` pastes what was copied in a previous selection",
         );
@@ -1995,6 +2003,9 @@ impl Variables {
         assert_ok!(variables.set("f-remove".to_string(), Variable::Alias("fr".to_string())));
         assert_ok!(variables.set("fw".to_string(), Variable::Alias("f-width".to_string())));
         assert_ok!(variables.set("fh".to_string(), Variable::Alias("f-height".to_string())));
+        assert_ok!(variables.set("s-copy".to_string(), Variable::Alias("copy".to_string())));
+        assert_ok!(variables.set("s-yank".to_string(), Variable::Alias("copy".to_string())));
+        assert_ok!(variables.set("yank".to_string(), Variable::Alias("copy".to_string())));
         assert_ok!(variables.set("s-paste".to_string(), Variable::Alias("paste".to_string())));
         assert_ok!(variables.set("slice".to_string(), Variable::Alias("split".to_string())));
         assert_ok!(variables.set("edit".to_string(), Variable::Alias("e".to_string())));

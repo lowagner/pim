@@ -2898,10 +2898,10 @@ impl Session {
                     // TODO: Enter paste mode?
                 }
             }
-            // TODO: Continue here!
             Cmd::SelectionYank => {
                 self.yank_selection();
             }
+            // TODO: Continue here!
             Cmd::SelectionFlip(dir) => {
                 if let (Mode::Visual(VisualState::Selecting { .. }), Some(s)) =
                     (self.mode, self.selection)
@@ -3518,6 +3518,9 @@ impl Session {
             }
             ZeroArgumentsFor::SelectionExpand => {
                 self.expand_selection();
+            }
+            ZeroArgumentsFor::SelectionCopy => {
+                self.yank_selection();
             }
             ZeroArgumentsFor::SelectionPaste => {
                 self.paste_selection();
