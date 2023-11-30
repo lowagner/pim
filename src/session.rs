@@ -1764,6 +1764,22 @@ impl Session {
         }
     }
 
+    fn erase_selection(&mut self) {
+        if let Some(s) = self.selection {
+            self.effects.extend_from_slice(&[
+                Effect::ViewBlendingChanged(Blending::Constant),
+                Effect::ViewPaintFinal(vec![Shape::Rectangle(
+                    s.abs().bounds().map(|n| n as f32),
+                    ZDepth::default(),
+                    Rotation::ZERO,
+                    Stroke::NONE,
+                    Fill::Solid(Rgba8::TRANSPARENT.into()),
+                )]),
+            ]);
+            self.active_view_mut().touch();
+        }
+    }
+
     fn yank_selection(&mut self) -> Option<Rect<i32>> {
         // TODO: copy the yanked pixels into their own buffer.
         //       use that buffer when pasting.
@@ -1819,8 +1835,7 @@ impl Session {
             }
             // Note that the effects generated here will be processed *before* the
             // view operations.
-            // TODO: switch to self.erase_selection
-            self.command(Cmd::SelectionErase);
+            self.erase_selection();
             // TODO: i think we can just `switch_mode` here.
             self.toggle_mode(Mode::Visual(VisualState::Selecting { dragging: false }));
         }
@@ -2980,22 +2995,10 @@ impl Session {
                     self.active_view_mut().touch();
                 }
             }
-            Cmd::SelectionErase => {
-                if let Some(s) = self.selection {
-                    self.effects.extend_from_slice(&[
-                        Effect::ViewBlendingChanged(Blending::Constant),
-                        Effect::ViewPaintFinal(vec![Shape::Rectangle(
-                            s.abs().bounds().map(|n| n as f32),
-                            ZDepth::default(),
-                            Rotation::ZERO,
-                            Stroke::NONE,
-                            Fill::Solid(Rgba8::TRANSPARENT.into()),
-                        )]),
-                    ]);
-                    self.active_view_mut().touch();
-                }
-            }
             // DONE - script.rs already has these.
+            Cmd::SelectionErase => {
+                self.erase_selection();
+            }
             Cmd::PaintLine(rgba, x1, y1, x2, y2) => {
                 let mut stroke = vec![];
                 Brush::line(Point2::new(x1, y1), Point2::new(x2, y2), &mut stroke);
@@ -3550,6 +3553,9 @@ impl Session {
             }
             ZeroArgumentsFor::SelectionExpand => {
                 self.expand_selection();
+            }
+            ZeroArgumentsFor::SelectionErase => {
+                self.erase_selection();
             }
             ZeroArgumentsFor::SelectionCopy => {
                 self.yank_selection();
