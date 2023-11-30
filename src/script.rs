@@ -272,9 +272,9 @@ impl fmt::Display for Command {
             Command::I64Setting(I64Setting::FrameHeight) => write!(f, "f-height"),
             Command::I64Setting(I64Setting::ImageSplit) => write!(f, "split"),
             Command::I64Setting(I64Setting::History) => write!(f, "history"),
-            Command::WithoutArguments(ZeroArgumentsFor::Paste) => write!(f, "paste"),
             Command::WithoutArguments(ZeroArgumentsFor::Reset) => write!(f, "reset"),
             Command::WithoutArguments(ZeroArgumentsFor::SelectionExpand) => write!(f, "s-expand"),
+            Command::WithoutArguments(ZeroArgumentsFor::SelectionPaste) => write!(f, "paste"),
             Command::UsingOptionalI64(OptionalI64For::FrameAdd) => write!(f, "fa"),
             Command::UsingOptionalI64(OptionalI64For::FrameClone) => write!(f, "fc"),
             Command::UsingOptionalI64(OptionalI64For::FrameRemove) => write!(f, "fr"),
@@ -362,9 +362,9 @@ impl FromStr for Command {
             "f-height" => Ok(Command::I64Setting(I64Setting::FrameHeight)),
             "split" => Ok(Command::I64Setting(I64Setting::ImageSplit)),
             "history" => Ok(Command::I64Setting(I64Setting::History)),
-            "paste" => Ok(Command::WithoutArguments(ZeroArgumentsFor::Paste)),
             "reset" => Ok(Command::WithoutArguments(ZeroArgumentsFor::Reset)),
             "s-expand" => Ok(Command::WithoutArguments(ZeroArgumentsFor::SelectionExpand)),
+            "paste" => Ok(Command::WithoutArguments(ZeroArgumentsFor::SelectionPaste)),
             "fa" => Ok(Command::UsingOptionalI64(OptionalI64For::FrameAdd)),
             "fc" => Ok(Command::UsingOptionalI64(OptionalI64For::FrameClone)),
             "fr" => Ok(Command::UsingOptionalI64(OptionalI64For::FrameRemove)),
@@ -423,12 +423,12 @@ pub enum ZeroArgumentsFor {
     // TODO: move PaletteClear here
     // TODO: move MouseX/Y here
     // TODO: BrushReset,
-    /// Pastes what is in the selection clipboard.
-    Paste,
     /// Resets settings.
     Reset,
     /// Expands the selection to the encompassing frame(s).
     SelectionExpand,
+    /// Pastes what is in the selection clipboard.
+    SelectionPaste,
 }
 
 #[derive(Eq, Hash, PartialEq, Debug, Clone, Copy, EnumIter)]
@@ -1775,16 +1775,16 @@ impl Variables {
             e.g., `$$` get the current ID which can be used to restore it later.",
         );
         variables.add_built_in(
-            Command::WithoutArguments(ZeroArgumentsFor::Paste),
-            "`$$` pastes what was copied in a previous selection",
-        );
-        variables.add_built_in(
             Command::WithoutArguments(ZeroArgumentsFor::Reset),
             "`$$` resets all settings",
         );
         variables.add_built_in(
             Command::WithoutArguments(ZeroArgumentsFor::SelectionExpand),
             "`$$` expands selection to fill the overlapped frames",
+        );
+        variables.add_built_in(
+            Command::WithoutArguments(ZeroArgumentsFor::SelectionPaste),
+            "`$$` pastes what was copied in a previous selection",
         );
         variables.add_built_in(
             Command::UsingOptionalI64(OptionalI64For::FrameAdd),
@@ -1995,6 +1995,7 @@ impl Variables {
         assert_ok!(variables.set("f-remove".to_string(), Variable::Alias("fr".to_string())));
         assert_ok!(variables.set("fw".to_string(), Variable::Alias("f-width".to_string())));
         assert_ok!(variables.set("fh".to_string(), Variable::Alias("f-height".to_string())));
+        assert_ok!(variables.set("s-paste".to_string(), Variable::Alias("paste".to_string())));
         assert_ok!(variables.set("slice".to_string(), Variable::Alias("split".to_string())));
         assert_ok!(variables.set("edit".to_string(), Variable::Alias("e".to_string())));
         assert_ok!(variables.set(

@@ -3509,9 +3509,6 @@ impl Session {
 
     pub fn script_zero(&mut self, for_what: ZeroArgumentsFor) -> ArgumentResult {
         match for_what {
-            ZeroArgumentsFor::Paste => {
-                self.paste_selection();
-            }
             ZeroArgumentsFor::Reset => {
                 if let Err(e) = self.reset() {
                     self.message(format!("Error: {}", e), MessageType::Error);
@@ -3519,7 +3516,12 @@ impl Session {
                 }
                 self.message("Settings reset to default values", MessageType::Okay);
             }
-            ZeroArgumentsFor::SelectionExpand => self.expand_selection(),
+            ZeroArgumentsFor::SelectionExpand => {
+                self.expand_selection();
+            }
+            ZeroArgumentsFor::SelectionPaste => {
+                self.paste_selection();
+            }
         }
         Ok(Argument::Null)
     }
