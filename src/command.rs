@@ -495,7 +495,7 @@ pub struct CommandLine {
     /// Input cursor position.
     pub cursor: usize,
     /// Parser.
-    pub parser: Parser<Cmd>,
+    pub parser: Parser<Script>,
     /// Commands.
     pub commands: Commands,
     /// The current input string displayed to the user.
@@ -513,7 +513,7 @@ impl CommandLine {
         Self {
             input: String::with_capacity(Self::MAX_INPUT),
             cursor: 0,
-            parser: cmds.line_parser(),
+            parser: param<Script>(),
             commands: cmds,
             history: History::new(history_path, 1024),
             autocomplete: Autocomplete::new(CommandCompleter::new(cwd, extensions)),
@@ -526,7 +526,7 @@ impl CommandLine {
         self.autocomplete = Autocomplete::new(CommandCompleter::new(path, exts.as_slice()));
     }
 
-    pub fn parse(&self, input: &str) -> Result<Cmd, Error> {
+    pub fn parse(&self, input: &str) -> Result<Script, Error> {
         match self.parser.parse(input) {
             Ok((cmd, _)) => Ok(cmd),
             Err((err, _)) => Err(err),
@@ -1507,3 +1507,4 @@ mod test {
         );
     }
 }
+
