@@ -48,21 +48,6 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::time;
 
-/// Settings help string.
-// TODO: remove after migration to script
-pub const SETTINGS: &str = r#"
-SETTINGS
-
-debug             on/off             Debug mode
-checker           on/off             Alpha checker toggle
-scale             1,2,3,4            UI scale
-animation         on/off             View animation toggle
-animation/delay   1..1000            View animation delay (ms)
-background        #000000..#ffffff   Set background appearance to <color>
-grid              <d>                If nonzero, the Grid spacing, otherwise hides grid.
-grid/color        #000000..#ffffff   Grid color
-"#;
-
 #[derive(Copy, Clone, Debug)]
 enum InternalCommand {
     StopRecording,
@@ -403,64 +388,29 @@ impl KeyBindings {
 /// A dictionary used to store session settings.
 #[derive(Debug)]
 pub struct Settings {
-    map: HashMap<String, Value>,
-}
-
-impl Settings {
-    const DEPRECATED: &'static [&'static str] = &["vsync"];
-
-    /// Lookup a setting.
-    pub fn get(&self, setting: &str) -> Option<&Value> {
-        self.map.get(setting)
-    }
-
-    /// Set an existing setting to a new value. Returns `Err` if there is a type
-    /// mismatch or the setting isn't found. Otherwise, returns `Ok` with the
-    /// old value.
-    pub fn set(&mut self, k: &str, v: Value) -> Result<Value, Error> {
-        if let Some(current) = self.get(k) {
-            if std::mem::discriminant(&v) == std::mem::discriminant(current) {
-                return Ok(self.map.insert(k.to_string(), v).unwrap());
-            }
-            Err(format!(
-                "invalid value `{}` for `{}`, expected {}",
-                v,
-                k,
-                current.description()
-            ))
-        } else {
-            Err(format!("no such setting `{}`", k))
-        }
-    }
+    debug: bool,
+    uiBackground: Rgba8,
+    uiChecker: u32,
+    uiGrid: u32,
+    uiGridColor: Rgba8,
+    uiScalePercentage: u32,
+    animation: bool,
+    paletteHeight: u32,
 }
 
 impl Default for Settings {
     /// The default settings.
     fn default() -> Self {
         Self {
-            map: hashmap! {
-                "debug" => Value::Bool(false),
-                "checker" => Value::U32(0),
-                "background" => Value::Rgba8(color::TRANSPARENT),
-                "scale%" => Value::U32(100),
-                "animation" => Value::Bool(true),
-                "animation/delay" => Value::U32(160),
-
-                "grid" => Value::U32(0),
-                "grid/color" => Value::Rgba8(color::BLUE),
-
-                "p/height" => Value::U32(Session::PALETTE_HEIGHT)
-            },
+            debug: false,
+            uiBackground: Rgba8::TRANSPARENT,
+            uiChecker: 0,
+            uiGrid: 0,
+            uiGridColor: Rgba8::BLUE,
+            uiScalePercentage: 100,
+            animation: true,
+            paletteHeight: Session::PALETTE_HEIGHT,
         }
-    }
-}
-
-impl std::ops::Index<&str> for Settings {
-    type Output = Value;
-
-    fn index(&self, setting: &str) -> &Self::Output {
-        self.get(setting)
-            .expect(&format!("setting {} should exist", setting))
     }
 }
 
@@ -525,8 +475,6 @@ pub struct Session {
     /// The session's current settings.
     pub settings: Settings,
     /// Settings recently changed.
-    // TODO: why do we need this?  i think we can remove.
-    pub settings_changed: HashSet<String>,
 
     /// Views loaded in the session.
     pub views: ViewManager<ViewResource>,
@@ -628,7 +576,6 @@ impl Session {
             bg: color::BLACK,
             brush: Brush::default(),
             settings: Settings::default(),
-            settings_changed: HashSet::new(),
             views: ViewManager::new(),
             effects: Vec::new(),
             accumulator: time::Duration::from_secs(0),
@@ -722,7 +669,6 @@ impl Session {
         delta: time::Duration,
         avg_time: time::Duration,
     ) -> Vec<Effect> {
-        self.settings_changed.clear();
         self.avg_time = avg_time;
 
         if let Tool::Brush = self.tool {
@@ -1044,43 +990,6 @@ impl Session {
         } else {
             None
         };
-    }
-
-    /// Called when settings have been changed.
-    // TODO: remove me
-    fn setting_changed(&mut self, name: &str, old: Value, new: Value) {
-        debug!("set `{}`: {} -> {}", name, old, new);
-
-        self.settings_changed.insert(name.to_owned());
-
-        match name {
-            "p/height" => {
-                self.palette.height = new.to_u64() as usize;
-                self.center_palette();
-            }
-            "scale%" => {
-                let mut new_percentage = new.to_u64();
-                if new_percentage < 100 || new_percentage > 400 {
-                    self.message(
-                        format!(
-                            "ui/scale% should be between 100 and 400, got {}",
-                            new_percentage
-                        ),
-                        MessageType::Error,
-                    );
-                    new_percentage = 100;
-                    assert_ok!(self
-                        .settings
-                        .set("scale%", Value::U32(new_percentage as u32)));
-                }
-                // TODO: We need to recompute the cursor position here
-                // from the window coordinates. Currently, cursor position
-                // is stored only in `SessionCoords`, which would have
-                // to change.
-                self.rescale((old.to_u64() as f64) / 100.0, new_percentage as f64 / 100.0);
-            }
-            _ => {}
-        }
     }
 
     /// Toggle the session mode.
@@ -2678,8 +2587,8 @@ impl Session {
 
     pub fn get_color_setting(&self, setting: ColorSetting) -> Rgba8 {
         match setting {
-            ColorSetting::UiBackground => self.settings["background"].to_rgba8(),
-            ColorSetting::UiGrid => self.settings["grid/color"].to_rgba8(),
+            ColorSetting::UiBackground => self.settings.uiBackground,
+            ColorSetting::UiGrid => self.settings.uiGridColor,
             ColorSetting::Foreground => self.fg,
             ColorSetting::Background => self.bg,
         }
@@ -2688,10 +2597,10 @@ impl Session {
     pub fn set_color_setting(&mut self, setting: ColorSetting, color: Rgba8) -> VoidResult {
         match setting {
             ColorSetting::UiBackground => {
-                self.settings.set("background", Value::Rgba8(color))?;
+                self.settings.uiBackground = color;
             }
             ColorSetting::UiGrid => {
-                self.settings.set("grid/color", Value::Rgba8(color))?;
+                self.settings.uiGridColor = color;
             }
             ColorSetting::Foreground => {
                 self.fg = color;
@@ -2738,11 +2647,11 @@ impl Session {
 
     pub fn get_i64_setting(&self, setting: I64Setting) -> i64 {
         match setting {
-            I64Setting::Debug => self.settings["debug"].is_set() as i64,
-            I64Setting::UiAnimate => self.settings["animation"].is_set() as i64,
-            I64Setting::UiChecker => self.settings["checker"].to_u64() as i64,
-            I64Setting::UiGrid => self.settings["grid"].to_u64() as i64,
-            I64Setting::UiScalePercentage => self.settings["scale%"].to_u64() as i64,
+            I64Setting::Debug => self.settings.debug as i64,
+            I64Setting::UiAnimate => self.settings.animation as i64,
+            I64Setting::UiChecker => self.settings.uiChecker as i64,
+            I64Setting::UiGrid => self.settings.uiGrid as i64,
+            I64Setting::UiScalePercentage => self.settings.scalePercentage as i64,
             I64Setting::UiOffsetX => self.offset.x as i64,
             I64Setting::UiOffsetY => self.offset.y as i64,
             I64Setting::Tool => self.tool as i64,
@@ -2780,22 +2689,21 @@ impl Session {
     ) -> VoidResult {
         match setting {
             I64Setting::Debug => {
-                self.settings.set("debug", Value::Bool(new_value != 0))?;
+                self.settings.debug = new_value != 0;
             }
             I64Setting::UiAnimate => {
-                self.settings
-                    .set("animation", Value::Bool(new_value != 0))?;
+                self.settings.animation = new_value != 0;
             }
             I64Setting::UiChecker => {
                 if new_value >= 0 {
-                    self.settings.set("checker", Value::U32(new_value as u32))?;
+                    self.settings.uiChecker = new_value as u32;
                 } else {
                     return Err(format!("invalid value for checkerboard: {}", new_value));
                 }
             }
             I64Setting::UiGrid => {
                 if new_value >= 0 {
-                    self.settings.set("grid", Value::U32(new_value as u32))?;
+                    self.settings.uiGrid = new_value as u32;
                 } else {
                     return Err(format!("invalid value for grid: {}", new_value));
                 }
@@ -2807,7 +2715,7 @@ impl Session {
                         new_value
                     ));
                 }
-                self.settings.set("scale%", Value::U32(new_value as u32))?;
+                self.settings.uiScalePercentage = new_value as u32;
                 // TODO: We need to recompute the cursor position here
                 // from the window coordinates. Currently, cursor position
                 // is stored only in `SessionCoords`, which would have
