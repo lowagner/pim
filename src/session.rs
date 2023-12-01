@@ -13,8 +13,8 @@ use crate::message::*;
 use crate::palette::*;
 use crate::platform::{self, InputState, Key, KeyboardInput, LogicalSize, ModifiersState};
 use crate::script::{
-    self, evaluate, Argument, ArgumentResult, Evaluate, Get, Script, ScriptRunner, Serialize,
-    Variables, VoidResult,
+    self, evaluate, Argument, ArgumentResult, Evaluate, Get, Input, Script, ScriptRunner,
+    Serialize, Variables, VoidResult,
 };
 use crate::script_runner;
 use crate::settings::*;
@@ -301,76 +301,66 @@ impl From<Direction> for i32 {
 /// A session error.
 type Error = String;
 
-#[derive(PartialEq, Copy, Clone, Debug)]
-pub enum Input {
-    Key(Key),
-    Character(char),
-}
-
-impl fmt::Display for Input {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Key(k) => write!(f, "{}", k),
-            Self::Character(c) => write!(f, "{}", c),
-        }
-    }
-}
-
 /// A key binding.
 #[derive(PartialEq, Clone, Debug)]
 pub struct KeyBinding {
     /// The `Mode`s this binding applies to.
     pub modes: Vec<Mode>,
-    /// Modifiers which must be held.
-    pub modifiers: ModifiersState,
     /// Input expected to trigger the binding.
     pub input: Input,
-    /// Whether the key should be pressed or released.
-    pub state: InputState,
     /// The script to run when this binding is triggered.
     pub script: Script,
     /// Whether this key binding controls a toggle.
-    pub is_toggle: bool,
+    // TODO: find some way to continuously press an input, e.g., for drawing.
+    //       the mouse down button for drawing should function like a command,
+    //       or, in fact, be a key binding.
+    // pub is_toggle: bool,
     /// How this key binding should be displayed to the user.
     /// If `None`, then this binding shouldn't be shown to the user.
     pub display: Option<String>,
 }
 
 impl KeyBinding {
-    fn is_match(
-        &self,
-        input: Input,
-        state: InputState,
-        modifiers: ModifiersState,
-        mode: Mode,
-    ) -> bool {
-        match (input, self.input) {
-            (Input::Key(key), Input::Key(k)) => {
-                key == k
-                    && self.state == state
-                    && self.modes.contains(&mode)
-                    && (self.modifiers == modifiers
-                        || state == InputState::Released
-                        || key.is_modifier())
-            }
-            (Input::Character(a), Input::Character(b)) => {
-                // Nb. We only check the <ctrl> modifier with characters,
-                // because the others (especially <shift>) will most likely
-                // input a different character.
-                // TODO: we probably should check meta.
-                a == b
-                    && self.modes.contains(&mode)
-                    && self.state == state
-                    && self.modifiers.ctrl == modifiers.ctrl
-            }
-            _ => false,
-        }
+    fn is_match(&self, input: Input, mode: Mode) -> bool {
+        input == self.input && self.modes.contains(&mode)
+        /* TODO: we need to have some of this logic for modifiers OR
+           TODO: we should probably actually handle held logic better (which will help in the future).
+                 if something is held it doesn't matter what modifiers are held when the no-mod-key is released.
+                 essentially we need to build Session up with a stateful "what keys are held down" map,
+                 with scripts to run when those keys are released.  we'll make a copy of the release script.
+                 This entails going back to a struct with KeyOrRune/Modifiers/Script/OptionalReleaseScript
+                 so that we can pull out the KeyOrRune quicker.  we can add OptionalHoldScript as well which
+                 will execute every frame.
+
+                match (input, self.input) {
+                    (Input::Key(key), Input::Key(k)) => {
+                        key == k
+                            && self.state == state
+                            && self.modes.contains(&mode)
+                            && (self.modifiers == modifiers
+                                || state == InputState::Released
+                                || key.is_modifier())
+                    }
+                    (Input::Character(a), Input::Character(b)) => {
+                        // Nb. We only check the <ctrl> modifier with characters,
+                        // because the others (especially <shift>) will most likely
+                        // input a different character.
+                        // TODO: we probably should check meta.
+                        a == b
+                            && self.modes.contains(&mode)
+                            && self.state == state
+                            && self.modifiers.ctrl == modifiers.ctrl
+                    }
+        */
     }
 }
 
 /// Manages a list of key bindings.
 #[derive(Debug, Default)]
 pub struct KeyBindings {
+    // TODO: we can probably hash `Input` and make this a HashMap<Input, KeyBinding> if we want.
+    // TODO: we also may want to break the KeyBindings down by mode (e.g., normal, map, etc.),
+    //       so each mode has their own HashMap.
     elems: Vec<KeyBinding>,
 }
 
@@ -378,8 +368,9 @@ impl KeyBindings {
     /// Add a key binding.
     pub fn add(&mut self, binding: KeyBinding) {
         for mode in binding.modes.iter() {
-            self.elems
-                .retain(|kb| !kb.is_match(binding.input, binding.state, binding.modifiers, *mode));
+            // TODO: technically we could remove `mode` from elems[X].modes for all X where elems[X].input matches.
+            //       probably best to switch to a HashMap, however, to make things more consistent.
+            self.elems.retain(|kb| !kb.is_match(binding.input, *mode));
         }
         self.elems.push(binding);
     }
@@ -393,18 +384,12 @@ impl KeyBindings {
     }
 
     /// Find a key binding based on some input state.
-    pub fn find(
-        &self,
-        input: Input,
-        modifiers: ModifiersState,
-        state: InputState,
-        mode: Mode,
-    ) -> Option<KeyBinding> {
+    pub fn find(&self, input: Input, mode: Mode) -> Option<KeyBinding> {
         self.elems
             .iter()
             .rev()
             .cloned()
-            .find(|kb| kb.is_match(input, state, modifiers, mode))
+            .find(|kb| kb.is_match(input, mode))
     }
 
     /// Iterate over all key bindings.
@@ -3197,7 +3182,12 @@ impl Session {
         input: script::Input,
         script: Script,
     ) -> VoidResult {
-        // TODO: need to add self.key_bindings with the Script.
+        self.key_bindings.add(KeyBinding {
+            modes,
+            input,
+            script,
+            display: None,
+        });
         Ok(())
     }
 
@@ -3285,20 +3275,15 @@ mod test {
     #[test]
     fn test_key_bindings() {
         let mut kbs = KeyBindings::default();
-        let state = InputState::Pressed;
-        let modifiers = Default::default();
 
         let kb1 = KeyBinding {
             modes: vec![Mode::Normal],
-            input: Input::Key(platform::Key::A),
+            input: Input::KeyPressed(Default::default(), platform::Key::A),
             script: Script {
                 command: Command::Help,
                 arguments: vec![],
             },
-            is_toggle: false,
             display: None,
-            modifiers,
-            state,
         };
         let kb2 = KeyBinding {
             modes: vec![Mode::Command],
@@ -3332,12 +3317,14 @@ mod test {
     fn test_key_bindings_modifier() {
         let kb = KeyBinding {
             modes: vec![Mode::Normal],
-            input: Input::Key(platform::Key::Control),
-            command: Cmd::Noop,
-            is_toggle: false,
+            // purposely put in a default modifiers here to test that we can
+            // match modifiers on or off.
+            input: Input::KeyPressed(Default::default(), platform::Key::Control),
+            script: Script {
+                command: Command::Echo,
+                arguments: vec![],
+            },
             display: None,
-            modifiers: Default::default(),
-            state: InputState::Pressed,
         };
 
         let mut kbs = KeyBindings::default();
@@ -3345,14 +3332,7 @@ mod test {
 
         assert_eq!(
             kbs.find(
-                Input::Key(platform::Key::Control),
-                ModifiersState {
-                    ctrl: true,
-                    alt: false,
-                    shift: false,
-                    meta: false
-                },
-                InputState::Pressed,
+                Input::modifier_pressed(platform::Modifier::Control),
                 Mode::Normal
             ),
             Some(kb.clone())
@@ -3360,9 +3340,7 @@ mod test {
 
         assert_eq!(
             kbs.find(
-                Input::Key(platform::Key::Control),
-                ModifiersState::default(),
-                InputState::Pressed,
+                Input::KeyPressed(ModifiersState::default(), platform::Key::Control),
                 Mode::Normal
             ),
             Some(kb)

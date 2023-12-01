@@ -1,7 +1,7 @@
 use crate::command::*;
 use crate::gfx::Rgba8;
 use crate::palette::Palette;
-use crate::platform::{Key, ModifiersState, MouseButton};
+use crate::platform::{Key, Modifier, ModifiersState, MouseButton};
 use crate::session::Tool;
 use crate::settings::*;
 
@@ -249,7 +249,7 @@ pub struct Use {
     pub lookback: i32,
 }
 
-#[derive(PartialEq, Debug, Clone, Copy)]
+#[derive(Eq, PartialEq, Debug, Clone, Copy)]
 pub enum Input {
     // TODO: rename ModifiersState -> Modifiers at some point.
     /// A special key like the `e` key (ignoring modifiers) or `<home>`, pressed.
@@ -263,6 +263,10 @@ pub enum Input {
     /// Mouse wheel was scrolled.  Multiplies the platform input by 100,
     /// so e.g., scrolling up/down is +-100.
     MouseWheel(ModifiersState, i32),
+    // TODO: we can probably bring back modifiers here.
+    //       e.g., `<ctrl>'ö'` or `<shift>'A'` for example.
+    //       we'll need to warn people that the modifiers you use to
+    //       generate the rune should be included.
     /// A letter/character/rune, e.g., 'A' or 'ö', without modifiers.
     /// We can't handle released state here, just the pressed state.
     Rune(char),
@@ -275,6 +279,18 @@ impl Input {
             Input::MousePressed(mods, btn) => Ok(Input::MouseReleased(*mods, *btn)),
             input => Err(format!("{:?} doesn't have a released version", input)),
         }
+    }
+
+    /// A convenience method for returning a single modifier press as an input.
+    /// Note that the ModifiersState must include that modifier.
+    pub fn modifier_pressed(modifier: Modifier) -> Input {
+        let (mods, key) = match modifier {
+            Modifier::Control => (ModifiersState::CTRL, Key::Control),
+            Modifier::Alt => (ModifiersState::ALT, Key::Alt),
+            Modifier::Shift => (ModifiersState::SHIFT, Key::Shift),
+            Modifier::Meta => (ModifiersState::META, Key::Meta),
+        };
+        KeyPressed(mods, key)
     }
 }
 
