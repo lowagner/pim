@@ -15,6 +15,29 @@ use std::str::FromStr;
 
 pub type Error = memoir::result::Error;
 
+/*
+    Creating your own commands, and how to run them:
+
+        :set 'cmd_name' (the_cmd $0 123)
+    =>  :cmd_name 5     -- calls `the_cmd` with arguments `5` `123`
+
+    where $0 means to use the argument at index 0.  Similarly for $1, etc.
+
+    The reason we use $0 for the first argument is to avoid off-by-one errors while
+    indexing the arguments internally within this script interpreter.
+
+    If we used $0 for the function name, this would make it more bash-like, and we
+    could call recursively like this:
+        :const 'factorial' (if (positive $1) (* $1 ($0 (+ $1 -1))) 1)
+    But we want to avoid off-by-one errors, so if we want to support this, we will create
+    our own re-evaluation function, e.g., $$.
+        :const 'factorial' (if (positive $0) (* $0 ($$ (+ $0 -1))) 1)
+
+    Note we also put parentheses before the function name so that in the common case,
+    where we're running just one function, we don't need to use parentheses.
+    E.g., `my_function my_arg_0 my_arg_1 my_arg_etc` instead of
+    `my_function(my_arg_0 my_arg1 my_arg_etc)` (NOT VALID).
+*/
 impl Parse for Script {
     fn parser() -> Parser<Self> {
         get_script_parser(0)
