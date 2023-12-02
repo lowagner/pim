@@ -30,12 +30,14 @@ impl Script {
     }
 }
 
-fn serialize_script(script: &Script, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    write!(f, "{}", script.command)?;
-    for a in &script.arguments {
-        write!(f, " {}", Serialize::Argument(&a))?;
+impl fmt::Display for Script {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", script.command)?;
+        for a in &script.arguments {
+            write!(f, " {}", a)?;
+        }
+        fmt::Result::Ok(())
     }
-    fmt::Result::Ok(())
 }
 
 pub type Arguments = Vec<Argument>;
@@ -198,44 +200,6 @@ impl Argument {
     }
 }
 
-// TODO: move Serialize logic into this fmt::Display for Argument
-impl fmt::Display for Argument {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Argument::Null => write!(f, "null"),
-            Argument::I64(value) => write!(f, "{}", *value),
-            Argument::Color(value) => write!(f, "{}", *value),
-            Argument::String(value) => write!(f, "'{}'", *value),
-            Argument::Input(Input::KeyPressed(mods, key)) => write!(f, "{}<{}>", mods, key),
-            Argument::Input(Input::KeyReleased(mods, key)) => write!(f, "{}<{}>!", mods, key),
-            Argument::Input(Input::MousePressed(mods, btn)) => write!(f, "{}<{}>", mods, btn),
-            Argument::Input(Input::MouseReleased(mods, btn)) => write!(f, "{}<{}>!", mods, btn),
-            Argument::Input(Input::MouseWheel(mods, val)) => write!(f, "{}<{{{}}}>!", mods, val),
-            Argument::Input(Input::Rune(rune)) => {
-                if *rune == '\'' {
-                    write!(f, "\"'\"")
-                } else {
-                    write!(f, "'{}'", rune)
-                }
-            }
-            Argument::Script(script) => {
-                let mut check = write!(f, "{{command: `{}`, arguments: [", script.command);
-                if check.is_err() {
-                    return check;
-                }
-                for arg in &script.arguments {
-                    check = write!(f, "{}, ", arg);
-                    if check.is_err() {
-                        return check;
-                    }
-                }
-                write!(f, "]}}")
-            }
-            Argument::Use(use_argument) => write!(f, "${}", use_argument.index),
-        }
-    }
-}
-
 #[derive(PartialEq, Debug, Clone, Copy)]
 pub struct Use {
     /// Index of argument on the script that we'll use to evaluate this argument.
@@ -303,63 +267,50 @@ pub type StringResult = Result<String, String>;
 pub type ScriptResult = Result<Script, String>;
 pub type OptionalScriptResult = Result<Option<Script>, String>;
 
-fn serialize_argument(argument: &Argument, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    match argument {
-        Argument::Null => write!(f, "null"),
-        Argument::I64(value) => write!(f, "{}", *value),
-        Argument::Color(value) => write!(f, "{}", *value),
-        Argument::String(value) => write!(f, "'{}'", *value),
-        Argument::Input(Input::KeyPressed(mods, key)) => write!(f, "{}<{}>", mods, key),
-        Argument::Input(Input::KeyReleased(mods, key)) => write!(f, "{}<{}>!", mods, key),
-        Argument::Input(Input::MousePressed(mods, btn)) => write!(f, "{}<{}>", mods, btn),
-        Argument::Input(Input::MouseReleased(mods, btn)) => write!(f, "{}<{}>!", mods, btn),
-        Argument::Input(Input::MouseWheel(mods, val)) => write!(f, "{}<{{{}}}>!", mods, val),
-        Argument::Input(Input::Rune(rune)) => {
-            if *rune == '\'' {
-                write!(f, "\"'\"")
-            } else {
-                write!(f, "'{}'", rune)
+impl fmt::Display for Argument {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Argument::Null => write!(f, "null"),
+            Argument::I64(value) => write!(f, "{}", *value),
+            Argument::Color(value) => write!(f, "{}", *value),
+            Argument::String(value) => write!(f, "'{}'", *value),
+            Argument::Input(Input::KeyPressed(mods, key)) => write!(f, "{}<{}>", mods, key),
+            Argument::Input(Input::KeyReleased(mods, key)) => write!(f, "{}<{}>!", mods, key),
+            Argument::Input(Input::MousePressed(mods, btn)) => write!(f, "{}<{}>", mods, btn),
+            Argument::Input(Input::MouseReleased(mods, btn)) => write!(f, "{}<{}>!", mods, btn),
+            Argument::Input(Input::MouseWheel(mods, val)) => write!(f, "{}<{{{}}}>!", mods, val),
+            Argument::Input(Input::Rune(rune)) => {
+                if *rune == '\'' {
+                    write!(f, "\"'\"")
+                } else {
+                    write!(f, "'{}'", rune)
+                }
             }
+            Argument::Script(script) if script.arguments.len() == 0 => {
+                write!(f, "{}", script.command)
+            }
+            Argument::Script(script) => {
+                write!(f, "({})", script)
+            }
+            // TODO: consider adding lookback here (${}{}), since lookback is negative.
+            //      i think we'll be ok because we implement the parser ourselves and
+            //      we always decrement lookback when going into a new script.
+            //      there shouldn't be any ambiguity if we copy paste the resulting script.
+            Argument::Use(use_argument) => write!(f, "${}", use_argument.index),
         }
-        Argument::Script(script) if script.arguments.len() == 0 => {
-            write!(f, "{}", script.command)
-        }
-        Argument::Script(script) => {
-            write!(f, "({})", Serialize::Script(&script))
-        }
-        // TODO: consider adding lookback here (${}{}), since lookback is negative.
-        //      i think we'll be ok because we implement the parser ourselves and
-        //      we always decrement lookback when going into a new script.
-        //      there shouldn't be any ambiguity if we copy paste the resulting script.
-        Argument::Use(use_argument) => write!(f, "${}", use_argument.index),
     }
 }
 
-// TODO: we probably can just use fmt::Display for the nice serialization,
-// and fmt::Debug for the debug display version.
-// i.e., use {:?} for scripts, arguments, and ArgumentResult where we currently don't serialize.
-pub enum Serialize<'a> {
-    Argument(&'a Argument),
-    Script(&'a Script),
-    ArgumentResult(&'a ArgumentResult),
-}
-
-impl<'a> fmt::Display for Serialize<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Serialize::Argument(argument) => serialize_argument(argument, f),
-            Serialize::Script(script) => serialize_script(script, f),
-            Serialize::ArgumentResult(result) => match result {
-                Err(string) => {
-                    if string.is_empty() {
-                        write!(f, "(error)")
-                    } else {
-                        write!(f, "(error `{}`)", string)
-                    }
-                }
-                Ok(argument) => serialize_argument(argument, f),
-            },
+pub fn result_to_string(result: ArgumentResult) -> String {
+    match result {
+        Err(string) => {
+            if string.is_empty() {
+                "(error)".to_string()
+            } else {
+                format!("(error `{}`)", string)
+            }
         }
+        Ok(argument) => format!("{}", argument),
     }
 }
 
@@ -460,10 +411,7 @@ macro_rules! script_runner {
                                         );
                                     } else {
                                         self.message(
-                                            format!(
-                                                "({}) -- a script",
-                                                Serialize::Script(nested_script)
-                                            ),
+                                            format!("({}) -- a script", nested_script),
                                             MessageType::Info,
                                         );
                                     }
@@ -478,7 +426,7 @@ macro_rules! script_runner {
                                     MessageType::Info,
                                 ),
                                 a => self.message(
-                                    format!("{} -- an argument", Serialize::Argument(a)),
+                                    format!("{} -- an argument", a),
                                     MessageType::Info,
                                 ),
                             }
@@ -489,7 +437,7 @@ macro_rules! script_runner {
                         let mut string = String::new();
                         for i in 0..script.arguments.len() {
                             let result = self.script_evaluate(&script_stack, Evaluate::Index(i as u32));
-                            let next_string = format!("{}", Serialize::ArgumentResult(&result));
+                            let next_string = result_to_string(result);
                             if i > 0 {
                                 string.push_str(" ");
                             }
@@ -502,7 +450,7 @@ macro_rules! script_runner {
                         let mut string = String::new();
                         for i in 0..script.arguments.len() {
                             let result = self.script_evaluate(&script_stack, Evaluate::Index(i as u32));
-                            let next_string = format!("{}", Serialize::ArgumentResult(&result));
+                            let next_string = result_to_string(result);
                             if i > 0 {
                                 string.push_str(" ");
                             }
@@ -1054,8 +1002,8 @@ impl Variables {
         match &self.map.get(&name) {
             None => format!("{} is unknown", name),
             Some(Variable::BuiltIn(_, description)) => format!("-- {}", description),
-            Some(Variable::Mutable(a)) => format!("{} -- mutable", Serialize::Argument(a)),
-            Some(Variable::Const(a)) => format!("{} -- const", Serialize::Argument(a)),
+            Some(Variable::Mutable(a)) => format!("{} -- mutable", a),
+            Some(Variable::Const(a)) => format!("{} -- const", a),
             Some(Variable::Alias(a)) => format!("-- alias of {}", a),
         }
     }
@@ -3636,10 +3584,7 @@ mod test {
             .to_argument()
             .get_script("for test")
             .unwrap();
-        assert_eq!(
-            format!("{}", Serialize::Script(&swap)),
-            "fg (bg fg)".to_string()
-        );
+        assert_eq!(format!("{}", swap), "fg (bg fg)".to_string());
     }
 
     #[test]
@@ -4026,7 +3971,7 @@ mod test {
         };
 
         assert_eq!(
-            format!("{}", Serialize::Script(&script)),
+            format!("{}", script),
             "if $0 (p x1 y2 $1) (jangles (fg $2) q $3)".to_string()
         );
     }

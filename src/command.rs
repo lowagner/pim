@@ -1,7 +1,7 @@
 use crate::autocomplete::{self, Autocomplete, FileCompleter, FileCompleterOpts};
 use crate::history::History;
 use crate::parser::*;
-use crate::script::{Script};
+use crate::script::Script;
 use crate::settings::*;
 
 use memoir::traits::Parse;
