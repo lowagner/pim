@@ -1,16 +1,16 @@
 use crate::autocomplete::{self, Autocomplete, FileCompleter, FileCompleterOpts};
 use crate::history::History;
 use crate::parser::*;
-use crate::platform;
+use crate::script::{Script};
+use crate::settings::*;
 
 use memoir::traits::Parse;
 use memoir::*;
-
-use crate::gfx::Rect;
-use crate::gfx::Rgba8;
+use strum_macros::EnumIter;
 
 use std::fmt;
 use std::path::Path;
+use std::str::FromStr;
 
 pub const COMMENT: char = '-';
 
@@ -546,8 +546,6 @@ pub struct CommandLine {
     pub cursor: usize,
     /// Parser.
     pub parser: Parser<Script>,
-    /// Commands.
-    pub commands: Commands,
     /// The current input string displayed to the user.
     input: String,
     /// File extensions supported.
@@ -558,13 +556,10 @@ impl CommandLine {
     const MAX_INPUT: usize = 256;
 
     pub fn new<P: AsRef<Path>>(cwd: P, history_path: P, extensions: &[&str]) -> Self {
-        let cmds = Commands::default();
-
         Self {
             input: String::with_capacity(Self::MAX_INPUT),
             cursor: 0,
             parser: param::<Script>(),
-            commands: cmds,
             history: History::new(history_path, 1024),
             extensions: extensions.iter().map(|e| (*e).into()).collect(),
         }
@@ -786,7 +781,6 @@ impl ScriptCompleter {
 #[cfg(test)]
 mod test {
     use super::*;
-    use std::{fs, fs::File};
     use strum::IntoEnumIterator;
 
     #[test]

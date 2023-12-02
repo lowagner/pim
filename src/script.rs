@@ -6,13 +6,10 @@ use crate::session::Tool;
 use crate::settings::*;
 
 use claim::assert_ok;
-use strum_macros::EnumIter;
 
 use std::collections::HashMap;
 use std::fmt;
-use std::mem;
 use std::path::MAIN_SEPARATOR;
-use std::str::FromStr;
 
 #[derive(PartialEq, Debug, Clone)]
 pub struct Script {
@@ -290,7 +287,7 @@ impl Input {
             Modifier::Shift => (ModifiersState::SHIFT, Key::Shift),
             Modifier::Meta => (ModifiersState::META, Key::Meta),
         };
-        KeyPressed(mods, key)
+        Input::KeyPressed(mods, key)
     }
 }
 

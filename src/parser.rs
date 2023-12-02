@@ -4,9 +4,10 @@ use memoir::*;
 use directories as dirs;
 
 use crate::brush::BrushMode;
+use crate::command::*;
 use crate::gfx::Rgba8;
 use crate::platform;
-use crate::script::{Argument, Command, Input, Script, Use};
+use crate::script::{Argument, Input, Script, Use};
 use crate::session::{Direction, Mode, VisualState};
 
 use std::ffi::OsString;

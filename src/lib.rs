@@ -51,7 +51,6 @@ pub mod util;
 use cmd::Value;
 use event::Event;
 use execution::{DigestMode, Execution, ExecutionMode};
-use message::*;
 use platform::{ModifiersCount, WindowEvent, WindowHint};
 use renderer::Renderer;
 use session::*;
@@ -140,10 +139,7 @@ pub fn init<P: AsRef<Path>>(paths: &[P], options: Options<'_>) -> std::io::Resul
         .init(options.source.clone())?;
 
     if options.debug {
-        session
-            .settings
-            .set("debug", Value::Bool(true))
-            .expect("'debug' is a bool'");
+        session.settings.debug = true;
     }
 
     let mut execution = match options.exec {
@@ -160,10 +156,7 @@ pub fn init<P: AsRef<Path>>(paths: &[P], options: Options<'_>) -> std::io::Resul
         Execution::Replaying { digest, .. } | Execution::Recording { digest, .. }
             if digest.mode != DigestMode::Ignore =>
         {
-            session
-                .settings
-                .set("animation", Value::Bool(false))
-                .expect("'animation' is a bool");
+            session.settings.animation = false;
         }
         _ => {}
     }

@@ -835,7 +835,7 @@ pub fn draw_help(session: &Session, text: &mut TextBatch, shape: &mut shape2d::B
                 TextAlign::Left,
             );
             text.add(
-                &format!("{}", kb.command),
+                &format!("{}", kb.script),
                 left_margin + column_offset,
                 y as f32,
                 self::HELP_LAYER,
@@ -868,7 +868,7 @@ pub fn draw_help(session: &Session, text: &mut TextBatch, shape: &mut shape2d::B
                 TextAlign::Left,
             );
             text.add(
-                &format!("{}", kb.command),
+                &format!("{}", kb.script),
                 left_margin + column_offset,
                 y as f32,
                 self::HELP_LAYER,
@@ -877,6 +877,7 @@ pub fn draw_help(session: &Session, text: &mut TextBatch, shape: &mut shape2d::B
             );
         }
     }
+    /* // TODO: add settings info here
     for l in session::SETTINGS.lines() {
         if let Some(y) = line.next() {
             text.add(
@@ -889,6 +890,7 @@ pub fn draw_help(session: &Session, text: &mut TextBatch, shape: &mut shape2d::B
             );
         }
     }
+    */
 
     for (i, l) in session.help().iter().enumerate() {
         let y = session.height - (i + 4) as f32 * self::LINE_HEIGHT;

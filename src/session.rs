@@ -8,10 +8,9 @@ use crate::data;
 use crate::event::{Event, TimedEvent};
 use crate::execution::{DigestMode, DigestState, Execution};
 use crate::flood::FloodFiller;
-use crate::hashmap;
 use crate::message::*;
 use crate::palette::*;
-use crate::platform::{self, InputState, Key, KeyboardInput, LogicalSize, ModifiersState};
+use crate::platform::{self, InputState, KeyboardInput, LogicalSize, ModifiersState};
 use crate::script::{
     self, evaluate, Argument, ArgumentResult, Evaluate, Get, Input, Script, ScriptRunner,
     Serialize, Variables, VoidResult,
@@ -23,7 +22,7 @@ use crate::util;
 use crate::gfx::math::*;
 use crate::gfx::rect::Rect;
 use crate::gfx::shape2d::{Fill, Rotation, Shape, Stroke};
-use crate::gfx::{Lyza, Point, Rgb8, Rgba8, ZDepth};
+use crate::gfx::{Point, Rgb8, Rgba8, ZDepth};
 use crate::view::path;
 use crate::view::resource::{EditId, ViewResource};
 use crate::view::{
@@ -32,7 +31,6 @@ use crate::view::{
 };
 
 use arrayvec::ArrayVec;
-use claim::assert_ok;
 
 use directories as dirs;
 use nonempty::NonEmpty;
@@ -388,14 +386,14 @@ impl KeyBindings {
 /// A dictionary used to store session settings.
 #[derive(Debug)]
 pub struct Settings {
-    debug: bool,
-    uiBackground: Rgba8,
-    uiChecker: u32,
-    uiGrid: u32,
-    uiGridColor: Rgba8,
-    uiScalePercentage: u32,
-    animation: bool,
-    paletteHeight: u32,
+    pub debug: bool,
+    pub uiBackground: Rgba8,
+    pub uiChecker: u32,
+    pub uiGrid: u32,
+    pub uiGridColor: Rgba8,
+    pub uiScalePercentage: u32,
+    pub animation: bool,
+    pub paletteHeight: u32,
 }
 
 impl Default for Settings {
@@ -3208,7 +3206,10 @@ mod test {
         );
 
         let kb3 = KeyBinding {
-            command: Cmd::Quit,
+            script: Script {
+                command: Command::Quit(Quit::Safe),
+                arguments: vec![],
+            },
             ..kb2.clone()
         };
         kbs.add(kb3.clone());
