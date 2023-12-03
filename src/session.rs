@@ -35,7 +35,7 @@ use arrayvec::ArrayVec;
 use directories as dirs;
 use nonempty::NonEmpty;
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::convert::TryFrom;
 use std::fmt;
 use std::fs::File;
@@ -911,11 +911,7 @@ impl Session {
 
     /// Return help string.
     pub fn help(&self) -> Vec<String> {
-        self.cmdline
-            .commands
-            .iter()
-            .map(|(_, help, parser)| format!(":{:<42} {}", parser.to_string(), help))
-            .collect()
+        self.variables.help()
     }
 
     ////////////////////////////////////////////////////////////////////////////
@@ -2077,10 +2073,8 @@ impl Session {
                 return;
             }
             self.cmdline_handle_input(c);
-        } else if let Some(kb) =
-            self.key_bindings.find(Input::Rune(c), self.mode)
-        {
-            kb.script.run(&mut dyn self);
+        } else if let Some(kb) = self.key_bindings.find(Input::Rune(c), self.mode) {
+            kb.script.run(&mut self);
         }
     }
 
@@ -2190,7 +2184,7 @@ impl Session {
                 //       for repeating commands, but held commands would be nice.
                 // if !repeat || (kb.command.repeats() && !kb.is_toggle) {
                 if !repeat {
-                    kb.script.run(&mut dyn self);
+                    kb.script.run(&mut self);
                 }
                 return;
             }
@@ -2244,7 +2238,7 @@ impl Session {
             if let Err(e) = self
                 .cmdline
                 .parse(&line)
-                .map(|script| script.run(&mut dyn self))
+                .map(|script| script.run(&mut self))
             {
                 return Err(io::Error::new(
                     io::ErrorKind::Other,
@@ -2454,7 +2448,7 @@ impl Session {
         match self
             .cmdline
             .parse(&input[1..input.len()])
-            .map(|script| script.run(&mut dyn self))
+            .map(|script| script.run(&mut self))
         {
             Ok(result) => self.message(format!("{:?}", result), MessageType::Info),
             Err(e) => self.message(format!("Error: {}", e), MessageType::Error),

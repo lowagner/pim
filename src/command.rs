@@ -545,18 +545,18 @@ pub enum Axis {
 ///////////////////////////////////////////////////////////////////////////////
 
 pub struct CommandLine {
-    /// The history of commands entered.
-    pub history: History,
     /// Command auto-complete.
     pub autocomplete: Autocomplete<ScriptCompleter>,
     /// Input cursor position.
     pub cursor: usize,
-    /// Parser.
-    pub parser: Parser<Script>,
-    /// The current input string displayed to the user.
-    input: String,
     /// File extensions supported.
     extensions: Vec<String>,
+    /// The history of commands entered.
+    pub history: History,
+    /// The current input string displayed to the user.
+    input: String,
+    /// Parser.
+    pub parser: Parser<Script>,
 }
 
 impl CommandLine {
@@ -564,12 +564,12 @@ impl CommandLine {
 
     pub fn new<P: AsRef<Path>>(cwd: P, history_path: P, extensions: &[&str]) -> Self {
         Self {
-            input: String::with_capacity(Self::MAX_INPUT),
+            autocomplete: Autocomplete::new(ScriptCompleter::new(cwd, extensions)),
             cursor: 0,
-            parser: param::<Script>(),
-            history: History::new(history_path, 1024),
-            autocomplete: Autocomplete::new(ScriptCompleter::new(cwd, extensions))
             extensions: extensions.iter().map(|e| (*e).into()).collect(),
+            history: History::new(history_path, 1024),
+            input: String::with_capacity(Self::MAX_INPUT),
+            parser: param::<Script>(),
         }
     }
 
@@ -744,7 +744,8 @@ impl autocomplete::Completer for ScriptCompleter {
         // Not sure why we need the map_err, I implemented Display for EmptyCommandParseError
         // but am still getting this compile error if I don't map_err:
         // :::the trait `From<command::EmptyCommandParseError>` is not implemented for `String`
-        let p = token().try_map(|input| Command::from_str(&input).map_err(|e| Err("no input".to_string())));
+        let p =
+            token().try_map(|input| Command::from_str(&input).map_err(|e| "no input".to_string()));
 
         match p.parse(input) {
             Ok((command, _)) => match command {

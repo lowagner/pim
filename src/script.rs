@@ -998,7 +998,8 @@ impl Variables {
     }
 
     pub fn help(&self) -> Vec<String> {
-        self.map.iter()
+        self.map
+            .iter()
             .map(|(name, value)| Self::describe_variable(&name, &value))
             .collect()
     }
@@ -1012,7 +1013,7 @@ impl Variables {
         }
     }
 
-    fn describe_variable(name: &String, var: &Variable): String {
+    fn describe_variable(name: &String, var: &Variable) -> String {
         match var {
             Variable::BuiltIn(_, description) => format!("{} -- {}", name, description),
             Variable::Mutable(a) => format!("{} -- mutable {}", name, a),
