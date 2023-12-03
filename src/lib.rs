@@ -48,7 +48,6 @@ mod view;
 #[macro_use]
 pub mod util;
 
-use cmd::Value;
 use event::Event;
 use execution::{DigestMode, Execution, ExecutionMode};
 use platform::{ModifiersCount, WindowEvent, WindowHint};

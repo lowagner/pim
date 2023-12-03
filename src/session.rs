@@ -3,7 +3,7 @@
 use crate::autocomplete::FileCompleter;
 use crate::brush::{self, Brush, BrushState};
 use crate::color;
-use crate::command::*;
+use crate::command::{self, *};
 use crate::data;
 use crate::event::{Event, TimedEvent};
 use crate::execution::{DigestMode, DigestState, Execution};
@@ -13,7 +13,7 @@ use crate::palette::*;
 use crate::platform::{self, InputState, KeyboardInput, LogicalSize, ModifiersState};
 use crate::script::{
     self, evaluate, result_to_string, Argument, ArgumentResult, Evaluate, Get, Input, Script,
-    ScriptRunner, Serialize, Variables, VoidResult,
+    ScriptRunner, Variables, VoidResult,
 };
 use crate::script_runner;
 use crate::settings::*;
@@ -2074,7 +2074,7 @@ impl Session {
             }
             self.cmdline_handle_input(c);
         } else if let Some(kb) = self.key_bindings.find(Input::Rune(c), self.mode) {
-            kb.script.run(&mut self);
+            kb.script.run(self);
         }
     }
 
@@ -2184,7 +2184,7 @@ impl Session {
                 //       for repeating commands, but held commands would be nice.
                 // if !repeat || (kb.command.repeats() && !kb.is_toggle) {
                 if !repeat {
-                    kb.script.run(&mut self);
+                    kb.script.run(self);
                 }
                 return;
             }
@@ -2232,14 +2232,10 @@ impl Session {
         for (i, line) in r.lines().enumerate() {
             let line = line?;
 
-            if line.starts_with(cmd::COMMENT) {
+            if line.starts_with(command::COMMENT) {
                 continue;
             }
-            if let Err(e) = self
-                .cmdline
-                .parse(&line)
-                .map(|script| script.run(&mut self))
-            {
+            if let Err(e) = self.cmdline.parse(&line).map(|script| script.run(self)) {
                 return Err(io::Error::new(
                     io::ErrorKind::Other,
                     format!("{} on line {}", e, i + 1),
@@ -2448,7 +2444,7 @@ impl Session {
         match self
             .cmdline
             .parse(&input[1..input.len()])
-            .map(|script| script.run(&mut self))
+            .map(|script| script.run(self))
         {
             Ok(result) => self.message(format!("{:?}", result), MessageType::Info),
             Err(e) => self.message(format!("Error: {}", e), MessageType::Error),

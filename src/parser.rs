@@ -538,7 +538,6 @@ pub fn tuple<O>(x: Parser<O>, y: Parser<O>) -> Parser<(O, O)> {
 mod test {
     use super::*;
     use crate::platform::{Key, ModifiersState};
-    use crate::script::Serialize;
     use crate::settings::*;
 
     #[test]
@@ -765,7 +764,7 @@ mod test {
         let (result, rest) = p.parse(&start).unwrap();
 
         assert_eq!(rest, "");
-        assert_eq!(format!("{}", Serialize::Script(&result)), start);
+        assert_eq!(format!("{}", result), start);
     }
 
     #[test]

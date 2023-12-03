@@ -4,7 +4,7 @@ pub mod resource;
 pub use path::{Format, Path};
 pub use resource::{Edit, EditId, Snapshot, ViewResource};
 
-use crate::cmd::Axis;
+use crate::command::Axis;
 use crate::session::{Direction, Session, SessionCoords};
 
 use crate::gfx::math::*;

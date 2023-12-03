@@ -745,7 +745,7 @@ impl autocomplete::Completer for ScriptCompleter {
         // but am still getting this compile error if I don't map_err:
         // :::the trait `From<command::EmptyCommandParseError>` is not implemented for `String`
         let p =
-            token().try_map(|input| Command::from_str(&input).map_err(|e| "no input".to_string()));
+            token().try_map(|input| Command::from_str(&input).map_err(|_| "no input".to_string()));
 
         match p.parse(input) {
             Ok((command, _)) => match command {

@@ -32,8 +32,8 @@ impl Script {
 
 impl fmt::Display for Script {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", script.command)?;
-        for a in &script.arguments {
+        write!(f, "{}", self.command)?;
+        for a in &self.arguments {
             write!(f, " {}", a)?;
         }
         fmt::Result::Ok(())
@@ -1006,7 +1006,7 @@ impl Variables {
 
     pub fn describe(&self, command: Command) -> String {
         let name = format!("{}", command);
-        if let Some(&var) = &self.map.get(&name) {
+        if let Some(var) = &self.map.get(&name) {
             Self::describe_variable(&name, &var)
         } else {
             format!("{} is unknown", name)
@@ -3092,7 +3092,7 @@ mod test {
         assert_eq!(
             test_runner.message,
             Message {
-                string: "-- explains what $0 does without evaluating it, \
+                string: "? -- explains what $0 does without evaluating it, \
                         e.g., `? paint` to explain what the `paint` command does"
                     .to_string(),
                 message_type: MessageType::Info,
@@ -3108,7 +3108,7 @@ mod test {
         assert_eq!(
             test_runner.message,
             Message {
-                string: "-- if $0 evaluates to truthy, evaluates $1, otherwise $2, \
+                string: "if -- if $0 evaluates to truthy, evaluates $1, otherwise $2, \
                         e.g., `if 'hi' 'world' 3` returns 'world'"
                     .to_string(),
                 message_type: MessageType::Info,
@@ -3126,7 +3126,7 @@ mod test {
         assert_eq!(
             test_runner.message,
             Message {
-                string: "-- getter/swapper for the current mode if $0 is null/present, \
+                string: "mode -- getter/swapper for the current mode if $0 is null/present, \
                         e.g., `mode 'normal'` to go to normal mode"
                     .to_string(),
                 message_type: MessageType::Info,

@@ -1,4 +1,4 @@
-use crate::cmd::Axis;
+use crate::command::Axis;
 use crate::draw;
 use crate::execution::Execution;
 use crate::font::TextBatch;
