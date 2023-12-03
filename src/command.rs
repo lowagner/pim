@@ -4,7 +4,6 @@ use crate::parser::*;
 use crate::script::Script;
 use crate::settings::*;
 
-use memoir::traits::Parse;
 use memoir::*;
 use strum_macros::EnumIter;
 
@@ -421,6 +420,12 @@ impl FromStr for Command {
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct EmptyCommandParseError;
 
+impl fmt::Display for EmptyCommandParseError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "EmptyCommandParseError")
+    }
+}
+
 #[derive(Eq, Hash, PartialEq, Debug, Clone, Copy, EnumIter)]
 pub enum Map {
     /// Effectively all modes.
@@ -542,6 +547,8 @@ pub enum Axis {
 pub struct CommandLine {
     /// The history of commands entered.
     pub history: History,
+    /// Command auto-complete.
+    pub autocomplete: Autocomplete<ScriptCompleter>,
     /// Input cursor position.
     pub cursor: usize,
     /// Parser.
@@ -561,6 +568,7 @@ impl CommandLine {
             cursor: 0,
             parser: param::<Script>(),
             history: History::new(history_path, 1024),
+            autocomplete: Autocomplete::new(ScriptCompleter::new(cwd, extensions))
             extensions: extensions.iter().map(|e| (*e).into()).collect(),
         }
     }
@@ -733,7 +741,10 @@ impl autocomplete::Completer for ScriptCompleter {
     type Options = ();
 
     fn complete(&self, input: &str, _opts: ()) -> Vec<String> {
-        let p = token().try_map(Command::from_str(input));
+        // Not sure why we need the map_err, I implemented Display for EmptyCommandParseError
+        // but am still getting this compile error if I don't map_err:
+        // :::the trait `From<command::EmptyCommandParseError>` is not implemented for `String`
+        let p = token().try_map(|input| Command::from_str(&input).map_err(|e| Err("no input".to_string())));
 
         match p.parse(input) {
             Ok((command, _)) => match command {

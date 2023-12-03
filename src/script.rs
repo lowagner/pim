@@ -997,14 +997,27 @@ impl Variables {
         ));
     }
 
+    pub fn help(&self) -> Vec<String> {
+        self.map.iter()
+            .map(|(name, value)| Self::describe_variable(&name, &value))
+            .collect()
+    }
+
     pub fn describe(&self, command: Command) -> String {
         let name = format!("{}", command);
-        match &self.map.get(&name) {
-            None => format!("{} is unknown", name),
-            Some(Variable::BuiltIn(_, description)) => format!("-- {}", description),
-            Some(Variable::Mutable(a)) => format!("{} -- mutable", a),
-            Some(Variable::Const(a)) => format!("{} -- const", a),
-            Some(Variable::Alias(a)) => format!("-- alias of {}", a),
+        if let Some(&var) = &self.map.get(&name) {
+            Self::describe_variable(&name, &var)
+        } else {
+            format!("{} is unknown", name)
+        }
+    }
+
+    fn describe_variable(name: &String, var: &Variable): String {
+        match var {
+            Variable::BuiltIn(_, description) => format!("{} -- {}", name, description),
+            Variable::Mutable(a) => format!("{} -- mutable {}", name, a),
+            Variable::Const(a) => format!("{} -- const {}", name, a),
+            Variable::Alias(a) => format!("{} -- alias of {}", name, a),
         }
     }
 

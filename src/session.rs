@@ -2078,10 +2078,9 @@ impl Session {
             }
             self.cmdline_handle_input(c);
         } else if let Some(kb) =
-            self.key_bindings
-                .find(Input::Character(c), mods, InputState::Pressed, self.mode)
+            self.key_bindings.find(Input::Rune(c), self.mode)
         {
-            kb.script.run(&mut self);
+            kb.script.run(&mut dyn self);
         }
     }
 
@@ -2181,7 +2180,7 @@ impl Session {
 
             if let Some(kb) = self
                 .key_bindings
-                .find(Input::Key(key), modifiers, state, self.mode)
+                .find(Input::KeyPressed(modifiers, key), self.mode)
             {
                 // For toggle-like key bindings, we don't want to run the command
                 // on key repeats. For regular key bindings, we run the command
@@ -2191,7 +2190,7 @@ impl Session {
                 //       for repeating commands, but held commands would be nice.
                 // if !repeat || (kb.command.repeats() && !kb.is_toggle) {
                 if !repeat {
-                    kb.script.run(&mut self);
+                    kb.script.run(&mut dyn self);
                 }
                 return;
             }
@@ -2245,7 +2244,7 @@ impl Session {
             if let Err(e) = self
                 .cmdline
                 .parse(&line)
-                .map(|script| script.run(&mut self))
+                .map(|script| script.run(&mut dyn self))
             {
                 return Err(io::Error::new(
                     io::ErrorKind::Other,
@@ -2455,7 +2454,7 @@ impl Session {
         match self
             .cmdline
             .parse(&input[1..input.len()])
-            .map(|script| script.run(&mut self))
+            .map(|script| script.run(&mut dyn self))
         {
             Ok(result) => self.message(format!("{:?}", result), MessageType::Info),
             Err(e) => self.message(format!("Error: {}", e), MessageType::Error),
@@ -2649,7 +2648,7 @@ impl Session {
             I64Setting::UiAnimate => self.settings.animation as i64,
             I64Setting::UiChecker => self.settings.uiChecker as i64,
             I64Setting::UiGrid => self.settings.uiGrid as i64,
-            I64Setting::UiScalePercentage => self.settings.scalePercentage as i64,
+            I64Setting::UiScalePercentage => self.settings.uiScalePercentage as i64,
             I64Setting::UiOffsetX => self.offset.x as i64,
             I64Setting::UiOffsetY => self.offset.y as i64,
             I64Setting::Tool => self.tool as i64,
@@ -3216,7 +3215,7 @@ mod test {
 
         assert_eq!(kbs.len(), 2, "bindings can be overwritten");
         assert_eq!(
-            kbs.find(kb2.input, kb2.modifiers, kb2.state, kb2.modes[0]),
+            kbs.find(kb2.input, kb2.modes[0]),
             Some(kb3),
             "bindings can be overwritten"
         );
