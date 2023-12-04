@@ -2073,7 +2073,7 @@ impl Session {
                 return;
             }
             self.cmdline_handle_input(c);
-        } else if let Some(kb) = self.key_bindings.find(Input::Rune(c), self.mode) {
+        } else if let Some(kb) = self.key_bindings.find(Input::Rune(mods, c), self.mode) {
             kb.script.run(self);
         }
     }
@@ -2174,7 +2174,7 @@ impl Session {
 
             if let Some(kb) = self
                 .key_bindings
-                .find(Input::KeyPressed(modifiers, key), self.mode)
+                .find(Input::Key(modifiers, key), self.mode)
             {
                 // For toggle-like key bindings, we don't want to run the command
                 // on key repeats. For regular key bindings, we run the command
@@ -3173,7 +3173,7 @@ mod test {
 
         let kb1 = KeyBinding {
             modes: vec![Mode::Normal],
-            input: Input::KeyPressed(Default::default(), platform::Key::A),
+            input: Input::Key(Default::default(), platform::Key::A),
             script: Script {
                 command: Command::Help,
                 arguments: vec![],
@@ -3217,7 +3217,7 @@ mod test {
             modes: vec![Mode::Normal],
             // purposely put in a default modifiers here to test that we can
             // match modifiers on or off.
-            input: Input::KeyPressed(Default::default(), platform::Key::Control),
+            input: Input::Key(Default::default(), platform::Key::Control),
             script: Script {
                 command: Command::Echo,
                 arguments: vec![],
@@ -3230,15 +3230,7 @@ mod test {
 
         assert_eq!(
             kbs.find(
-                Input::modifier_pressed(platform::Modifier::Control),
-                Mode::Normal
-            ),
-            Some(kb.clone())
-        );
-
-        assert_eq!(
-            kbs.find(
-                Input::KeyPressed(ModifiersState::default(), platform::Key::Control),
+                Input::Key(ModifiersState::default(), platform::Key::Control),
                 Mode::Normal
             ),
             Some(kb)

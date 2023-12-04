@@ -414,14 +414,15 @@ impl Parse for Input {
     fn parser() -> Parser<Self> {
         // TODO: mouse button
         // TODO: mouse wheel
-        // Input::Rune(char) is actually taken care of by passing in a string to the `map` command.
+        // TODO: mouse move
+        // TODO: modifiers with a rune, e.g., `<shift>'ö'`, becomes Input::Rune(mods, char) 
         let modifiers = param::<platform::ModifiersState>();
         // TODO: the "tag" part of the key should be optional if modifiers were present.
         let tagged_key = get_key_parser(true);
         peek(optional(modifiers).then(tagged_key))
             .map(|(mods, key)| {
                 let mods = mods.unwrap_or_default();
-                Input::KeyPressed(mods, key)
+                Input::Key(mods, key)
             })
             .label("<input>")
     }
@@ -862,8 +863,8 @@ mod test {
             Script {
                 command: Command::Evaluate("asdf".to_string()),
                 arguments: vec![
-                    Argument::Input(Input::KeyPressed(ModifiersState::CTRL, Key::E)),
-                    Argument::Input(Input::KeyPressed(ModifiersState::ALT_SHIFT, Key::Home)),
+                    Argument::Input(Input::Key(ModifiersState::CTRL, Key::E)),
+                    Argument::Input(Input::Key(ModifiersState::ALT_SHIFT, Key::Home)),
                 ],
             }
         );
@@ -1056,11 +1057,12 @@ mod test {
     fn test_input_parser() {
         let p = param::<Input>();
 
+        // TODO: enable this as a Input::Key(mods, platform::Key::Shift) input
         assert!(p.parse("<shift>").is_err());
         assert_eq!(
             p.parse("<shift><e>"),
             Ok((
-                Input::KeyPressed(platform::ModifiersState::SHIFT, platform::Key::E),
+                Input::Key(platform::ModifiersState::SHIFT, platform::Key::E),
                 ""
             ))
         );
@@ -1069,7 +1071,7 @@ mod test {
         assert_eq!(
             p.parse("<shift><ctrl><home>..."),
             Ok((
-                Input::KeyPressed(platform::ModifiersState::CTRL_SHIFT, platform::Key::Home),
+                Input::Key(platform::ModifiersState::CTRL_SHIFT, platform::Key::Home),
                 "..."
             ))
         );
@@ -1078,7 +1080,7 @@ mod test {
         assert_eq!(
             p.parse("<alt><shift><ctrl><pgup>asdf"),
             Ok((
-                Input::KeyPressed(
+                Input::Key(
                     platform::ModifiersState::CTRL_ALT_SHIFT,
                     platform::Key::PageUp
                 ),
@@ -1090,7 +1092,7 @@ mod test {
         assert_eq!(
             p.parse("<alt><meta><shift><ctrl><pagedown>whoa"),
             Ok((
-                Input::KeyPressed(
+                Input::Key(
                     platform::ModifiersState::CTRL_ALT_SHIFT_META,
                     platform::Key::PageDown
                 ),
@@ -1102,14 +1104,14 @@ mod test {
         assert_eq!(
             p.parse("<end>y"),
             Ok((
-                Input::KeyPressed(platform::ModifiersState::default(), platform::Key::End),
+                Input::Key(platform::ModifiersState::default(), platform::Key::End),
                 "y"
             ))
         );
         assert_eq!(
             p.parse("<q>soup"),
             Ok((
-                Input::KeyPressed(platform::ModifiersState::default(), platform::Key::Q),
+                Input::Key(platform::ModifiersState::default(), platform::Key::Q),
                 "soup"
             ))
         );

@@ -169,7 +169,7 @@ impl Argument {
                 if chars.next().is_some() {
                     return Err(format!("invalid input {}: '{}'", what_for, string));
                 }
-                Ok(Input::Rune(rune))
+                Ok(Input::Rune(ModifiersState::default(), rune))
             }
             Argument::Input(input) => Ok(input.clone()),
             result => Err(format!("invalid input {}: {}", what_for, result)),
@@ -213,46 +213,16 @@ pub struct Use {
 #[derive(Eq, PartialEq, Debug, Clone, Copy)]
 pub enum Input {
     // TODO: rename ModifiersState -> Modifiers at some point.
-    /// A special key like the `e` key (ignoring modifiers) or `<home>`, pressed.
-    KeyPressed(ModifiersState, Key),
-    /// A special key like the `e` key (ignoring modifiers) or `<home>`, released.
-    KeyReleased(ModifiersState, Key),
-    /// Mouse button was pressed.
-    MousePressed(ModifiersState, MouseButton),
-    /// Mouse button was released.
-    MouseReleased(ModifiersState, MouseButton),
+    /// A special key like the `e` key (ignoring modifiers) or `<home>`.
+    Key(ModifiersState, Key),
+    /// A mouse button like left-mouse button (lmb).
+    MouseButton(ModifiersState, MouseButton),
     /// Mouse wheel was scrolled.  Multiplies the platform input by 100,
     /// so e.g., scrolling up/down is +-100.
     MouseWheel(ModifiersState, i32),
-    // TODO: we can probably bring back modifiers here.
-    //       e.g., `<ctrl>'ö'` or `<shift>'A'` for example.
-    //       we'll need to warn people that the modifiers you use to
-    //       generate the rune should be included.
     /// A letter/character/rune, e.g., 'A' or 'ö', without modifiers.
     /// We can't handle released state here, just the pressed state.
-    Rune(char),
-}
-
-impl Input {
-    pub fn pressed_to_released(&self) -> InputResult {
-        match self {
-            Input::KeyPressed(mods, key) => Ok(Input::KeyReleased(*mods, *key)),
-            Input::MousePressed(mods, btn) => Ok(Input::MouseReleased(*mods, *btn)),
-            input => Err(format!("{:?} doesn't have a released version", input)),
-        }
-    }
-
-    /// A convenience method for returning a single modifier press as an input.
-    /// Note that the ModifiersState must include that modifier.
-    pub fn modifier_pressed(modifier: Modifier) -> Input {
-        let (mods, key) = match modifier {
-            Modifier::Control => (ModifiersState::CTRL, Key::Control),
-            Modifier::Alt => (ModifiersState::ALT, Key::Alt),
-            Modifier::Shift => (ModifiersState::SHIFT, Key::Shift),
-            Modifier::Meta => (ModifiersState::META, Key::Meta),
-        };
-        Input::KeyPressed(mods, key)
-    }
+    Rune(ModifiersState, char),
 }
 
 pub type VoidResult = Result<(), String>;
@@ -274,16 +244,14 @@ impl fmt::Display for Argument {
             Argument::I64(value) => write!(f, "{}", *value),
             Argument::Color(value) => write!(f, "{}", *value),
             Argument::String(value) => write!(f, "'{}'", *value),
-            Argument::Input(Input::KeyPressed(mods, key)) => write!(f, "{}<{}>", mods, key),
-            Argument::Input(Input::KeyReleased(mods, key)) => write!(f, "{}<{}>!", mods, key),
-            Argument::Input(Input::MousePressed(mods, btn)) => write!(f, "{}<{}>", mods, btn),
-            Argument::Input(Input::MouseReleased(mods, btn)) => write!(f, "{}<{}>!", mods, btn),
-            Argument::Input(Input::MouseWheel(mods, val)) => write!(f, "{}<{{{}}}>!", mods, val),
-            Argument::Input(Input::Rune(rune)) => {
+            Argument::Input(Input::Key(mods, key)) => write!(f, "{}<{}>", mods, key),
+            Argument::Input(Input::MouseButton(mods, btn)) => write!(f, "{}<{}>", mods, btn),
+            Argument::Input(Input::MouseWheel(mods, val)) => write!(f, "{}<{{{}}}>", mods, val),
+            Argument::Input(Input::Rune(mods, rune)) => {
                 if *rune == '\'' {
-                    write!(f, "\"'\"")
+                    write!(f, "{}\"'\"", mods)
                 } else {
-                    write!(f, "'{}'", rune)
+                    write!(f, "{}'{}'", mods, rune)
                 }
             }
             Argument::Script(script) if script.arguments.len() == 0 => {
@@ -3994,12 +3962,12 @@ mod test {
     fn test_argument_string_can_become_input() {
         assert_eq!(
             Argument::String("a".to_string()).get_input("for stuff"),
-            Ok(Input::Rune('a'))
+            Ok(Input::Rune(ModifiersState::default(), 'a'))
         );
 
         assert_eq!(
             Argument::String("Ö".to_string()).get_input("for stuff"),
-            Ok(Input::Rune('Ö'))
+            Ok(Input::Rune(ModifiersState::default(), 'Ö'))
         );
 
         // But only if it's exactly one char long:
