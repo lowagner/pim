@@ -35,7 +35,7 @@ use arrayvec::ArrayVec;
 use directories as dirs;
 use nonempty::NonEmpty;
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
 use std::fmt;
 use std::fs::File;
@@ -59,7 +59,7 @@ pub type SessionCoords = Point<Session, f32>;
 
 /// An editing mode the `Session` can be in.
 /// Some of these modes are inspired by vi.
-#[derive(Eq, PartialEq, Copy, Clone, Debug, Default)]
+#[derive(Eq, PartialEq, Copy, Clone, Debug, Default, Hash)]
 pub enum Mode {
     /// Allows the user to paint pixels.
     #[default]
@@ -103,7 +103,7 @@ impl FromStr for Mode {
     }
 }
 
-#[derive(Eq, PartialEq, Copy, Clone, Debug)]
+#[derive(Eq, PartialEq, Copy, Clone, Debug, Hash)]
 pub enum VisualState {
     Selecting { dragging: bool },
     Pasting,
@@ -287,92 +287,44 @@ type Error = String;
 /// A key binding.
 #[derive(PartialEq, Clone, Debug)]
 pub struct KeyBinding {
-    /// The `Mode`s this binding applies to.
-    pub modes: Vec<Mode>,
     /// Input expected to trigger the binding.
     pub input: Input,
     /// The script to run when this binding is triggered.
-    pub script: Script,
-    /// Whether this key binding controls a toggle.
-    // TODO: find some way to continuously press an input, e.g., for drawing.
-    //       the mouse down button for drawing should function like a command,
-    //       or, in fact, be a key binding.
-    // pub is_toggle: bool,
+    pub on_trigger: Script,
+    /// The script to run when this binding is released, if any.
+    pub on_release: Option<Script>,
+    // TODO: optional script to run every frame, e.g., on_frame
     /// How this key binding should be displayed to the user.
     /// If `None`, then this binding shouldn't be shown to the user.
     pub display: Option<String>,
 }
 
-impl KeyBinding {
-    fn is_match(&self, input: Input, mode: Mode) -> bool {
-        input == self.input && self.modes.contains(&mode)
-        /* TODO: we need to have some of this logic for modifiers OR
-           TODO: we should probably actually handle held logic better (which will help in the future).
-                 if something is held it doesn't matter what modifiers are held when the no-mod-key is released.
-                 essentially we need to build Session up with a stateful "what keys are held down" map,
-                 with scripts to run when those keys are released.  we'll make a copy of the release script.
-                 This entails going back to a struct with KeyOrRune/Modifiers/Script/OptionalReleaseScript
-                 so that we can pull out the KeyOrRune quicker.  we can add OptionalHoldScript as well which
-                 will execute every frame.
-
-                match (input, self.input) {
-                    (Input::Key(key), Input::Key(k)) => {
-                        key == k
-                            && self.state == state
-                            && self.modes.contains(&mode)
-                            && (self.modifiers == modifiers
-                                || state == InputState::Released
-                                || key.is_modifier())
-                    }
-                    (Input::Character(a), Input::Character(b)) => {
-                        // Nb. We only check the <ctrl> modifier with characters,
-                        // because the others (especially <shift>) will most likely
-                        // input a different character.
-                        // TODO: we probably should check meta.
-                        a == b
-                            && self.modes.contains(&mode)
-                            && self.state == state
-                            && self.modifiers.ctrl == modifiers.ctrl
-                    }
-        */
-    }
-}
-
 /// Manages a list of key bindings.
 #[derive(Debug, Default)]
 pub struct KeyBindings {
-    // TODO: we can probably hash `Input` and make this a HashMap<Input, KeyBinding> if we want.
-    // TODO: we also may want to break the KeyBindings down by mode (e.g., normal, map, etc.),
-    //       so each mode has their own HashMap.
-    elems: Vec<KeyBinding>,
+    bindings_by_mode: HashMap<Mode, HashMap<Input, KeyBinding>>,
 }
 
 impl KeyBindings {
-    /// Add a key binding.
-    pub fn add(&mut self, binding: KeyBinding) {
-        for mode in binding.modes.iter() {
-            // TODO: technically we could remove `mode` from elems[X].modes for all X where elems[X].input matches.
-            //       probably best to switch to a HashMap, however, to make things more consistent.
-            self.elems.retain(|kb| !kb.is_match(binding.input, *mode));
+    /// Adds a key binding.
+    pub fn add(&mut self, mode: Mode, binding: KeyBinding) {
+        match self.bindings_by_mode.get_mut(&mode) {
+            None => self
+                .bindings_by_mode
+                .insert(mode, HashMap::from((binding.input, binding))),
+            Some(mode_bindings) => {
+                let old_binding = mode_bindings.insert(binding.input, binding);
+                // TODO: add an error message if there was an old binding.
+            }
         }
-        self.elems.push(binding);
     }
 
-    pub fn len(&self) -> usize {
-        self.elems.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.elems.is_empty()
-    }
-
-    /// Find a key binding based on some input state.
+    /// Finds a key binding based on some input state.
     pub fn find(&self, input: Input, mode: Mode) -> Option<KeyBinding> {
-        self.elems
-            .iter()
-            .rev()
-            .cloned()
-            .find(|kb| kb.is_match(input, mode))
+        match self.bindings_by_mode.get(&mode) {
+            None => None,
+            Some(mode_bindings) => mode_bindings.get(input),
+        }
     }
 
     /// Iterate over all key bindings.
@@ -462,8 +414,8 @@ pub struct Session {
 
     /// Whether we should ignore characters received.
     ignore_received_characters: bool,
-    /// The set of keys currently pressed.
-    keys_pressed: HashSet<platform::Key>,
+    /// The keys currently pressed, with a list of scripts to run when they are released.
+    keys_pressed: HashMap<platform::Key, Vec<Script>>,
     /// The list of all active key bindings.
     pub key_bindings: KeyBindings,
 
@@ -579,7 +531,7 @@ impl Session {
             accumulator: time::Duration::from_secs(0),
             palette: Palette::new(Self::PALETTE_CELL_SIZE, Self::PALETTE_HEIGHT as usize),
             key_bindings: KeyBindings::default(),
-            keys_pressed: HashSet::new(),
+            keys_pressed: HashMap::new(),
             ignore_received_characters: false,
             cmdline: CommandLine::new(cwd, history_path, path::SUPPORTED_READ_FORMATS),
             mode: Mode::Normal,
@@ -1033,7 +985,7 @@ impl Session {
 
     /// Release all keys and mouse buttons.
     fn release_inputs(&mut self) {
-        let pressed: Vec<platform::Key> = self.keys_pressed.iter().cloned().collect();
+        let pressed: Vec<platform::Key> = self.keys_pressed.iter().map(|k| k.0).cloned().collect();
         for k in pressed {
             self.handle_keyboard_input(
                 platform::KeyboardInput {
@@ -2074,6 +2026,7 @@ impl Session {
             }
             self.cmdline_handle_input(c);
         } else if let Some(kb) = self.key_bindings.find(Input::Rune(mods, c), self.mode) {
+            // TODO: document that `Input::Rune` can't have a released state
             kb.script.run(self);
         }
     }
@@ -2096,14 +2049,41 @@ impl Session {
             }
 
             if state == InputState::Pressed {
-                repeat = repeat || !self.keys_pressed.insert(key);
-            } else if state == InputState::Released {
-                if !self.keys_pressed.remove(&key) {
+                if !self.keys_pressed.contains_key(&key) {
+                    // TODO: we used to set `repeat = true` in this instance, but i don't know why.
+                    self.keys_pressed.insert(key, vec![]);
+                }
+
+                if let Some(kb) = self
+                    .key_bindings
+                    .find(Input::Key(modifiers, key), self.mode)
+                {
+                    if !repeat {
+                        kb.script.run(self);
+                        if let Some(on_release) = kb.on_release {
+                            // This should be present unless we reset the released keys somehow
+                            if let Some(release_scripts) = self.keys_pressed.get_mut(&key) {
+                                release_scripts.push(on_release);
+                            }
+                        }
+                    }
                     return;
+                }
+            } else if state == InputState::Released {
+                match self.keys_pressed.remove(&key) {
+                    None => return,
+                    Some(release_scripts) => {
+                        // TODO: should we keep track of the script's mode and only fire
+                        //       the release script if the mode matches?
+                        for script in release_scripts {
+                            script.run(self);
+                        }
+                    }
                 }
             }
 
             match self.mode {
+                // TODO: some of these should be config settings.
                 Mode::Visual(VisualState::Selecting { .. }) => {
                     if key == platform::Key::Escape && state == InputState::Pressed {
                         self.switch_mode(Mode::Normal);
@@ -2137,6 +2117,7 @@ impl Session {
                             platform::Key::Backspace => {
                                 self.cmdline_handle_backspace();
                             }
+                            // TODO: add Key::Delete
                             platform::Key::Return => {
                                 self.cmdline_handle_enter();
                             }
@@ -2170,23 +2151,6 @@ impl Session {
                         return;
                     }
                 }
-            }
-
-            if let Some(kb) = self
-                .key_bindings
-                .find(Input::Key(modifiers, key), self.mode)
-            {
-                // For toggle-like key bindings, we don't want to run the command
-                // on key repeats. For regular key bindings, we run the command
-                // depending on if it's supposed to repeat.
-                // TODO: make a consistent framework for commands that repeat
-                //       versus commands that can be held.  i don't know if i care
-                //       for repeating commands, but held commands would be nice.
-                // if !repeat || (kb.command.repeats() && !kb.is_toggle) {
-                if !repeat {
-                    kb.script.run(self);
-                }
-                return;
             }
 
             if let Execution::Recording { events, .. } = exec {
@@ -3071,18 +3035,11 @@ impl Session {
         Ok(Argument::Null)
     }
 
-    pub fn map_input(
-        &mut self,
-        modes: Vec<Mode>,
-        input: script::Input,
-        script: Script,
-    ) -> VoidResult {
-        self.key_bindings.add(KeyBinding {
-            modes,
-            input,
-            script,
-            display: None,
-        });
+    pub fn bind_key(&mut self, mode: Mode, key_binding: KeyBinding) -> VoidResult {
+        // TODO: we may need to improve this logic for modifiers, e.g.,
+        //       we'll double check if the ModifiersState is considered pressed when the modifier key is pressed
+        // TODO: right now our parser logic might not interpret sole modifiers correctly anyway.
+        self.key_bindings.add(mode, key_binding);
         Ok(())
     }
 

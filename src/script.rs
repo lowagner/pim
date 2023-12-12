@@ -2,7 +2,7 @@ use crate::command::*;
 use crate::gfx::Rgba8;
 use crate::palette::Palette;
 use crate::platform::{Key, Modifier, ModifiersState, MouseButton};
-use crate::session::Tool;
+use crate::session::{KeyBinding, Tool};
 use crate::settings::*;
 
 use claim::assert_ok;
@@ -210,7 +210,7 @@ pub struct Use {
     pub lookback: i32,
 }
 
-#[derive(Eq, PartialEq, Debug, Clone, Copy)]
+#[derive(Eq, PartialEq, Debug, Clone, Copy, Hash)]
 pub enum Input {
     // TODO: rename ModifiersState -> Modifiers at some point.
     /// A special key like the `e` key (ignoring modifiers) or `<home>`.
@@ -522,11 +522,11 @@ macro_rules! script_runner {
                             &script_stack,
                             Evaluate::Index(0),
                         )?.get_input("for input mapping")?;
-                        let input_script = self.script_evaluate(
+                        let on_trigger = self.script_evaluate(
                             &script_stack,
                             Evaluate::Index(1),
                         )?.get_script("for input script")?;
-                        let optional_released_script = self.script_evaluate(
+                        let on_release = self.script_evaluate(
                             &script_stack,
                             Evaluate::Index(2),
                         )?.get_optional_script("for input-released mapping")?;
@@ -536,16 +536,15 @@ macro_rules! script_runner {
                             Map::AllModes => vec![Mode::Normal, Mode::Command],
                         };
 
-                        // TODO: add tests for all these cases.
-                        if let Some(released_script) = optional_released_script {
-                            // First get `released` version before we map anything,
-                            // in case there's an error in the conversion (e.g.,
-                            // the input may not support a released version).
-                            let released = input.pressed_to_released()?;
-                            self.map_input(modes.clone(), input, input_script)?;
-                            self.map_input(modes, released, released_script)?;
-                        } else {
-                            self.map_input(modes, input, input_script)?;
+                        let key_binding = KeyBinding {
+                            input,
+                            on_trigger,
+                            on_release,
+                            display: Some(format!("{}", script)),
+                        };
+
+                        for mode in modes {
+                            self.bind_key(mode, key_binding.clone());
                         }
                         Ok(Argument::Null)
                     },
@@ -1952,10 +1951,10 @@ mod test {
             Ok(())
         }
 
-        pub fn map_input(&mut self, modes: Vec<Mode>, input: Input, script: Script) -> VoidResult {
+        pub fn bind_key(&mut self, mode: Mode, binding: KeyBinding) -> VoidResult {
             self.test_what_ran.push(WhatRan::Mocked(format!(
-                "map{:?}{{{:?} -> {:?}}}",
-                modes, input, script
+                "bind{:?}{{{:?} -> {:?}}}",
+                mode, binding
             )));
             Ok(())
         }

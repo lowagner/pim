@@ -117,6 +117,7 @@ pub enum Command {
     /// with an optional script at $2 for release.
     // TODO: we should pass the result of `$1` on press into the release script as an argument.
     // TODO: we should come up with some "hold" input/script that fires while you're holding a key down.
+    // TODO: rename to `Bind` instead of `Map` which is more ambiguous (could be iter().map())
     Map(Map),
     /// Getter/swapper for various settings that are colors.  These can be set via palette index (i64)
     /// or via a color argument (Rgba8).

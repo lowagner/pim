@@ -415,7 +415,7 @@ impl Parse for Input {
         // TODO: mouse button
         // TODO: mouse wheel
         // TODO: mouse move
-        // TODO: modifiers with a rune, e.g., `<shift>'ö'`, becomes Input::Rune(mods, char) 
+        // TODO: modifiers with a rune, e.g., `<shift>'ö'`, becomes Input::Rune(mods, char)
         let modifiers = param::<platform::ModifiersState>();
         // TODO: the "tag" part of the key should be optional if modifiers were present.
         let tagged_key = get_key_parser(true);
