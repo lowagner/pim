@@ -8,7 +8,7 @@ use crate::command::*;
 use crate::gfx::Rgba8;
 use crate::platform;
 use crate::script::{Argument, Input, Script, Use};
-use crate::session::{Direction, Mode, VisualState};
+use crate::session::{Direction, Mode, Visual};
 
 use std::ffi::OsString;
 use std::path::MAIN_SEPARATOR;
@@ -499,7 +499,7 @@ impl Parse for Mode {
                 match id.as_str() {
                     "command" => Ok((Mode::Command, p)),
                     "normal" => Ok((Mode::Normal, p)),
-                    "visual" => Ok((Mode::Visual(VisualState::default()), p)),
+                    "visual" => Ok((Mode::Visual(Visual::default()), p)),
                     mode => Err((
                         memoir::result::Error::new(format!("unknown mode: {}", mode)),
                         input,

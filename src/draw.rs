@@ -4,7 +4,7 @@ use crate::execution::Execution;
 use crate::font::{TextAlign, TextBatch};
 use crate::platform;
 use crate::session;
-use crate::session::{Mode, Session, Tool, VisualState};
+use crate::session::{Mode, Session, Tool, Visual};
 use crate::settings::*;
 use crate::sprite;
 use crate::view::{View, ViewCoords};
@@ -84,9 +84,7 @@ pub mod cursors {
 
             Tool::Brush => match m {
                 Mode::Visual(_) if in_selection && in_view => self::OMNI,
-                Mode::Visual(VisualState::Selecting { dragging: true }) if in_selection => {
-                    self::OMNI
-                }
+                Mode::Visual(Visual::Dragging) if in_selection => self::OMNI,
                 _ => {
                     if b.is_set(BrushMode::Erase) {
                         self::ERASE
@@ -163,9 +161,8 @@ fn draw_ui(session: &Session, canvas: &mut shape2d::Batch, text: &mut TextBatch)
 
     if let Some(selection) = session.selection {
         let fill = match session.mode {
-            Mode::Visual(VisualState::Selecting { .. }) => {
-                Rgba8::new(color::RED.r, color::RED.g, color::RED.b, 0x55)
-            }
+            Mode::Visual(Visual::Selecting) => color::RED.alpha(0x55),
+            Mode::Visual(Visual::Dragging) => color::YELLOW.alpha(0x55),
             // TODO: Handle different modes differently.
             _ => Rgba8::TRANSPARENT,
         };
@@ -638,7 +635,7 @@ fn draw_brush(session: &Session, brush: &Brush, shapes: &mut shape2d::Batch) {
     let z = v.zoom as f32;
 
     match session.mode {
-        Mode::Visual(VisualState::Selecting { .. }) => {
+        Mode::Visual(Visual::Selecting) | Mode::Visual(Visual::Dragging) => {
             if session.is_selected(session.view_coords(v.id, c).into()) {
                 return;
             }
@@ -735,7 +732,7 @@ fn draw_brush(session: &Session, brush: &Brush, shapes: &mut shape2d::Batch) {
 }
 
 fn draw_paste(session: &Session, batch: &mut sprite2d::Batch) {
-    if let (Mode::Visual(VisualState::Pasting), Some(s)) = (session.mode, session.selection) {
+    if let (Mode::Visual(Visual::Pasting), Some(s)) = (session.mode, session.selection) {
         batch.add(
             Rect::origin(batch.w as f32, batch.h as f32),
             Rect::new(s.x1 as f32, s.y1 as f32, s.x2 as f32 + 1., s.y2 as f32 + 1.),

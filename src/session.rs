@@ -64,9 +64,8 @@ pub enum Mode {
     /// Allows the user to paint pixels.
     #[default]
     Normal,
-    // TODO: rename to "Selection" mode
     /// Allows pixels to be selected, copied and manipulated visually.
-    Visual(VisualState),
+    Visual(Visual),
     /// Allows commands to be run.
     Command,
     /// Activated with the `:help` command.
@@ -77,9 +76,9 @@ impl fmt::Display for Mode {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Normal => "normal".fmt(f),
-            Self::Visual(VisualState::Selecting { dragging: true }) => "visual (dragging)".fmt(f),
-            Self::Visual(VisualState::Selecting { .. }) => "visual".fmt(f),
-            Self::Visual(VisualState::Pasting) => "visual (pasting)".fmt(f),
+            Self::Visual(Visual::Selecting) => "visual".fmt(f),
+            Self::Visual(Visual::Dragging) => "visual (dragging)".fmt(f),
+            Self::Visual(Visual::Pasting) => "visual (pasting)".fmt(f),
             Self::Command => "command".fmt(f),
             Self::Help => "help".fmt(f),
         }
@@ -95,7 +94,7 @@ impl FromStr for Mode {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.trim() {
             "normal" => Ok(Mode::Normal),
-            "visual" => Ok(Mode::Visual(VisualState::default())),
+            "visual" => Ok(Mode::Visual(Visual::default())),
             "command" => Ok(Mode::Command),
             "help" => Ok(Mode::Help),
             _ => Err(ModeParseError),
@@ -104,20 +103,23 @@ impl FromStr for Mode {
 }
 
 #[derive(Eq, PartialEq, Copy, Clone, Debug, Hash)]
-pub enum VisualState {
-    Selecting { dragging: bool },
+pub enum Visual {
+    /// Determining the selection by holding click to determine the box size.
+    Selecting,
+    /// Dragging the current selection, i.e., to move it around.
+    Dragging,
+    /// Pasting what's in the clipboard into the current selection.
+    // TODO: can we make this a command instead?
     Pasting,
+    // TODO: ExpandingSelectionSymmetrically -- shift+RMB-drag
+    // TODO: ExpandingSelectionByCorner -- ctrl+RMB-drag
+    //       probably need Corner::TopLeft, TopRight, BottomLeft, BottomRight
+    // TODO: Moving -- ctrl+LMB-drag -- moves the pixels in the selection
 }
 
-impl VisualState {
-    pub fn selecting() -> Self {
-        Self::Selecting { dragging: false }
-    }
-}
-
-impl Default for VisualState {
+impl Default for Visual {
     fn default() -> Self {
-        Self::selecting()
+        Self::Selecting
     }
 }
 
@@ -956,17 +958,23 @@ impl Session {
             return;
         }
 
-        match old {
+        let was_visual = match old {
+            Mode::Visual(_) => true,
             Mode::Command => {
                 // TODO: put this into history
                 self.cmdline.clear();
+                false
             }
-            _ => {}
-        }
+            _ => false,
+        };
 
-        match new {
+        let now_visual = match new {
+            // TODO: if we're switching to Visual::Dragging etc. but we don't have
+            //       a self.selection, we should probably switch to Visual::Selecting
+            Mode::Visual(_) => true,
             Mode::Normal => {
                 self.selection = None;
+                false
             }
             Mode::Command => {
                 // When switching to command mode via the keyboard, we simultaneously
@@ -976,11 +984,17 @@ impl Session {
                 // all such input until the end of the current update.
                 self.ignore_received_characters = true;
                 self.cmdline_handle_input(':');
+                false
             }
-            _ => {}
-        }
+            _ => false,
+        };
 
+        if !(was_visual && now_visual) {
+            // If we are transitioning from visual to visual, should we still release inputs?
+            eprint!("TODO: should we avoid releasing inputs?\n");
+        }
         self.release_inputs();
+        // TODO: should visual mode always go back to Selecting here?
         self.prev_mode = Some(self.mode);
         self.mode = new;
     }
@@ -1628,8 +1642,7 @@ impl Session {
         //       use that buffer when pasting.
         // TODO: longer term, keep track of last Z yanks (e.g., Z = 10, maybe make it a setting),
         //       allow pasting from any of these.
-        if let (Mode::Visual(VisualState::Selecting { .. }), Some(s)) = (self.mode, self.selection)
-        {
+        if let (Mode::Visual(Visual::Selecting), Some(s)) = (self.mode, self.selection) {
             let v = self.active_view_mut();
             let s = s.abs().bounds();
 
@@ -1639,7 +1652,7 @@ impl Session {
                 v.yank(s);
 
                 self.selection = Some(Selection::from(s));
-                self.switch_mode(Mode::Visual(VisualState::Pasting));
+                self.switch_mode(Mode::Visual(Visual::Pasting));
 
                 return Some(s);
             }
@@ -1648,7 +1661,7 @@ impl Session {
     }
 
     fn paste_selection(&mut self) -> Option<Rect<i32>> {
-        if let (Mode::Visual(VisualState::Pasting), Some(s)) = (self.mode, self.selection) {
+        if let (Mode::Visual(Visual::Pasting), Some(s)) = (self.mode, self.selection) {
             let bounds = s.abs().bounds();
             self.active_view_mut().paste(bounds);
             Some(bounds)
@@ -1660,8 +1673,7 @@ impl Session {
     }
 
     fn flip_selection(&mut self, axis: Axis) {
-        if let (Mode::Visual(VisualState::Selecting { .. }), Some(s)) = (self.mode, self.selection)
-        {
+        if let (Mode::Visual(Visual::Selecting), Some(s)) = (self.mode, self.selection) {
             let v = self.active_view_mut();
             let s = s.abs().bounds();
 
@@ -1674,13 +1686,13 @@ impl Session {
                 v.paste(s);
 
                 self.selection = Some(Selection::from(s));
-                self.switch_mode(Mode::Visual(VisualState::Pasting));
+                self.switch_mode(Mode::Visual(Visual::Pasting));
             }
             // Note that the effects generated here will be processed *before* the
             // view operations.
             self.erase_selection();
             // TODO: i think we can just `switch_mode` here.
-            self.toggle_mode(Mode::Visual(VisualState::Selecting { dragging: false }));
+            self.toggle_mode(Mode::Visual(Visual::Selecting));
         }
     }
 
@@ -1851,13 +1863,15 @@ impl Session {
                             Mode::Command => {
                                 // TODO
                             }
-                            Mode::Visual(VisualState::Selecting { ref mut dragging }) => {
+                            // TODO: Can we even get to Visual::Dragging without already having pressed
+                            //       the mouse button?  i guess we'll want to support this via scripts.
+                            Mode::Visual(Visual::Selecting) | Mode::Visual(Visual::Dragging) => {
                                 let p = p.map(|n| n as i32);
                                 let unit = Selection::new(p.x, p.y, p.x + 1, p.y + 1);
 
                                 if let Some(s) = &mut self.selection {
                                     if s.abs().bounds().contains(p) {
-                                        *dragging = true;
+                                        self.switch_mode(Mode::Visual(Visual::Dragging));
                                     } else {
                                         self.selection = Some(unit);
                                     }
@@ -1865,7 +1879,7 @@ impl Session {
                                     self.selection = Some(unit);
                                 }
                             }
-                            Mode::Visual(VisualState::Pasting) => {
+                            Mode::Visual(Visual::Pasting) => {
                                 // Re-center the selection in-case we've switched layer.
                                 self.center_selection(self.cursor);
                                 self.paste_selection();
@@ -1879,17 +1893,17 @@ impl Session {
                 } else {
                     // Clicking outside a view...
                     match self.mode {
-                        Mode::Visual(VisualState::Selecting { ref mut dragging }) => {
+                        Mode::Visual(Visual::Selecting) | Mode::Visual(Visual::Dragging) => {
                             self.selection = None;
-                            *dragging = false;
+                            self.mode = Mode::Visual(Visual::Selecting);
                         }
                         _ => {}
                     }
                 }
             }
             InputState::Released => match self.mode {
-                Mode::Visual(VisualState::Selecting { ref mut dragging }) => {
-                    *dragging = false;
+                Mode::Visual(Visual::Dragging) => {
+                    self.switch_mode(Mode::Visual(Visual::Selecting));
                 }
                 Mode::Normal => {
                     if let Tool::Brush = self.tool {
@@ -1982,14 +1996,14 @@ impl Session {
                         },
                         _ => {}
                     },
-                    Mode::Visual(VisualState::Selecting { dragging: false }) => {
+                    Mode::Visual(Visual::Selecting) => {
                         if self.lmb_state == InputState::Pressed {
                             if let Some(ref mut s) = self.selection {
                                 *s = Selection::new(s.x1, s.y1, p.x as i32 + 1, p.y as i32 + 1);
                             }
                         }
                     }
-                    Mode::Visual(VisualState::Selecting { dragging: true }) => {
+                    Mode::Visual(Visual::Dragging) => {
                         let view = self.active_view().layer_bounds();
 
                         // Resize selection.
@@ -2006,7 +2020,7 @@ impl Session {
                             }
                         }
                     }
-                    Mode::Visual(VisualState::Pasting) => {
+                    Mode::Visual(Visual::Pasting) => {
                         self.center_selection(cursor);
                     }
                     _ => {}
@@ -2087,19 +2101,6 @@ impl Session {
             }
 
             match self.mode {
-                // TODO: some of these should be config settings.
-                Mode::Visual(VisualState::Selecting { .. }) => {
-                    if key == platform::Key::Escape && state == InputState::Pressed {
-                        self.switch_mode(Mode::Normal);
-                        return;
-                    }
-                }
-                Mode::Visual(VisualState::Pasting) => {
-                    if key == platform::Key::Escape && state == InputState::Pressed {
-                        self.switch_mode(Mode::Visual(VisualState::default()));
-                        return;
-                    }
-                }
                 Mode::Command => {
                     if state == InputState::Pressed {
                         match key {
@@ -2149,9 +2150,9 @@ impl Session {
                         }
                     }
                 }
-                Mode::Help => {
-                    if state == InputState::Pressed && key == platform::Key::Escape {
-                        self.switch_mode(Mode::Normal);
+                _ => {
+                    if key == platform::Key::Escape && state == InputState::Pressed {
+                        self.switch_mode(Mode::Visual(Visual::default()));
                         return;
                     }
                 }

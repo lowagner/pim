@@ -2,7 +2,7 @@ use crate::command::*;
 use crate::gfx::Rgba8;
 use crate::palette::Palette;
 use crate::platform::{Key, Modifier, ModifiersState, MouseButton};
-use crate::session::{KeyBinding, Tool};
+use crate::session::Tool;
 use crate::settings::*;
 
 use claim::assert_ok;
@@ -1672,7 +1672,7 @@ mod test {
     use super::*;
     use crate::gfx::Point;
     use crate::message::*;
-    use crate::session::Mode;
+    use crate::session::{KeyBinding, Mode};
     use crate::view::ViewExtent;
     use std::collections::HashSet;
     use strum::IntoEnumIterator;
