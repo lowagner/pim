@@ -117,8 +117,7 @@ pub enum Command {
     /// with an optional script at $2 for release.
     // TODO: we should pass the result of `$1` on press into the release script as an argument.
     // TODO: we should come up with some "hold" input/script that fires while you're holding a key down.
-    // TODO: rename to `Bind` instead of `Map` which is more ambiguous (could be iter().map())
-    Map(Map),
+    Bind(Bind),
     /// Getter/swapper for various settings that are colors.  These can be set via palette index (i64)
     /// or via a color argument (Rgba8).
     ColorSetting(ColorSetting),
@@ -232,7 +231,7 @@ impl fmt::Display for Command {
             Command::SetVariable => write!(f, "set"),
             Command::ConstVariable => write!(f, "const"),
             Command::CreateAlias => write!(f, "alias"),
-            Command::Map(Map::AllModes) => write!(f, "map"),
+            Command::Bind(Bind::AllModes) => write!(f, "bind"),
             Command::ColorSetting(ColorSetting::UiBackground) => write!(f, "ui-bg"),
             Command::ColorSetting(ColorSetting::UiGrid) => write!(f, "grid-color"),
             Command::ColorSetting(ColorSetting::Foreground) => write!(f, "fg"),
@@ -328,7 +327,7 @@ impl FromStr for Command {
             "set" => Ok(Command::SetVariable),
             "const" => Ok(Command::ConstVariable),
             "alias" => Ok(Command::CreateAlias),
-            "map" => Ok(Command::Map(Map::AllModes)),
+            "bind" => Ok(Command::Bind(Bind::AllModes)),
             "ui-bg" => Ok(Command::ColorSetting(ColorSetting::UiBackground)),
             "grid-color" => Ok(Command::ColorSetting(ColorSetting::UiGrid)),
             "fg" => Ok(Command::ColorSetting(ColorSetting::Foreground)),
@@ -428,7 +427,7 @@ impl fmt::Display for EmptyCommandParseError {
 }
 
 #[derive(Eq, Hash, PartialEq, Debug, Clone, Copy, EnumIter)]
-pub enum Map {
+pub enum Bind {
     /// Effectively all modes.
     AllModes,
     // TODO: Normal/Selection/Etc.
@@ -837,8 +836,8 @@ mod test {
 
     #[test]
     fn test_commands_can_be_printed_and_unprinted() {
-        for map in Map::iter() {
-            let command = Command::Map(map);
+        for bind in Bind::iter() {
+            let command = Command::Bind(bind);
             let name = format!("{}", command);
             let command_from_name = Command::from_str(&name).unwrap();
             assert_eq!(command_from_name, command);

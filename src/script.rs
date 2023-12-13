@@ -517,7 +517,7 @@ macro_rules! script_runner {
                     Command::SetVariable => self.variables.set_from_script(&script),
                     Command::ConstVariable => self.variables.set_from_script(&script),
                     Command::CreateAlias => self.variables.set_from_script(&script),
-                    Command::Map(map) => {
+                    Command::Bind(bind) => {
                         let input = self.script_evaluate(
                             &script_stack,
                             Evaluate::Index(0),
@@ -531,9 +531,9 @@ macro_rules! script_runner {
                             Evaluate::Index(2),
                         )?.get_optional_script("for input-released mapping")?;
 
-                        let modes = match map {
+                        let modes = match bind {
                             // TODO: add Selection modes to Map::AllModes
-                            Map::AllModes => vec![Mode::Normal, Mode::Command],
+                            Bind::AllModes => vec![Mode::Normal, Mode::Command],
                         };
 
                         let key_binding = KeyBinding {
@@ -1068,8 +1068,8 @@ impl Variables {
             e.g., `$$ 'fgc' 'fg'` to add `fgc` as an alias for `fg`",
         );
         variables.add_built_in(
-            Command::Map(Map::AllModes),
-            "adds input $0 mapping with script $1 on press, optional $2 on release, \
+            Command::Bind(Bind::AllModes),
+            "adds input $0 binding with script $1 on press, optional $2 on release, \
             to all modes, e.g., `$$ <ctrl><z> undo` to undo, or \
             `$$ <shift><p> (p cx cy #123456) (p cx cy #654321)` to paint",
         );
