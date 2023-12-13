@@ -309,9 +309,10 @@ impl KeyBindings {
     /// Adds a key binding.
     pub fn add(&mut self, mode: Mode, binding: KeyBinding) {
         match self.bindings_by_mode.get_mut(&mode) {
-            None => self
-                .bindings_by_mode
-                .insert(mode, HashMap::from((binding.input, binding))),
+            None => {
+                self.bindings_by_mode
+                    .insert(mode, HashMap::from([(binding.input, binding)]));
+            }
             Some(mode_bindings) => {
                 let old_binding = mode_bindings.insert(binding.input, binding);
                 // TODO: add an error message if there was an old binding.
@@ -323,13 +324,14 @@ impl KeyBindings {
     pub fn find(&self, input: Input, mode: Mode) -> Option<KeyBinding> {
         match self.bindings_by_mode.get(&mode) {
             None => None,
-            Some(mode_bindings) => mode_bindings.get(input),
+            Some(mode_bindings) => mode_bindings.get(&input).cloned(),
         }
     }
 
-    /// Iterate over all key bindings.
-    pub fn iter(&self) -> std::slice::Iter<'_, KeyBinding> {
-        self.elems.iter()
+    pub fn len(&self) -> usize {
+        self.bindings_by_mode
+            .values()
+            .fold(0, |count, bindings| count + bindings.len())
     }
 }
 
@@ -2026,8 +2028,9 @@ impl Session {
             }
             self.cmdline_handle_input(c);
         } else if let Some(kb) = self.key_bindings.find(Input::Rune(mods, c), self.mode) {
-            // TODO: document that `Input::Rune` can't have a released state
-            kb.script.run(self);
+            kb.on_trigger.run(self);
+            // TODO: document that `Input::Rune` immediately runs its release state
+            kb.on_release.map(|on_release| on_release.run(self));
         }
     }
 
@@ -2059,12 +2062,13 @@ impl Session {
                     .find(Input::Key(modifiers, key), self.mode)
                 {
                     if !repeat {
-                        kb.script.run(self);
+                        kb.on_trigger.run(self);
                         if let Some(on_release) = kb.on_release {
-                            // This should be present unless we reset the released keys somehow
-                            if let Some(release_scripts) = self.keys_pressed.get_mut(&key) {
-                                release_scripts.push(on_release);
-                            }
+                            let release_scripts = self
+                                .keys_pressed
+                                .get_mut(&key)
+                                .expect("just added to keys_pressed if it wasn't there");
+                            release_scripts.push(on_release);
                         }
                     }
                     return;
@@ -3129,21 +3133,17 @@ mod test {
         let mut kbs = KeyBindings::default();
 
         let kb1 = KeyBinding {
-            modes: vec![Mode::Normal],
             input: Input::Key(Default::default(), platform::Key::A),
-            script: Script {
+            on_trigger: Script {
                 command: Command::Help,
                 arguments: vec![],
             },
+            on_release: None,
             display: None,
         };
-        let kb2 = KeyBinding {
-            modes: vec![Mode::Command],
-            ..kb1.clone()
-        };
 
-        kbs.add(kb1);
-        kbs.add(kb2.clone());
+        kbs.add(Mode::Normal, kb1.clone());
+        kbs.add(Mode::Command, kb1.clone());
 
         assert_eq!(
             kbs.len(),
@@ -3151,19 +3151,20 @@ mod test {
             "identical bindings for different modes can co-exist"
         );
 
-        let kb3 = KeyBinding {
-            script: Script {
+        let kb2 = KeyBinding {
+            on_trigger: Script {
                 command: Command::Quit(Quit::Safe),
                 arguments: vec![],
             },
-            ..kb2.clone()
+            on_release: None,
+            ..kb1.clone()
         };
-        kbs.add(kb3.clone());
+        kbs.add(Mode::Normal, kb2.clone());
 
         assert_eq!(kbs.len(), 2, "bindings can be overwritten");
         assert_eq!(
-            kbs.find(kb2.input, kb2.modes[0]),
-            Some(kb3),
+            kbs.find(kb1.input, Mode::Normal),
+            Some(kb2),
             "bindings can be overwritten"
         );
     }
@@ -3171,19 +3172,19 @@ mod test {
     #[test]
     fn test_key_bindings_modifier() {
         let kb = KeyBinding {
-            modes: vec![Mode::Normal],
             // purposely put in a default modifiers here to test that we can
             // match modifiers on or off.
             input: Input::Key(Default::default(), platform::Key::Control),
-            script: Script {
+            on_trigger: Script {
                 command: Command::Echo,
                 arguments: vec![],
             },
+            on_release: None,
             display: None,
         };
 
         let mut kbs = KeyBindings::default();
-        kbs.add(kb.clone());
+        kbs.add(Mode::Normal, kb.clone());
 
         assert_eq!(
             kbs.find(

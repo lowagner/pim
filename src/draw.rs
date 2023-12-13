@@ -811,6 +811,7 @@ pub fn draw_help(session: &Session, text: &mut TextBatch, shape: &mut shape2d::B
         TextAlign::Left,
     );
 
+    /* TODO: bring back help for key bindings
     let (normal_kbs, visual_kbs): (
         Vec<(&String, &session::KeyBinding)>,
         Vec<(&String, &session::KeyBinding)>,
@@ -877,6 +878,7 @@ pub fn draw_help(session: &Session, text: &mut TextBatch, shape: &mut shape2d::B
             );
         }
     }
+    */
     /* // TODO: add settings info here
     for l in session::SETTINGS.lines() {
         if let Some(y) = line.next() {

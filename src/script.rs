@@ -1952,10 +1952,8 @@ mod test {
         }
 
         pub fn bind_key(&mut self, mode: Mode, binding: KeyBinding) -> VoidResult {
-            self.test_what_ran.push(WhatRan::Mocked(format!(
-                "bind{:?}{{{:?} -> {:?}}}",
-                mode, binding
-            )));
+            self.test_what_ran
+                .push(WhatRan::Mocked(format!("bind{:?}{:?}", mode, binding)));
             Ok(())
         }
 
