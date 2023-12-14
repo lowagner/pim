@@ -1534,25 +1534,26 @@ impl Session {
     }
 
     /// Quit the view.
-    fn quit_view(&mut self, id: ViewId) {
+    fn quit_view(&mut self, id: ViewId) -> ArgumentResult {
         self.destroy_view(id);
 
         if !self.views.is_empty() {
             self.organize_views();
             self.center_active_view();
         }
+        Ok(Argument::Null)
     }
 
-    /// Quit view if it has been saved. Otherwise, display an error.
-    fn quit_view_safe(&mut self, id: ViewId) {
+    /// Quit view if it has been saved, or return an error otherwise.
+    fn quit_view_safe(&mut self, id: ViewId) -> ArgumentResult {
         let v = self.view(id);
         if v.file_status.needs_saving() {
-            self.message(
-                "Error: no write since last change (enter `:q!` to quit without saving)",
-                MessageType::Error,
-            );
+            Err(
+                "Error: no write since last change (enter `:q!` to quit without saving)"
+                    .to_string(),
+            )
         } else {
-            self.quit_view(id);
+            self.quit_view(id)
         }
     }
 
@@ -3113,20 +3114,24 @@ impl Session {
         Ok(())
     }
 
-    pub fn script_quit(&mut self, quit: Quit) {
+    pub fn script_quit(&mut self, quit: Quit) -> ArgumentResult {
         match quit {
             Quit::Safe => self.quit_view_safe(self.views.active_id),
             Quit::AllSafe => {
                 let ids: Vec<ViewId> = self.views.ids().collect();
                 for id in ids {
-                    self.quit_view_safe(id);
+                    self.quit_view_safe(id)?;
                 }
+                Ok(Argument::Null)
             }
             Quit::Forced => self.quit_view(self.views.active_id),
-            Quit::AllForced => self.quit(ExitReason::Normal),
+            Quit::AllForced => {
+                self.quit(ExitReason::Normal);
+                Ok(Argument::Null)
+            }
             Quit::AfterWrite => match self.save_view(self.views.active_id) {
                 Ok(_) => self.quit_view(self.views.active_id),
-                Err(e) => self.message(e, MessageType::Error),
+                Err(e) => Err(format!("file saving error: {}", e)),
             },
         }
     }

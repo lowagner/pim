@@ -810,10 +810,7 @@ macro_rules! script_runner {
                         self.script_write(arg0, arg1)?;
                         Ok(Argument::Null)
                     }
-                    Command::Quit(q) => {
-                        self.script_quit(*q);
-                        Ok(Argument::Null)
-                    }
+                    Command::Quit(q) => self.script_quit(*q),
                 }
             }
         }
@@ -1992,9 +1989,10 @@ mod test {
             Ok(())
         }
 
-        fn script_quit(&mut self, quit: Quit) {
+        fn script_quit(&mut self, quit: Quit) -> ArgumentResult {
             self.test_what_ran
                 .push(WhatRan::Mocked(format!("quit{{{:?}}}", quit)));
+            Ok(Argument::Null)
         }
     }
 
