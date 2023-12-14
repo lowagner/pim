@@ -418,8 +418,8 @@ pub struct Session {
 
     /// Whether we should ignore characters received.
     ignore_received_characters: bool,
-    /// The keys currently pressed, with a list of scripts to run when they are released.
-    keys_pressed: HashMap<platform::Key, Vec<Script>>,
+    /// The keys currently pressed, with a list of scripts to run (with arguments) when they are released.
+    keys_pressed: HashMap<platform::Key, Vec<(Script, Vec<Argument>)>>,
     /// The list of all active key bindings.
     pub key_bindings: KeyBindings,
 
@@ -2042,9 +2042,15 @@ impl Session {
             }
             self.cmdline_handle_input(c);
         } else if let Some(kb) = self.key_bindings.find(Input::Rune(mods, c), self.mode) {
-            kb.on_trigger.run(self);
+            // TODO: maybe figure out a way to pass every argument evaluated in the on_trigger
+            //       script into this argument list.  might need a different command, might be impossible.
+            //       OR we need `run` to return a list of argument results, etc.
+            // TODO: if Err, show message:
+            let result = kb.on_trigger.run(self);
             // TODO: document that `Input::Rune` immediately runs its release state
-            kb.on_release.map(|on_release| on_release.run(self));
+            if let (Ok(result), Some(on_release)) = (result, kb.on_release) {
+                self.run_with_arguments(on_release, vec![result]);
+            }
         }
     }
 
@@ -2076,13 +2082,16 @@ impl Session {
                     .find(Input::Key(modifiers, key), self.mode)
                 {
                     if !repeat {
-                        kb.on_trigger.run(self);
-                        if let Some(on_release) = kb.on_release {
+                        // TODO: maybe figure out a way to pass every argument evaluated in the on_trigger
+                        //       script into this argument list.  might need a different command, might be impossible.
+                        //       OR we need `run` to return a list of argument results, etc.
+                        let result = kb.on_trigger.run(self);
+                        if let (Ok(result), Some(on_release)) = (result, kb.on_release) {
                             let release_scripts = self
                                 .keys_pressed
                                 .get_mut(&key)
                                 .expect("just added to keys_pressed if it wasn't there");
-                            release_scripts.push(on_release);
+                            release_scripts.push((on_release, vec![result]));
                         }
                     }
                     return;
@@ -2093,8 +2102,8 @@ impl Session {
                     Some(release_scripts) => {
                         // TODO: should we keep track of the script's mode and only fire
                         //       the release script if the mode matches?
-                        for script in release_scripts {
-                            script.run(self);
+                        for (script, arguments) in release_scripts {
+                            self.run_with_arguments(script, arguments);
                         }
                     }
                 }
@@ -2464,6 +2473,21 @@ impl Session {
     fn sample_color(&mut self, button: platform::MouseButton) {
         if let Some(color) = self.hover_color {
             self.pick_color(color, button);
+        }
+    }
+
+    /// Runs a script with arguments.  Note this only applies in limited circumstances,
+    /// like triggering a script on a key press, due to how arguments will get populated
+    /// for an unevaluated script.
+    fn run_with_arguments(&mut self, script: Script, arguments: Vec<Argument>) {
+        // This base command is ignored; we just need to populate the argument list.
+        let base_script = Script {
+            command: Command::Help,
+            arguments,
+        };
+        match self.run(vec![&base_script, &script]) {
+            Ok(_) => {}
+            Err(err) => self.message(format!("error: {}", err), MessageType::Error),
         }
     }
 
