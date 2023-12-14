@@ -2209,8 +2209,9 @@ impl Session {
     fn source_reader<P: AsRef<Path>, R: io::BufRead>(&mut self, r: R, _path: P) -> io::Result<()> {
         for (i, line) in r.lines().enumerate() {
             let line = line?;
+            let line = line.trim();
 
-            if line.starts_with(command::COMMENT) {
+            if line.is_empty() || line.starts_with(command::COMMENT) {
                 continue;
             }
             if let Err(e) = self.cmdline.parse(&line).map(|script| script.run(self)) {
