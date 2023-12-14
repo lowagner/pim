@@ -388,26 +388,33 @@ impl Parse for platform::Modifier {
 
 impl Parse for platform::ModifiersState {
     fn parser() -> Parser<Self> {
-        many::<_, Vec<platform::Modifier>>(param::<platform::Modifier>())
-            .map(|modifiers| {
-                let mut state = platform::ModifiersState {
-                    shift: false,
-                    alt: false,
-                    ctrl: false,
-                    meta: false,
-                };
-                for modifier in modifiers {
-                    match modifier {
-                        platform::Modifier::Control => state.ctrl = true,
-                        platform::Modifier::Shift => state.shift = true,
-                        platform::Modifier::Alt => state.alt = true,
-                        platform::Modifier::Meta => state.meta = true,
-                    }
-                }
-                state
-            })
+        parse_modifiers_with_last()
+            .map(|(mods, last)| mods)
             .label("<mods>")
     }
+}
+
+fn parse_modifiers_with_last() -> Parser<(platform::ModifiersState, Option<platform::Modifier>)> {
+    many::<_, Vec<platform::Modifier>>(param::<platform::Modifier>())
+        .map(|modifiers| {
+            let mut state = platform::ModifiersState {
+                shift: false,
+                alt: false,
+                ctrl: false,
+                meta: false,
+            };
+            let last_modifier = modifiers.last().copied();
+            for modifier in modifiers {
+                match modifier {
+                    platform::Modifier::Control => state.ctrl = true,
+                    platform::Modifier::Shift => state.shift = true,
+                    platform::Modifier::Alt => state.alt = true,
+                    platform::Modifier::Meta => state.meta = true,
+                }
+            }
+            (state, last_modifier)
+        })
+        .label("<(mods, last-mod)>")
 }
 
 impl Parse for Input {
@@ -432,8 +439,17 @@ impl Parse for Input {
                     Input::Rune(mods, rune)
                 }),
         );
+        // Modifiers without anything else, use the last mod as the key to press.
+        let input_mod = peek(parse_modifiers_with_last().try_map(|(mods, last)| {
+            if let Some(last) = last {
+                // TODO: double check if we need to remove `last` from mods:
+                Ok(Input::Key(mods, last.into()))
+            } else {
+                Err("no mod")
+            }
+        }));
 
-        input_key.or(input_rune).label("<input>")
+        input_key.or(input_rune).or(input_mod).label("<input>")
     }
 }
 
@@ -1066,8 +1082,13 @@ mod test {
     fn test_input_parser_to_input_key() {
         let p = param::<Input>();
 
-        // TODO: enable this as a Input::Key(mods, platform::Key::Shift) input
-        assert!(p.parse("<shift>").is_err());
+        assert_eq!(
+            p.parse("<shift>y"),
+            Ok((
+                Input::Key(platform::ModifiersState::SHIFT, platform::Key::Shift),
+                "y"
+            ))
+        );
         assert_eq!(
             p.parse("<shift><e>"),
             Ok((
@@ -1076,7 +1097,13 @@ mod test {
             ))
         );
 
-        assert!(p.parse("<shift><ctrl>").is_err());
+        assert_eq!(
+            p.parse("<ctrl><shift>oh"),
+            Ok((
+                Input::Key(platform::ModifiersState::CTRL_SHIFT, platform::Key::Shift),
+                "oh"
+            ))
+        );
         assert_eq!(
             p.parse("<shift><ctrl><home>..."),
             Ok((
@@ -1085,7 +1112,16 @@ mod test {
             ))
         );
 
-        assert!(p.parse("<shift><ctrl><alt>").is_err());
+        assert_eq!(
+            p.parse("<alt><shift><ctrl>yoop"),
+            Ok((
+                Input::Key(
+                    platform::ModifiersState::CTRL_ALT_SHIFT,
+                    platform::Key::Control
+                ),
+                "yoop"
+            ))
+        );
         assert_eq!(
             p.parse("<alt><shift><ctrl><pgup>asdf"),
             Ok((
@@ -1097,7 +1133,16 @@ mod test {
             ))
         );
 
-        assert!(p.parse("<meta><shift><ctrl><alt>").is_err());
+        assert_eq!(
+            p.parse("<alt><shift><ctrl><meta>ey"),
+            Ok((
+                Input::Key(
+                    platform::ModifiersState::CTRL_ALT_SHIFT_META,
+                    platform::Key::Meta
+                ),
+                "ey"
+            ))
+        );
         assert_eq!(
             p.parse("<alt><meta><shift><ctrl><pagedown>whoa"),
             Ok((
@@ -1139,7 +1184,9 @@ mod test {
             ))
         );
 
+        /* TODO: ensure this parses bad; maybe we should always absorb an entire token??
         assert!(p.parse("<ctrl><shift>\"qu\"").is_err());
+        */
         assert_eq!(
             p.parse("<ctrl><alt>\"ö\""),
             Ok((Input::Rune(platform::ModifiersState::CTRL_ALT, 'ö'), ""))

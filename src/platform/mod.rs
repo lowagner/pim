@@ -311,11 +311,23 @@ impl Key {
     }
 }
 
+#[derive(Debug, Hash, Ord, PartialOrd, PartialEq, Eq, Clone, Copy)]
 pub enum Modifier {
     Meta,
     Shift,
     Control,
     Alt,
+}
+
+impl From<Modifier> for Key {
+    fn from(modifier: Modifier) -> Self {
+        match modifier {
+            Modifier::Meta => Key::Meta,
+            Modifier::Shift => Key::Shift,
+            Modifier::Control => Key::Control,
+            Modifier::Alt => Key::Alt,
+        }
+    }
 }
 
 impl fmt::Display for Modifier {
