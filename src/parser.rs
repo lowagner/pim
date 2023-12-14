@@ -7,7 +7,7 @@ use crate::brush::BrushMode;
 use crate::command::*;
 use crate::gfx::Rgba8;
 use crate::platform;
-use crate::script::{Argument, Input, Script, Use};
+use crate::script::{get_single_rune, Argument, Input, Script, Use};
 use crate::session::{Direction, Mode, Visual};
 
 use std::ffi::OsString;
@@ -415,16 +415,25 @@ impl Parse for Input {
         // TODO: mouse button
         // TODO: mouse wheel
         // TODO: mouse move
-        // TODO: modifiers with a rune, e.g., `<shift>'ö'`, becomes Input::Rune(mods, char)
-        let modifiers = param::<platform::ModifiersState>();
-        // TODO: the "tag" part of the key should be optional if modifiers were present.
-        let tagged_key = get_key_parser(true);
-        peek(optional(modifiers).then(tagged_key))
-            .map(|(mods, key)| {
-                let mods = mods.unwrap_or_default();
-                Input::Key(mods, key)
-            })
-            .label("<input>")
+        // Modifiers with a special key, e.g., `<shift><k>` for shift+k
+        let input_key = peek(
+            optional(param::<platform::ModifiersState>()).then(get_key_parser(true)),
+        )
+        .map(|(mods, key)| {
+            let mods = mods.unwrap_or_default();
+            Input::Key(mods, key)
+        });
+        // Modifiers with a rune, e.g., `<shift>'ö'`, becomes Input::Rune(mods, char)
+        let input_rune = peek(
+            optional(param::<platform::ModifiersState>())
+                .then(quoted().try_map(|string| get_single_rune(&string)))
+                .map(|(mods, rune)| {
+                    let mods = mods.unwrap_or_default();
+                    Input::Rune(mods, rune)
+                }),
+        );
+
+        input_key.or(input_rune).label("<input>")
     }
 }
 
@@ -1054,7 +1063,7 @@ mod test {
     }
 
     #[test]
-    fn test_input_parser() {
+    fn test_input_parser_to_input_key() {
         let p = param::<Input>();
 
         // TODO: enable this as a Input::Key(mods, platform::Key::Shift) input
@@ -1114,6 +1123,26 @@ mod test {
                 Input::Key(platform::ModifiersState::default(), platform::Key::Q),
                 "soup"
             ))
+        );
+    }
+
+    #[test]
+    fn test_input_parser_to_input_rune() {
+        let p = param::<Input>();
+
+        assert!(p.parse("'asdf'").is_err());
+        assert_eq!(
+            p.parse("'a'extra"),
+            Ok((
+                Input::Rune(platform::ModifiersState::default(), 'a'),
+                "extra"
+            ))
+        );
+
+        assert!(p.parse("<ctrl><shift>\"qu\"").is_err());
+        assert_eq!(
+            p.parse("<ctrl><alt>\"ö\""),
+            Ok((Input::Rune(platform::ModifiersState::CTRL_ALT, 'ö'), ""))
         );
     }
 }

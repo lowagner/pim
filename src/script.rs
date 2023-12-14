@@ -156,30 +156,21 @@ impl Argument {
         }
     }
 
-    pub fn get_input(&self, what_for: &str) -> InputResult {
+    pub fn get_input(&self) -> InputResult {
         match self {
-            Argument::String(string) => {
-                // We want only the first char, but only if the string is one char long.
-                let mut chars = string.chars();
-                let rune = chars.next();
-                if rune.is_none() {
-                    return Err(format!("invalid input {}: <empty-string>", what_for));
-                }
-                let rune = rune.unwrap();
-                if chars.next().is_some() {
-                    return Err(format!("invalid input {}: '{}'", what_for, string));
-                }
-                Ok(Input::Rune(ModifiersState::default(), rune))
-            }
+            Argument::String(string) => Ok(Input::Rune(
+                ModifiersState::default(),
+                get_single_rune(&string)?,
+            )),
             Argument::Input(input) => Ok(input.clone()),
-            result => Err(format!("invalid input {}: {}", what_for, result)),
+            result => Err(format!("invalid input: {}", result)),
         }
     }
 
-    pub fn get_optional_input(&self, what_for: &str) -> OptionalInputResult {
+    pub fn get_optional_input(&self) -> OptionalInputResult {
         match self {
             Argument::Null => Ok(None),
-            arg => Ok(Some(arg.get_input(what_for)?)),
+            arg => Ok(Some(arg.get_input()?)),
         }
     }
 
@@ -198,6 +189,21 @@ impl Argument {
             arg => Ok(Some(arg.get_script(what_for)?)),
         }
     }
+}
+
+/// Returns the rune if the string comprises only a single char.
+pub fn get_single_rune(string: &String) -> Result<char, String> {
+    // We want only the first char, but only if the string is one char long.
+    let mut chars = string.chars();
+    let rune = chars.next();
+    if rune.is_none() {
+        return Err(format!("invalid input: <empty-string>"));
+    }
+    let rune = rune.unwrap();
+    if chars.next().is_some() {
+        return Err(format!("invalid input: '{}'", string));
+    }
+    Ok(rune)
 }
 
 #[derive(PartialEq, Debug, Clone, Copy)]
@@ -521,7 +527,7 @@ macro_rules! script_runner {
                         let input = self.script_evaluate(
                             &script_stack,
                             Evaluate::Index(0),
-                        )?.get_input("for input mapping")?;
+                        )?.get_input()?;
                         let get_optional_script = |index: usize, for_what: &str| {
                             match &script.arguments.get(index) {
                                 None => Ok(None),
@@ -3981,24 +3987,24 @@ mod test {
     #[test]
     fn test_argument_string_can_become_input() {
         assert_eq!(
-            Argument::String("a".to_string()).get_input("for stuff"),
+            Argument::String("a".to_string()).get_input(),
             Ok(Input::Rune(ModifiersState::default(), 'a'))
         );
 
         assert_eq!(
-            Argument::String("Ö".to_string()).get_input("for stuff"),
+            Argument::String("Ö".to_string()).get_input(),
             Ok(Input::Rune(ModifiersState::default(), 'Ö'))
         );
 
         // But only if it's exactly one char long:
         assert_eq!(
-            Argument::String("xy".to_string()).get_input("for stuff"),
-            Err("invalid input for stuff: 'xy'".to_string())
+            Argument::String("xy".to_string()).get_input(),
+            Err("invalid input: 'xy'".to_string())
         );
 
         assert_eq!(
-            Argument::String("".to_string()).get_input("oh no"),
-            Err("invalid input oh no: <empty-string>".to_string())
+            Argument::String("".to_string()).get_input(),
+            Err("invalid input: <empty-string>".to_string())
         );
     }
 }
