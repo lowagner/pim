@@ -522,14 +522,17 @@ macro_rules! script_runner {
                             &script_stack,
                             Evaluate::Index(0),
                         )?.get_input("for input mapping")?;
-                        let on_trigger = self.script_evaluate(
-                            &script_stack,
-                            Evaluate::Index(1),
-                        )?.get_script("for input script")?;
-                        let on_release = self.script_evaluate(
-                            &script_stack,
-                            Evaluate::Index(2),
-                        )?.get_optional_script("for input-released mapping")?;
+                        let get_optional_script = |index: usize, for_what: &str| {
+                            match &script.arguments.get(index) {
+                                None => Ok(None),
+                                Some(Argument::Script(script)) => Ok(Some(script.clone())),
+                                Some(_) => Err(format!("not a script at argument {} {}", index, for_what)),
+                            }
+                        };
+                        let on_trigger = get_optional_script(1, "for trigger")?.ok_or(
+                            "need script for trigger at argument 1".to_string(),
+                        )?;
+                        let on_release = get_optional_script(2, "for release")?;
 
                         let modes = match bind {
                             Bind::Modes => vec![Mode::Normal, Mode::Visual(Visual::Selecting)],
