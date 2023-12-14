@@ -231,7 +231,10 @@ impl fmt::Display for Command {
             Command::SetVariable => write!(f, "set"),
             Command::ConstVariable => write!(f, "const"),
             Command::CreateAlias => write!(f, "alias"),
-            Command::Bind(Bind::AllModes) => write!(f, "bind"),
+            Command::Bind(Bind::Modes) => write!(f, "bind"),
+            Command::Bind(Bind::Normal) => write!(f, "bind-normal"),
+            Command::Bind(Bind::Visual) => write!(f, "bind-visual"),
+            Command::Bind(Bind::Help) => write!(f, "bind-help"),
             Command::ColorSetting(ColorSetting::UiBackground) => write!(f, "ui-bg"),
             Command::ColorSetting(ColorSetting::UiGrid) => write!(f, "grid-color"),
             Command::ColorSetting(ColorSetting::Foreground) => write!(f, "fg"),
@@ -327,7 +330,10 @@ impl FromStr for Command {
             "set" => Ok(Command::SetVariable),
             "const" => Ok(Command::ConstVariable),
             "alias" => Ok(Command::CreateAlias),
-            "bind" => Ok(Command::Bind(Bind::AllModes)),
+            "bind" => Ok(Command::Bind(Bind::Modes)),
+            "bind-normal" => Ok(Command::Bind(Bind::Normal)),
+            "bind-visual" => Ok(Command::Bind(Bind::Visual)),
+            "bind-help" => Ok(Command::Bind(Bind::Help)),
             "ui-bg" => Ok(Command::ColorSetting(ColorSetting::UiBackground)),
             "grid-color" => Ok(Command::ColorSetting(ColorSetting::UiGrid)),
             "fg" => Ok(Command::ColorSetting(ColorSetting::Foreground)),
@@ -428,9 +434,15 @@ impl fmt::Display for EmptyCommandParseError {
 
 #[derive(Eq, Hash, PartialEq, Debug, Clone, Copy, EnumIter)]
 pub enum Bind {
-    /// Effectively all modes.
-    AllModes,
-    // TODO: Normal/Selection/Etc.
+    /// Standard modes; i.e., everything except Help and Command.
+    Modes,
+    /// Just the normal mode.
+    Normal,
+    /// Just the visual mode, technically just Visual::Selecting.
+    Visual,
+    /// Just the help mode.
+    Help,
+    // TODO: Command, if we can do it right.
 }
 
 #[derive(Eq, Hash, PartialEq, Debug, Clone, Copy, EnumIter)]

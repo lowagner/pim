@@ -1,7 +1,7 @@
 use crate::command::*;
 use crate::gfx::Rgba8;
 use crate::palette::Palette;
-use crate::platform::{Key, Modifier, ModifiersState, MouseButton};
+use crate::platform::{Key, ModifiersState, MouseButton};
 use crate::session::Tool;
 use crate::settings::*;
 
@@ -532,8 +532,10 @@ macro_rules! script_runner {
                         )?.get_optional_script("for input-released mapping")?;
 
                         let modes = match bind {
-                            // TODO: add Selection modes to Map::AllModes
-                            Bind::AllModes => vec![Mode::Normal, Mode::Command],
+                            Bind::Modes => vec![Mode::Normal, Mode::Visual(Visual::Selecting)],
+                            Bind::Normal => vec![Mode::Normal],
+                            Bind::Visual => vec![Mode::Visual(Visual::Selecting)],
+                            Bind::Help => vec![Mode::Help],
                         };
 
                         let key_binding = KeyBinding {
@@ -1068,10 +1070,28 @@ impl Variables {
             e.g., `$$ 'fgc' 'fg'` to add `fgc` as an alias for `fg`",
         );
         variables.add_built_in(
-            Command::Bind(Bind::AllModes),
+            Command::Bind(Bind::Modes),
             "adds input $0 binding with script $1 on press, optional $2 on release, \
-            to all modes, e.g., `$$ <ctrl><z> undo` to undo, or \
+            to standard modes, e.g., `$$ <ctrl><z> undo` to undo, or \
             `$$ <shift><p> (p cx cy #123456) (p cx cy #654321)` to paint",
+        );
+        variables.add_built_in(
+            Command::Bind(Bind::Normal),
+            "adds input $0 binding with script $1 on press, optional $2 on release, \
+            to normal mode, e.g., `$$ <ctrl><z> undo` to undo, or \
+            `$$ <shift><p> (p cx cy #123456) (p cx cy #654321)` to paint",
+        );
+        variables.add_built_in(
+            Command::Bind(Bind::Visual),
+            "adds input $0 binding with script $1 on press, optional $2 on release, \
+            to visual mode, e.g., `$$ <ctrl><z> undo` to undo, or \
+            `$$ <shift><p> (p cx cy #123456) (p cx cy #654321)` to paint",
+        );
+        variables.add_built_in(
+            Command::Bind(Bind::Help),
+            "adds input $0 binding with script $1 on press, optional $2 on release, \
+            to help mode, e.g., `$$ '?' (mode 'normal')` to go back to normal mode, or \
+            `$$ <space> (tool pant) (tool $0)` to pan",
         );
         variables.add_built_in(
             Command::ColorSetting(ColorSetting::UiBackground),
@@ -1672,7 +1692,7 @@ mod test {
     use super::*;
     use crate::gfx::Point;
     use crate::message::*;
-    use crate::session::{KeyBinding, Mode};
+    use crate::session::{KeyBinding, Mode, Visual};
     use crate::view::ViewExtent;
     use std::collections::HashSet;
     use strum::IntoEnumIterator;

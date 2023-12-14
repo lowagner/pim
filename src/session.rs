@@ -2056,7 +2056,7 @@ impl Session {
             ..
         } = input;
 
-        let mut repeat = state == InputState::Repeated;
+        let repeat = state == InputState::Repeated;
         let state = if repeat { InputState::Pressed } else { state };
 
         if let Some(key) = key {
