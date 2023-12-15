@@ -309,47 +309,48 @@ impl Parse for platform::Key {
 }
 
 fn get_key_parser(tag_required: bool) -> Parser<platform::Key> {
-    let tagged_key = between('<', '>', any::<_, String>(letter())).try_map(move |key| {
-        let key = match key.as_str() {
-            "up" => platform::Key::Up,
-            "down" => platform::Key::Down,
-            "left" => platform::Key::Left,
-            "right" => platform::Key::Right,
-            "backspace" => platform::Key::Backspace,
-            "return" => platform::Key::Return,
-            "space" => platform::Key::Space,
-            "tab" => platform::Key::Tab,
-            "esc" => platform::Key::Escape,
-            "escape" => platform::Key::Escape,
-            "ins" => platform::Key::Insert,
-            "insert" => platform::Key::Insert,
-            "del" => platform::Key::Delete,
-            "delete" => platform::Key::Delete,
-            "home" => platform::Key::Home,
-            "end" => platform::Key::End,
-            "pgdown" => platform::Key::PageDown,
-            "pagedown" => platform::Key::PageDown,
-            "pgup" => platform::Key::PageUp,
-            "pageup" => platform::Key::PageUp,
-            "shift" => platform::Key::Shift,
-            "ctrl" => platform::Key::Control,
-            "alt" => platform::Key::Alt,
-            "meta" => platform::Key::Meta,
-            other => {
-                if tag_required {
-                    let key = char::from_str(other);
-                    if key.is_ok() {
-                        let key: platform::Key = key.unwrap().into();
-                        if key != platform::Key::Unknown {
-                            return Ok(key);
+    let tagged_key =
+        between('<', '>', any::<_, String>(any_char_except('>'))).try_map(move |key| {
+            let key = match key.as_str() {
+                "up" => platform::Key::Up,
+                "down" => platform::Key::Down,
+                "left" => platform::Key::Left,
+                "right" => platform::Key::Right,
+                "backspace" => platform::Key::Backspace,
+                "return" => platform::Key::Return,
+                "space" => platform::Key::Space,
+                "tab" => platform::Key::Tab,
+                "esc" => platform::Key::Escape,
+                "escape" => platform::Key::Escape,
+                "ins" => platform::Key::Insert,
+                "insert" => platform::Key::Insert,
+                "del" => platform::Key::Delete,
+                "delete" => platform::Key::Delete,
+                "home" => platform::Key::Home,
+                "end" => platform::Key::End,
+                "pgdown" => platform::Key::PageDown,
+                "pagedown" => platform::Key::PageDown,
+                "pgup" => platform::Key::PageUp,
+                "pageup" => platform::Key::PageUp,
+                "shift" => platform::Key::Shift,
+                "ctrl" => platform::Key::Control,
+                "alt" => platform::Key::Alt,
+                "meta" => platform::Key::Meta,
+                other => {
+                    if tag_required {
+                        let key = char::from_str(other);
+                        if key.is_ok() {
+                            let key: platform::Key = key.unwrap().into();
+                            if key != platform::Key::Unknown {
+                                return Ok(key);
+                            }
                         }
                     }
+                    return Err(format!("unknown key <{}>", other));
                 }
-                return Err(format!("unknown key <{}>", other));
-            }
-        };
-        Ok(key)
-    });
+            };
+            Ok(key)
+        });
 
     if tag_required {
         tagged_key
@@ -366,6 +367,10 @@ fn get_key_parser(tag_required: bool) -> Parser<platform::Key> {
         });
         tagged_key.or(alphanum).label("<key>")
     }
+}
+
+fn any_char_except(not_this: char) -> Parser<char> {
+    satisfy(move |c| c != not_this, "<not-this>")
 }
 
 impl Parse for platform::Modifier {
@@ -1101,6 +1106,13 @@ mod test {
             Ok((
                 Input::Key(platform::ModifiersState::SHIFT, platform::Key::E),
                 ""
+            ))
+        );
+        assert_eq!(
+            p.parse("<ctrl><;>???"),
+            Ok((
+                Input::Key(platform::ModifiersState::CTRL, platform::Key::Semicolon),
+                "???"
             ))
         );
 

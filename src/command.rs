@@ -97,8 +97,7 @@ pub enum Command {
     //      for any of the primitive operations; we'd need to handle those specially.
     // GetVariable,
     // TODO: we should define a way to evaluate something and put its value into a variable;
-    //       everything below is lazily evaluated.  e.g., `set-val 'my-var' (...)`
-    //       or maybe `set-eval 'my-var' (...)`
+    //       probably can do `set 'whatever' :(asdf my-command-arguments)` where `:` means to eagerly evaluate.
     // TODO: convert these to `NamedScript(NamedScript)` command, e.g., with a String and a Script as arguments.
     /// Sets a variable with name $0 to the value at $1, allowing future changes.
     /// E.g., `:set 'my-mut' 123` will set `my-mut` to evaluate to 123.

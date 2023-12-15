@@ -193,15 +193,17 @@ impl Argument {
 
 /// Returns the rune if the string comprises only a single char.
 pub fn get_single_rune(string: &String) -> Result<char, String> {
+    // TODO: probably can use char::from_str with `use std::str::FromStr;` import.
+    //       but we need to convert to the String error.
     // We want only the first char, but only if the string is one char long.
     let mut chars = string.chars();
     let rune = chars.next();
     if rune.is_none() {
-        return Err(format!("invalid input: <empty-string>"));
+        return Err(format!("invalid rune: <empty-string>"));
     }
     let rune = rune.unwrap();
     if chars.next().is_some() {
-        return Err(format!("invalid input: '{}'", string));
+        return Err(format!("invalid rune: '{}'", string));
     }
     Ok(rune)
 }
@@ -3997,12 +3999,12 @@ mod test {
         // But only if it's exactly one char long:
         assert_eq!(
             Argument::String("xy".to_string()).get_input(),
-            Err("invalid input: 'xy'".to_string())
+            Err("invalid rune: 'xy'".to_string())
         );
 
         assert_eq!(
             Argument::String("".to_string()).get_input(),
-            Err("invalid input: <empty-string>".to_string())
+            Err("invalid rune: <empty-string>".to_string())
         );
     }
 }

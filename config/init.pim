@@ -9,7 +9,7 @@
 ----------- --------------- ----------------------------------- -----------------------------------
 bind        '?'             (mode 'help')                       --  Show help
 bind-help   '?'             (mode 'normal')                     --  Hide help
-bind        ':'             (mode 'command')                    --  Switch to command mode
+bind        <shift><;>      (mode 'command')                    --  Switch to command mode
 bind        'v'             (mode 'visual')                     --  Switch to visual mode
 bind        '.'             zoom++                              --  Zoom in active view
 bind        ','             zoom--                              --  Zoom out active view
