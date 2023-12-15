@@ -86,7 +86,7 @@ pub mod cursors {
                 Mode::Visual(_) if in_selection && in_view => self::OMNI,
                 Mode::Visual(Visual::Dragging) if in_selection => self::OMNI,
                 _ => {
-                    if b.is_set(BrushMode::Erase) {
+                    if b.effectively_erases() {
                         self::ERASE
                     } else {
                         self::CROSSHAIR
@@ -657,7 +657,7 @@ fn draw_brush(session: &Session, brush: &Brush, shapes: &mut shape2d::Batch) {
 
                 // Draw enabled brush
                 if v.contains(c - session.offset) {
-                    let (stroke, fill) = if brush.is_set(BrushMode::Erase) {
+                    let (stroke, fill) = if brush.effectively_erases() {
                         // When erasing, we draw a stroke that is the inverse of the underlying
                         // color at the cursor. Note that this isn't perfect, since it uses
                         // the current snapshot to get the color, so it may be incorrect
@@ -711,7 +711,7 @@ fn draw_brush(session: &Session, brush: &Brush, shapes: &mut shape2d::Batch) {
                     }
                 // Draw disabled brush
                 } else {
-                    let color = if brush.is_set(BrushMode::Erase) {
+                    let color = if brush.effectively_erases() {
                         color::GREY
                     } else {
                         session.fg

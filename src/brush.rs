@@ -107,6 +107,10 @@ impl Brush {
         self.modes.contains(&m)
     }
 
+    pub fn effectively_erases(&self) -> bool {
+        self.is_set(BrushMode::Erase) || self.color.a == 0
+    }
+
     /// Activate the given brush mode.
     pub fn set(&mut self, m: BrushMode, value: i64) {
         if value != 0 {

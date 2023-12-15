@@ -741,7 +741,7 @@ impl Session {
                 match brush.state {
                     // If we're erasing, we can't use the staging framebuffer, since we
                     // need to be replacing pixels on the real buffer.
-                    _ if brush.is_set(brush::BrushMode::Erase) => {
+                    _ if brush.effectively_erases() => {
                         self.effects.extend_from_slice(&[
                             Effect::ViewBlendingChanged(Blending::Constant),
                             Effect::ViewPaintFinal(output),
