@@ -388,15 +388,17 @@ impl Parse for platform::Modifier {
 
 impl Parse for platform::ModifiersState {
     fn parser() -> Parser<Self> {
-        parse_modifiers_with_last()
+        parse_modifiers_with_last(true)
             .map(|(mods, last)| mods)
             .label("<mods>")
     }
 }
 
-fn parse_modifiers_with_last() -> Parser<(platform::ModifiersState, Option<platform::Modifier>)> {
+fn parse_modifiers_with_last(
+    keep_last: bool,
+) -> Parser<(platform::ModifiersState, Option<platform::Modifier>)> {
     many::<_, Vec<platform::Modifier>>(param::<platform::Modifier>())
-        .map(|modifiers| {
+        .map(move |modifiers| {
             let mut state = platform::ModifiersState {
                 shift: false,
                 alt: false,
@@ -404,12 +406,14 @@ fn parse_modifiers_with_last() -> Parser<(platform::ModifiersState, Option<platf
                 meta: false,
             };
             let last_modifier = modifiers.last().copied();
-            for modifier in modifiers {
-                match modifier {
-                    platform::Modifier::Control => state.ctrl = true,
-                    platform::Modifier::Shift => state.shift = true,
-                    platform::Modifier::Alt => state.alt = true,
-                    platform::Modifier::Meta => state.meta = true,
+            if modifiers.len() > 0 {
+                for i in 0..modifiers.len() - if keep_last { 0 } else { 1 } {
+                    match modifiers[i] {
+                        platform::Modifier::Control => state.ctrl = true,
+                        platform::Modifier::Shift => state.shift = true,
+                        platform::Modifier::Alt => state.alt = true,
+                        platform::Modifier::Meta => state.meta = true,
+                    }
                 }
             }
             (state, last_modifier)
@@ -439,15 +443,18 @@ impl Parse for Input {
                     Input::Rune(mods, rune)
                 }),
         );
-        // Modifiers without anything else, use the last mod as the key to press.
-        let input_mod = peek(parse_modifiers_with_last().try_map(|(mods, last)| {
-            if let Some(last) = last {
-                // TODO: double check if we need to remove `last` from mods:
-                Ok(Input::Key(mods, last.into()))
-            } else {
-                Err("no mod")
-            }
-        }));
+        // Modifiers without anything else, use the last mod as the key to press;
+        // The platform considers all other mods as modifying the key press, but not
+        // that key itself.
+        let input_mod = peek(
+            parse_modifiers_with_last(false).try_map(|(mut mods, last)| {
+                if let Some(last) = last {
+                    Ok(Input::Key(mods, last.into()))
+                } else {
+                    Err("no mod")
+                }
+            }),
+        );
 
         input_key.or(input_rune).or(input_mod).label("<input>")
     }
@@ -1085,7 +1092,7 @@ mod test {
         assert_eq!(
             p.parse("<shift>y"),
             Ok((
-                Input::Key(platform::ModifiersState::SHIFT, platform::Key::Shift),
+                Input::Key(platform::ModifiersState::default(), platform::Key::Shift),
                 "y"
             ))
         );
@@ -1100,7 +1107,7 @@ mod test {
         assert_eq!(
             p.parse("<ctrl><shift>oh"),
             Ok((
-                Input::Key(platform::ModifiersState::CTRL_SHIFT, platform::Key::Shift),
+                Input::Key(platform::ModifiersState::CTRL, platform::Key::Shift),
                 "oh"
             ))
         );
@@ -1115,10 +1122,7 @@ mod test {
         assert_eq!(
             p.parse("<alt><shift><ctrl>yoop"),
             Ok((
-                Input::Key(
-                    platform::ModifiersState::CTRL_ALT_SHIFT,
-                    platform::Key::Control
-                ),
+                Input::Key(platform::ModifiersState::ALT_SHIFT, platform::Key::Control),
                 "yoop"
             ))
         );
@@ -1137,7 +1141,7 @@ mod test {
             p.parse("<alt><shift><ctrl><meta>ey"),
             Ok((
                 Input::Key(
-                    platform::ModifiersState::CTRL_ALT_SHIFT_META,
+                    platform::ModifiersState::CTRL_ALT_SHIFT,
                     platform::Key::Meta
                 ),
                 "ey"
