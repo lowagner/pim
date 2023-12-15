@@ -34,6 +34,8 @@ use arrayvec::ArrayVec;
 
 use directories as dirs;
 use nonempty::NonEmpty;
+use strum::IntoEnumIterator;
+use strum_macros::EnumIter;
 
 use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
@@ -59,7 +61,7 @@ pub type SessionCoords = Point<Session, f32>;
 
 /// An editing mode the `Session` can be in.
 /// Some of these modes are inspired by vi.
-#[derive(Eq, PartialEq, Copy, Clone, Debug, Default, Hash)]
+#[derive(Eq, PartialEq, Copy, Clone, Debug, Default, Hash, EnumIter)]
 pub enum Mode {
     /// Allows the user to paint pixels.
     #[default]
@@ -356,7 +358,7 @@ impl Default for Settings {
     /// The default settings.
     fn default() -> Self {
         Self {
-            debug: false,
+            debug: true,
             uiBackground: Rgba8::TRANSPARENT,
             uiChecker: 0,
             uiGrid: 0,
@@ -2222,6 +2224,22 @@ impl Session {
                 ));
             }
         }
+        if self.settings.debug {
+            for mode in Mode::iter() {
+                eprint!("=========================\n");
+                match self.key_bindings.bindings_by_mode.get(&mode) {
+                    None => {
+                        eprint!("no bindings for mode {:?}\n\n", mode);
+                    }
+                    Some(bindings) => {
+                        for binding in bindings {
+                            eprint!("\n{:?}\n", binding);
+                        }
+                    }
+                }
+            }
+            eprint!("=========================\n");
+        }
         Ok(())
     }
 
@@ -3067,9 +3085,7 @@ impl Session {
     }
 
     pub fn bind_key(&mut self, mode: Mode, key_binding: KeyBinding) -> VoidResult {
-        // TODO: we may need to improve this logic for modifiers, e.g.,
-        //       we'll double check if the ModifiersState is considered pressed when the modifier key is pressed
-        // TODO: right now our parser logic might not interpret sole modifiers correctly anyway.
+        debug!("binding {:?} to mode {:?}\n", key_binding, mode);
         self.key_bindings.add(mode, key_binding);
         Ok(())
     }

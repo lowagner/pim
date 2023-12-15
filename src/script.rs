@@ -709,16 +709,8 @@ macro_rules! script_runner {
                             Evaluate::Index(0),
                         )?.get_string("for palette file path")?;
                         match self.palette.write(path) {
-                            Ok(text) => {
-                                self.message(text, MessageType::Info);
-                                Ok(Argument::Null)
-                            }
-                            Err(err) => {
-                                // TODO: make sure we call something like this
-                                //      on a bad command evaluation
-                                // self.message(err, MessageType::Error);
-                                Err(err)
-                            }
+                            Ok(text) => Ok(Argument::String(text)),
+                            Err(err) => Err(err),
                         }
                     }
                     Command::PaletteClear => {

@@ -247,7 +247,16 @@ fn implicit_path() -> Parser<String> {
     peek(
         token()
             .try_map(|input: String| {
-                let evidence = input.contains(MAIN_SEPARATOR) || input.contains(".");
+                let evidence = input.contains(MAIN_SEPARATOR)
+                    || (
+                        // We'll treat asdf.png as a string...
+                        input.contains(".")
+                        // but don't treat 'asdf.png' in the same way;
+                        // implicit_path() will add quotes to the string, e.g.,
+                        // "'asdf.png'" instead of "asdf.png".  Leave this
+                        // case to quoted().
+                        && !(input.starts_with('"') || input.starts_with('\''))
+                    );
 
                 // Linux and BSD and MacOS use `~` to infer the home directory of a given user.
                 let maybe_path: Option<OsString> = if cfg!(unix) {
@@ -1080,6 +1089,13 @@ mod test {
             Ok(("this-is-a-great-file.png".to_string(), ""))
         );
         assert_eq!(p.parse(".pimrc hi"), Ok((".pimrc".to_string(), " hi")));
+    }
+
+    #[test]
+    fn test_implicit_path_fails_if_starting_with_quotes() {
+        let p = implicit_path();
+        assert!(p.parse("'.'").is_err());
+        assert!(p.parse("\",\"").is_err());
     }
 
     #[test]
