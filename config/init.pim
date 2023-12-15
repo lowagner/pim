@@ -22,8 +22,9 @@ bind         <ctrl>'r'      redo                                --  Undo active 
 bind        'x'             (fg (bg fg))                        --  Swap foreground-background colors
 bind-normal 'b'             (tool brusht)                       --  Reset brush
 bind-normal 'g'             (tool floodt)                       --  Flood tool
-bind-normal 'e'             (b-erase 1) (b-erase 0)             --  Erase (hold)
-bind-normal  <shift>        (b-multi 1) (b-multi 0)             --  Multi-brush (hold)
+-- commands with press and release scripts need to be tagged inputs, e.g., <e>
+bind-normal <e>             (b-erase 1) (b-erase 0)             --  Erase (hold)
+bind-normal <shift>         (b-multi 1) (b-multi 0)             --  Multi-brush (hold)
 bind-normal '='             (b-perfect (not b-perfect))         --  Toggle pixel-perfect brush
 bind-normal ']'             b-size++                            --  Increase brush size
 bind-normal '['             b-size--                            --  Decrease brush size
