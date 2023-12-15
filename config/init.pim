@@ -81,3 +81,14 @@ p-add #f4f4f4
 p-add #94b0c2
 p-add #566c86
 p-add #333c57
+
+bind        <1>             (fg (pc 1))                         -- Set foreground to palette color 1
+bind        <2>             (fg (pc 2))                         -- etc.
+bind        <3>             (fg (pc 3))
+bind        <4>             (fg (pc 4))
+bind        <5>             (fg (pc 5))
+bind        <6>             (fg (pc 6))
+bind        <7>             (fg (pc 7))
+bind        <8>             (fg (pc 8))
+bind        <9>             (fg (pc 9))
+bind        <0>             (fg (pc 0))                         -- Set foreground to palette color 0
