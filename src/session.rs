@@ -2134,7 +2134,9 @@ impl Session {
                             platform::Key::Backspace => {
                                 self.cmdline_handle_backspace();
                             }
-                            // TODO: add Key::Delete
+                            platform::Key::Delete => {
+                                self.cmdline_handle_delete();
+                            }
                             platform::Key::Return => {
                                 self.cmdline_handle_enter();
                             }
@@ -2417,11 +2419,15 @@ impl Session {
     }
 
     fn cmdline_handle_backspace(&mut self) {
-        self.cmdline.delc();
+        self.cmdline.delete_backwards();
 
         if self.cmdline.is_empty() {
             self.cmdline_hide();
         }
+    }
+
+    fn cmdline_handle_delete(&mut self) {
+        self.cmdline.delete_forwards();
     }
 
     fn cmdline_handle_enter(&mut self) {

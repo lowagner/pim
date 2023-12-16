@@ -685,11 +685,21 @@ impl CommandLine {
         self.autocomplete.invalidate();
     }
 
-    pub fn delc(&mut self) {
+    pub fn delete_backwards(&mut self) {
         match self.peek_back() {
             // Don't allow deleting the ':' unless it's the last remaining character.
             Some(c) if self.cursor > 1 || self.input.len() == 1 => {
                 self.cursor -= c.len_utf8();
+                self.input.remove(self.cursor);
+                self.autocomplete.invalidate();
+            }
+            _ => {}
+        }
+    }
+
+    pub fn delete_forwards(&mut self) {
+        match self.peek() {
+            Some(c) => {
                 self.input.remove(self.cursor);
                 self.autocomplete.invalidate();
             }
@@ -723,7 +733,6 @@ impl CommandLine {
         self.input[..self.cursor].to_owned()
     }
 
-    #[cfg(test)]
     fn peek(&self) -> Option<char> {
         self.input[self.cursor..].chars().next()
     }
@@ -1053,15 +1062,15 @@ mod test {
             let mut cli = CommandLine::new("/dev/null", "/dev/null", &[]);
 
             cli.puts(":echo");
-            cli.delc();
+            cli.delete_backwards();
             assert_eq!(cli.input(), ":ech");
-            cli.delc();
+            cli.delete_backwards();
             assert_eq!(cli.input(), ":ec");
-            cli.delc();
+            cli.delete_backwards();
             assert_eq!(cli.input(), ":e");
-            cli.delc();
+            cli.delete_backwards();
             assert_eq!(cli.input(), ":");
-            cli.delc();
+            cli.delete_backwards();
             assert_eq!(cli.input(), "");
 
             cli.clear();
@@ -1076,7 +1085,7 @@ mod test {
             assert_eq!(cli.peek(), Some('e'));
             assert_eq!(cli.peek_back(), Some(':'));
 
-            cli.delc();
+            cli.delete_backwards();
             assert_eq!(cli.input(), ":e");
 
             cli.clear();

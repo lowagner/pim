@@ -127,6 +127,7 @@ impl WindowEvent {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct KeyboardInput {
     pub state: InputState,
+    // TODO: why is this an option?  can't it just be a key?
     pub key: Option<Key>,
     pub modifiers: ModifiersState,
 }
