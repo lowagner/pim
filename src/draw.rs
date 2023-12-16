@@ -377,6 +377,7 @@ fn draw_meta(session: &Session, canvas: &mut shape2d::Batch, text: &mut TextBatc
             MARGIN,
             MARGIN,
             self::TEXT_LAYER,
+            // TODO: if ui-background is white, this won't be visible
             Rgba8::WHITE,
             TextAlign::Left,
         );

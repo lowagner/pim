@@ -1484,9 +1484,23 @@ impl Variables {
         assert_ok!(variables.set("multiply".to_string(), Variable::Alias("*".to_string())));
         assert_ok!(variables.set("product".to_string(), Variable::Alias("*".to_string())));
         assert_ok!(variables.set("sum".to_string(), Variable::Alias("+".to_string())));
+        assert_ok!(variables.set("anim".to_string(), Variable::Alias("ui-a".to_string())));
         assert_ok!(variables.set(
             "ui-background".to_string(),
             Variable::Alias("ui-bg".to_string())
+        ));
+        assert_ok!(variables.set(
+            "ui-checker".to_string(),
+            Variable::Alias("checker".to_string())
+        ));
+        assert_ok!(variables.set("ui-grid".to_string(), Variable::Alias("grid".to_string())));
+        assert_ok!(variables.set(
+            "ui-grid-color".to_string(),
+            Variable::Alias("grid-color".to_string())
+        ));
+        assert_ok!(variables.set(
+            "scale%".to_string(),
+            Variable::Alias("ui-scale%".to_string())
         ));
         assert_ok!(variables.set("foreground".to_string(), Variable::Alias("fg".to_string())));
         assert_ok!(variables.set("background".to_string(), Variable::Alias("bg".to_string())));

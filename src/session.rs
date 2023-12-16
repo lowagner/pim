@@ -345,13 +345,12 @@ impl KeyBindings {
 #[derive(Debug)]
 pub struct Settings {
     pub debug: bool,
-    pub uiBackground: Rgba8,
-    pub uiChecker: u32,
-    pub uiGrid: u32,
-    pub uiGridColor: Rgba8,
-    pub uiScalePercentage: u32,
+    pub ui_background: Rgba8,
+    pub ui_checker: u32,
+    pub ui_grid: u32,
+    pub ui_grid_color: Rgba8,
+    pub ui_scale_percentage: u32,
     pub animation: bool,
-    pub paletteHeight: u32,
 }
 
 impl Default for Settings {
@@ -359,13 +358,12 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             debug: true,
-            uiBackground: Rgba8::TRANSPARENT,
-            uiChecker: 0,
-            uiGrid: 0,
-            uiGridColor: Rgba8::BLUE,
-            uiScalePercentage: 100,
+            ui_background: Rgba8::TRANSPARENT,
+            ui_checker: 0,
+            ui_grid: 0,
+            ui_grid_color: Rgba8::BLUE,
+            ui_scale_percentage: 100,
             animation: true,
-            paletteHeight: Session::PALETTE_HEIGHT,
         }
     }
 }
@@ -2587,8 +2585,8 @@ impl Session {
 
     pub fn get_color_setting(&self, setting: ColorSetting) -> Rgba8 {
         match setting {
-            ColorSetting::UiBackground => self.settings.uiBackground,
-            ColorSetting::UiGrid => self.settings.uiGridColor,
+            ColorSetting::UiBackground => self.settings.ui_background,
+            ColorSetting::UiGrid => self.settings.ui_grid_color,
             ColorSetting::Foreground => self.fg,
             ColorSetting::Background => self.bg,
         }
@@ -2597,10 +2595,10 @@ impl Session {
     pub fn set_color_setting(&mut self, setting: ColorSetting, color: Rgba8) -> VoidResult {
         match setting {
             ColorSetting::UiBackground => {
-                self.settings.uiBackground = color;
+                self.settings.ui_background = color;
             }
             ColorSetting::UiGrid => {
-                self.settings.uiGridColor = color;
+                self.settings.ui_grid_color = color;
             }
             ColorSetting::Foreground => {
                 self.fg = color;
@@ -2649,9 +2647,9 @@ impl Session {
         match setting {
             I64Setting::Debug => self.settings.debug as i64,
             I64Setting::UiAnimate => self.settings.animation as i64,
-            I64Setting::UiChecker => self.settings.uiChecker as i64,
-            I64Setting::UiGrid => self.settings.uiGrid as i64,
-            I64Setting::UiScalePercentage => self.settings.uiScalePercentage as i64,
+            I64Setting::UiChecker => self.settings.ui_checker as i64,
+            I64Setting::UiGrid => self.settings.ui_grid as i64,
+            I64Setting::UiScalePercentage => self.settings.ui_scale_percentage as i64,
             I64Setting::UiOffsetX => self.offset.x as i64,
             I64Setting::UiOffsetY => self.offset.y as i64,
             I64Setting::Tool => self.tool as i64,
@@ -2696,14 +2694,14 @@ impl Session {
             }
             I64Setting::UiChecker => {
                 if new_value >= 0 {
-                    self.settings.uiChecker = new_value as u32;
+                    self.settings.ui_checker = new_value as u32;
                 } else {
                     return Err(format!("invalid value for checkerboard: {}", new_value));
                 }
             }
             I64Setting::UiGrid => {
                 if new_value >= 0 {
-                    self.settings.uiGrid = new_value as u32;
+                    self.settings.ui_grid = new_value as u32;
                 } else {
                     return Err(format!("invalid value for grid: {}", new_value));
                 }
@@ -2715,7 +2713,7 @@ impl Session {
                         new_value
                     ));
                 }
-                self.settings.uiScalePercentage = new_value as u32;
+                self.settings.ui_scale_percentage = new_value as u32;
                 // TODO: We need to recompute the cursor position here
                 // from the window coordinates. Currently, cursor position
                 // is stored only in `SessionCoords`, which would have
