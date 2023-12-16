@@ -591,7 +591,7 @@ impl CommandLine {
 
     pub fn parse(&self, input: &str) -> Result<Script, Error> {
         match self.parser.parse(input) {
-            Ok((cmd, _)) => Ok(cmd),
+            Ok((script, _)) => Ok(script),
             Err((err, _)) => Err(err),
         }
     }

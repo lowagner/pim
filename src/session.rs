@@ -2044,15 +2044,26 @@ impl Session {
                 return;
             }
             self.cmdline_handle_input(c);
-        } else if let Some(kb) = self.key_bindings.find(Input::Rune(mods, c), self.mode) {
+            return;
+        }
+        let input = Input::Rune(mods, c);
+        if let Some(kb) = self.key_bindings.find(input, self.mode) {
             // TODO: maybe figure out a way to pass every argument evaluated in the on_trigger
             //       script into this argument list.  might need a different command, might be impossible.
             //       OR we need `run` to return a list of argument results, etc.
-            // TODO: if Err, show message:
             let result = kb.on_trigger.run(self);
             // TODO: document that `Input::Rune` immediately runs its release state
-            if let (Ok(result), Some(on_release)) = (result, kb.on_release) {
-                self.run_with_arguments(on_release, vec![result]);
+            match (result, kb.on_release) {
+                (Ok(result), Some(on_release)) => {
+                    self.run_with_arguments(on_release, vec![result]);
+                }
+                (Err(result), _) => {
+                    eprint!(
+                        "error in input {:?} press script {:?}: {}",
+                        input, kb.on_trigger, result
+                    );
+                }
+                _ => {}
             }
         }
     }
@@ -2084,17 +2095,27 @@ impl Session {
                     .key_bindings
                     .find(Input::Key(modifiers, key), self.mode)
                 {
+                    // TODO: we can allow repeats if there is no on_release for this binding.
                     if !repeat {
                         // TODO: maybe figure out a way to pass every argument evaluated in the on_trigger
                         //       script into this argument list.  might need a different command, might be impossible.
                         //       OR we need `run` to return a list of argument results, etc.
                         let result = kb.on_trigger.run(self);
-                        if let (Ok(result), Some(on_release)) = (result, kb.on_release) {
-                            let release_scripts = self
-                                .keys_pressed
-                                .get_mut(&key)
-                                .expect("just added to keys_pressed if it wasn't there");
-                            release_scripts.push((on_release, vec![result]));
+                        match (result, kb.on_release) {
+                            (Ok(result), Some(on_release)) => {
+                                let release_scripts = self
+                                    .keys_pressed
+                                    .get_mut(&key)
+                                    .expect("just added to keys_pressed if it wasn't there");
+                                release_scripts.push((on_release, vec![result]));
+                            }
+                            (Err(result), _) => {
+                                eprint!(
+                                    "error in input {:?} press script {:?}: {}",
+                                    input, kb.on_trigger, result
+                                );
+                            }
+                            _ => {}
                         }
                     }
                     return;
@@ -2450,7 +2471,16 @@ impl Session {
             .parse(&input[1..input.len()])
             .map(|script| script.run(self))
         {
-            Ok(result) => self.message(format!("{:?}", result), MessageType::Info),
+            Ok(result) => {
+                // TODO: not sure why we need this double unwrap.  i figured `map`
+                //       above would give parse.Script -> ArgumentResult (as Ok or Err)
+                //       and would give parse.Error -> Error (as Err),
+                //       but use some Rust magic to make this cleaner plz
+                match result {
+                    Ok(result) => self.message(result, MessageType::Info),
+                    Err(result) => self.message(result, MessageType::Error),
+                }
+            }
             Err(e) => self.message(format!("Error: {}", e), MessageType::Error),
         }
     }
@@ -2506,8 +2536,8 @@ impl Session {
     /// like triggering a script on a key press, due to how arguments will get populated
     /// for an unevaluated script.
     fn run_with_arguments(&mut self, script: Script, arguments: Vec<Argument>) {
-        // This base command is ignored; we just need to populate the argument list.
         let base_script = Script {
+            // This base command is ignored; we just need to populate the argument list.
             command: Command::Help,
             arguments,
         };

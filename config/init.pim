@@ -37,6 +37,7 @@ bind         <left>         (pan -1  0)                         --  Pan view lef
 bind         <right>        (pan  1  0)                         --  Pan view right
 bind         <return>       f-add                               --  Add a frame to the view
 bind         <backspace>    f-remove                            --  Remove a frame from the view
+bind         <del>          f-remove                            --  Remove a frame from the view
 bind-normal 'h'             f--                                 --  Navigate to previous frame
 bind-normal 'l'             f++                                 --  Navigate to next frame
 
