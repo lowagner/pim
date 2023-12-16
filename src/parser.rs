@@ -207,41 +207,6 @@ pub fn comment() -> Parser<String> {
         .map(|(_, comment)| comment)
 }
 
-pub fn scale() -> Parser<u32> {
-    symbol('@')
-        .then(integer())
-        .skip(symbol('x'))
-        .label("@<scale>")
-        .map(|(_, scale)| scale)
-}
-
-// TODO: i think we can remove this at some point and use `implicit_path` instead.
-pub fn path() -> Parser<String> {
-    token()
-        .map(|input: String| {
-            let mut path: OsString = input.clone().into();
-
-            // Linux and BSD and MacOS use `~` to infer the home directory of a given user.
-            if cfg!(unix) {
-                // We have to do this dance because `Path::join` doesn't do what we want
-                // if the input is for eg. "~/". We also can't use `Path::strip_prefix`
-                // because it drops our trailing slash.
-                if let Some('~') = input.chars().next() {
-                    if let Some(base_dirs) = dirs::BaseDirs::new() {
-                        path = base_dirs.home_dir().into();
-                        path.push(&input['~'.len_utf8()..]);
-                    }
-                }
-            }
-
-            match path.to_str() {
-                Some(p) => p.to_string(),
-                None => panic!("invalid path: {:?}", path),
-            }
-        })
-        .label("<path>")
-}
-
 // TODO: rename to `path` eventually.
 fn implicit_path() -> Parser<String> {
     peek(
@@ -284,30 +249,6 @@ fn implicit_path() -> Parser<String> {
                 }
             })
             .label("<path>"),
-    )
-}
-
-// An implementation of `choice` which doesn't require parsing to the end.
-// It also resets the input for each new option.
-pub fn choose_prefix<T>(choices: Vec<Parser<T>>) -> Parser<T> {
-    let label = choices
-        .iter()
-        .map(|p| p.label.clone())
-        .collect::<Vec<_>>()
-        .join(" | ");
-    let expected = label.clone();
-
-    Parser::new(
-        move |input| {
-            for p in &choices {
-                match p.parse(input) {
-                    Ok((result, rest)) => return Ok((result, rest)),
-                    Err(_) => continue,
-                }
-            }
-            Err((Error::expect(&expected, input), input))
-        },
-        label,
     )
 }
 
@@ -403,7 +344,7 @@ impl Parse for platform::Modifier {
 impl Parse for platform::ModifiersState {
     fn parser() -> Parser<Self> {
         parse_modifiers_with_last(true)
-            .map(|(mods, last)| mods)
+            .map(|(mods, _last)| mods)
             .label("<mods>")
     }
 }
@@ -460,15 +401,13 @@ impl Parse for Input {
         // Modifiers without anything else, use the last mod as the key to press;
         // The platform considers all other mods as modifying the key press, but not
         // that key itself.
-        let input_mod = peek(
-            parse_modifiers_with_last(false).try_map(|(mut mods, last)| {
-                if let Some(last) = last {
-                    Ok(Input::Key(mods, last.into()))
-                } else {
-                    Err("no mod")
-                }
-            }),
-        );
+        let input_mod = peek(parse_modifiers_with_last(false).try_map(|(mods, last)| {
+            if let Some(last) = last {
+                Ok(Input::Key(mods, last.into()))
+            } else {
+                Err("no mod")
+            }
+        }));
 
         input_key.or(input_rune).or(input_mod).label("<input>")
     }
@@ -569,14 +508,6 @@ pub fn double_quoted() -> Parser<String> {
     between('"', '"', until(symbol('"')))
 }
 
-pub fn paths() -> Parser<Vec<String>> {
-    any::<_, Vec<String>>(path().skip(optional(whitespace()))).label("<path>..")
-}
-
-pub fn setting() -> Parser<String> {
-    identifier().label("<setting>")
-}
-
 pub fn tuple<O>(x: Parser<O>, y: Parser<O>) -> Parser<(O, O)> {
     x.skip(whitespace()).then(y)
 }
@@ -586,16 +517,6 @@ mod test {
     use super::*;
     use crate::platform::{Key, ModifiersState};
     use crate::settings::*;
-
-    #[test]
-    fn test_paths() {
-        let p = paths();
-
-        let (out, rest) = p.parse("path/one.png path/two.png path/three.png").unwrap();
-
-        assert_eq!(rest, "");
-        assert_eq!(out, vec!["path/one.png", "path/two.png", "path/three.png"]);
-    }
 
     #[test]
     fn test_color() {

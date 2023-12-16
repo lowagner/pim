@@ -3,7 +3,6 @@ use crate::color;
 use crate::execution::Execution;
 use crate::font::{TextAlign, TextBatch};
 use crate::platform;
-use crate::session;
 use crate::session::{Mode, Session, Tool, Visual};
 use crate::settings::*;
 use crate::sprite;

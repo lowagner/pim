@@ -1985,10 +1985,9 @@ mod test {
             Ok(())
         }
 
-        pub fn bind_key(&mut self, mode: Mode, binding: KeyBinding) -> VoidResult {
+        pub fn bind_key(&mut self, mode: Mode, binding: KeyBinding) {
             self.test_what_ran
                 .push(WhatRan::Mocked(format!("bind{:?}{:?}", mode, binding)));
-            Ok(())
         }
 
         fn script_write(&mut self, arg0: Option<String>, arg1: Option<i64>) -> VoidResult {

@@ -3120,10 +3120,9 @@ impl Session {
         Ok(Argument::Null)
     }
 
-    pub fn bind_key(&mut self, mode: Mode, key_binding: KeyBinding) -> VoidResult {
+    pub fn bind_key(&mut self, mode: Mode, key_binding: KeyBinding) {
         debug!("binding {:?} to mode {:?}\n", key_binding, mode);
         self.key_bindings.add(mode, key_binding);
-        Ok(())
     }
 
     fn script_write(&mut self, arg0: Option<String>, arg1: Option<i64>) -> VoidResult {
