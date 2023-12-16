@@ -2037,6 +2037,8 @@ impl Session {
     }
 
     fn handle_received_character(&mut self, c: char, mods: ModifiersState) {
+        // TODO: for some reason <ctrl>'z' doesn't get mapped here.
+        //       in the meantime, make sure to use <ctrl><z> etc.
         if self.mode == Mode::Command {
             if c.is_control() || self.ignore_received_characters {
                 return;
