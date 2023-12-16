@@ -746,8 +746,6 @@ impl<'a> renderer::Renderer<'a> for Renderer {
                     if session.get_i64_setting(I64Setting::UiAnimate) != 0
                         && view.animation.len() > 1
                     {
-                        // TODO: always show the animation on the left (don't let it go OOB);
-                        //       hide frames that would draw over/under it.
                         if let Some(v) = view_data.get_mut(&view.id) {
                             if let Some(tess) = &v.anim_tess {
                                 let bound_layer = pipeline
@@ -755,13 +753,16 @@ impl<'a> renderer::Renderer<'a> for Renderer {
                                     .expect("binding textures never fails");
                                 let zoom = view.zoom as f32;
                                 let t = Matrix4::from_translation(Vector3::new(
-                                    // Move the animation over a bit from the frames.
-                                    -24.0 * zoom,
-                                    zoom,
+                                    // Always show the animation on the far right,
+                                    // irrespective of session.offset.x:
+                                    session.width - session.palette.cellsize,
+                                    session.offset.y,
                                     0.0,
                                 ));
 
                                 // Render layer animation.
+                                // TODO: add a session.ui-bg square behind the animation in case it overlaps
+                                //       with later frames.
                                 iface.set(&uni.tex, bound_layer.binding());
                                 iface.set(&uni.transform, t.into());
                                 rdr_gate
@@ -1262,7 +1263,7 @@ impl Renderer {
         let v = s.active_view();
         // FIXME: When `v.animation.val()` doesn't change, we don't need
         // to re-create the buffer.
-        let batch = draw::draw_view_animation(s, v);
+        let batch = draw::draw_view_animation(v);
 
         if let Some(vd) = self.view_data.get_mut(&v.id) {
             vd.anim_tess = Some(

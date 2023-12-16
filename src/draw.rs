@@ -744,13 +744,12 @@ fn draw_paste(session: &Session, batch: &mut sprite2d::Batch) {
     }
 }
 
-pub fn draw_view_animation<R>(session: &Session, v: &View<R>) -> sprite2d::Batch {
+pub fn draw_view_animation<R>(v: &View<R>) -> sprite2d::Batch {
     sprite2d::Batch::singleton(
         v.width(),
         v.fh,
         v.animation.val().map(|e| e as f32),
-        Rect::new(-(v.fw as f32), 0., 0., v.fh as f32) * v.zoom as f32
-            + (session.offset + v.offset),
+        Rect::new(-(v.fw as f32), 0.0, 0.0, v.fh as f32) * v.zoom as f32 + v.offset,
         self::VIEW_LAYER,
         Rgba::TRANSPARENT,
         1.,
