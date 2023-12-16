@@ -317,10 +317,12 @@ impl KeyBindings {
                 self.bindings_by_mode
                     .insert(mode, HashMap::from([(binding.input, binding)]));
             }
-            Some(mode_bindings) => {
-                let old_binding = mode_bindings.insert(binding.input, binding);
-                // TODO: add an error message if there was an old binding.
-            }
+            Some(mode_bindings) => match mode_bindings.insert(binding.input, binding) {
+                Some(old_binding) => {
+                    eprint!("\nbinding replaced for mode {}: {:?}\n", mode, old_binding);
+                }
+                None => {}
+            },
         }
     }
 
