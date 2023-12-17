@@ -376,38 +376,32 @@ macro_rules! script_runner {
                 match command {
                     Command::Help => {
                         if script.arguments.len() != 1 {
-                            self.message(self.variables.describe(Command::Help), MessageType::Info);
+                            Ok(Argument::String(self.variables.describe(Command::Help)))
                         } else {
                             match &script.arguments[0] {
                                 Argument::Script(nested_script) => {
                                     if nested_script.arguments.len() == 0 {
-                                        self.message(
-                                            self.variables.describe(nested_script.command.clone()),
-                                            MessageType::Info,
-                                        );
+                                        Ok(Argument::String(self.variables.describe(nested_script.command.clone())))
                                     } else {
-                                        self.message(
+                                        Ok(Argument::String(
                                             format!("({}) -- a script", nested_script),
-                                            MessageType::Info,
-                                        );
+                                        ))
                                     }
                                 }
-                                Argument::Use(use_arg) => self.message(
+                                Argument::Use(use_arg) => Ok(Argument::String(
                                     format!(
                                         "-- a way to evaluate an argument at position {}; \
                                         e.g., `const 'ten' (sum $0 10)` will add 10 to argument 0, \
                                         and can be called via `ten 123` which will return `133`",
                                         use_arg.index
                                     ),
-                                    MessageType::Info,
-                                ),
-                                a => self.message(
+                                )),
+                                // TODO: break down by argument type.  e.g., Argument::String is a string argument
+                                a => Ok(Argument::String(
                                     format!("{} -- an argument", a),
-                                    MessageType::Info,
-                                ),
+                                )),
                             }
                         }
-                        Ok(Argument::Null)
                     }
                     Command::Echo => {
                         let mut string = String::new();
@@ -419,7 +413,6 @@ macro_rules! script_runner {
                             }
                             string.push_str(&next_string);
                         }
-                        self.message(string.clone(), MessageType::Echo);
                         Ok(Argument::String(string))
                     }
                     Command::Error => {
@@ -1304,6 +1297,11 @@ impl Variables {
             Command::UsingOptionalI64(OptionalI64For::FrameRemove),
             "removes the frame at index $0, or the current frame if $0 is null, \
             e.g., `$$ 0` to remove the first frame",
+        );
+        variables.add_built_in(
+            Command::UsingOptionalI64(OptionalI64For::FrameShift),
+            "shifts the starting frame right by $0 frames, defaulting to 1, with wrap-around, \
+            e.g., `$$ -1` to move the first frame left (to the end of the animation)",
         );
         variables.add_built_in(
             Command::UsingOptionalI64(OptionalI64For::Undo),
@@ -3091,15 +3089,13 @@ mod test {
         }
         .run(&mut test_runner);
         assert_eq!(
-            test_runner.message,
-            Message {
-                string: "? -- explains what $0 does without evaluating it, \
-                        e.g., `? paint` to explain what the `paint` command does"
-                    .to_string(),
-                message_type: MessageType::Info,
-            }
+            result,
+            Ok(Argument::String(
+                "? -- explains what $0 does without evaluating it, \
+            e.g., `? paint` to explain what the `paint` command does"
+                    .to_string()
+            ))
         );
-        assert_eq!(result, Ok(Argument::Null));
 
         let result = Script {
             command: Command::Help,
@@ -3107,15 +3103,13 @@ mod test {
         }
         .run(&mut test_runner);
         assert_eq!(
-            test_runner.message,
-            Message {
-                string: "if -- if $0 evaluates to truthy, evaluates $1, otherwise $2, \
-                        e.g., `if 'hi' 'world' 3` returns 'world'"
+            result,
+            Ok(Argument::String(
+                "if -- if $0 evaluates to truthy, evaluates $1, otherwise $2, \
+            e.g., `if 'hi' 'world' 3` returns 'world'"
                     .to_string(),
-                message_type: MessageType::Info,
-            }
+            ))
         );
-        assert_eq!(result, Ok(Argument::Null));
 
         let result = Script {
             command: Command::Help,
@@ -3125,15 +3119,13 @@ mod test {
         }
         .run(&mut test_runner);
         assert_eq!(
-            test_runner.message,
-            Message {
-                string: "mode -- getter/swapper for the current mode if $0 is null/present, \
-                        e.g., `mode 'normal'` to go to normal mode"
+            result,
+            Ok(Argument::String(
+                "mode -- getter/swapper for the current mode if $0 is null/present, \
+                e.g., `mode 'normal'` to go to normal mode"
                     .to_string(),
-                message_type: MessageType::Info,
-            }
+            ))
         );
-        assert_eq!(result, Ok(Argument::Null));
 
         let result = Script {
             command: Command::Help,
@@ -3144,16 +3136,14 @@ mod test {
         }
         .run(&mut test_runner);
         assert_eq!(
-            test_runner.message,
-            Message {
-                string: "-- a way to evaluate an argument at position 3; \
-                        e.g., `const 'ten' (sum $0 10)` will add 10 to argument 0, \
-                        and can be called via `ten 123` which will return `133`"
+            result,
+            Ok(Argument::String(
+                "-- a way to evaluate an argument at position 3; \
+                e.g., `const 'ten' (sum $0 10)` will add 10 to argument 0, \
+                and can be called via `ten 123` which will return `133`"
                     .to_string(),
-                message_type: MessageType::Info,
-            }
+            ))
         );
-        assert_eq!(result, Ok(Argument::Null));
 
         let result = Script {
             command: Command::Help,
@@ -3161,13 +3151,9 @@ mod test {
         }
         .run(&mut test_runner);
         assert_eq!(
-            test_runner.message,
-            Message {
-                string: "'blah' -- an argument".to_string(),
-                message_type: MessageType::Info,
-            }
+            result,
+            Ok(Argument::String("'blah' -- an argument".to_string()))
         );
-        assert_eq!(result, Ok(Argument::Null));
 
         let result = Script {
             command: Command::Help,
@@ -3178,13 +3164,9 @@ mod test {
         }
         .run(&mut test_runner);
         assert_eq!(
-            test_runner.message,
-            Message {
-                string: "(if 2) -- a script".to_string(),
-                message_type: MessageType::Info,
-            }
+            result,
+            Ok(Argument::String("(if 2) -- a script".to_string()))
         );
-        assert_eq!(result, Ok(Argument::Null));
     }
 
     #[test]
