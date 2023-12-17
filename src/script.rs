@@ -317,18 +317,6 @@ macro_rules! script_runner {
         impl $name {
             // Can add other common methods for ScriptRunner here.
 
-            /// Display a message to the user. Also logs.
-            pub fn message<D: fmt::Display>(&mut self, msg: D, t: MessageType) {
-                // TODO: if an existing message is present, we should wait a bit
-                // and then show the new message later, a la toasts.  we can log right away.
-                self.message = Message::new(msg, t);
-                self.message.log();
-            }
-
-            fn message_clear(&mut self) {
-                self.message = Message::default();
-            }
-
             /// Sums the top of the script stack's arguments together.
             /// Converts a Null sum to 0.
             fn sum(&mut self, script_stack: &Vec<&Script>) -> ArgumentResult {
