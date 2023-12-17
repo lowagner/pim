@@ -140,7 +140,6 @@ pub enum Command {
     //      we maybe handle the effects after every action.
     // TODO: FrameSwap, "fs" with two indices
     // TODO: FrameClear "fc" with index and color, use view.clear_frame
-    // TODO: FrameShift, moves the animation over one to start one frame down
     // TODO: FileAppend, keeps the same height but centers the contents in $0 (file name) and adds to animation
     // TODO: WrapHorizontally: moves the contents of a single frame over to the right by $0 amount,
     //          wrapping that many pixels to the left side
@@ -278,6 +277,7 @@ impl fmt::Display for Command {
             Command::UsingOptionalI64(OptionalI64For::FrameClone) => write!(f, "fc"),
             Command::UsingOptionalI64(OptionalI64For::FrameRemove) => write!(f, "fr"),
             Command::UsingOptionalI64(OptionalI64For::FrameShift) => write!(f, "shift"),
+            Command::UsingOptionalI64(OptionalI64For::FrameShiftX) => write!(f, "fsx"),
             Command::UsingOptionalI64(OptionalI64For::Undo) => write!(f, "undo"),
             Command::UsingOptionalI64(OptionalI64For::Redo) => write!(f, "redo"),
             Command::UsingOptionalColor(OptionalColorFor::SelectionClear) => write!(f, "clear"),
@@ -382,6 +382,7 @@ impl FromStr for Command {
             "fc" => Ok(Command::UsingOptionalI64(OptionalI64For::FrameClone)),
             "fr" => Ok(Command::UsingOptionalI64(OptionalI64For::FrameRemove)),
             "shift" => Ok(Command::UsingOptionalI64(OptionalI64For::FrameShift)),
+            "fsx" => Ok(Command::UsingOptionalI64(OptionalI64For::FrameShiftX)),
             "undo" => Ok(Command::UsingOptionalI64(OptionalI64For::Undo)),
             "redo" => Ok(Command::UsingOptionalI64(OptionalI64For::Redo)),
             "clear" => Ok(Command::UsingOptionalColor(
@@ -482,6 +483,8 @@ pub enum OptionalI64For {
     FrameRemove,
     /// Shifts the frames to the right by Some(i64), defaulting to 1.
     FrameShift,
+    /// Shifts each frame's columns to the right by Some(i64), defaulting to 1.
+    FrameShiftX,
     /// Repeats undo the specified number of times, or 1.
     Undo,
     /// Repeats redo the specified number of times, or 1.

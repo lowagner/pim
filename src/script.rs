@@ -1292,6 +1292,11 @@ impl Variables {
             e.g., `$$ -1` to move the first frame left (to the end of the animation)",
         );
         variables.add_built_in(
+            Command::UsingOptionalI64(OptionalI64For::FrameShiftX),
+            "shifts each frame's columns by $0 pixels, defaulting to 1, with wrap-around, \
+            e.g., `$$ -1` to move the first column left (to the end of the frame)",
+        );
+        variables.add_built_in(
             Command::UsingOptionalI64(OptionalI64For::Undo),
             "calls undo with an optional number of times to repeat, defaulting to 1, \
             e.g., `$$` to undo once",
@@ -1505,6 +1510,7 @@ impl Variables {
         assert_ok!(variables.set("f-remove".to_string(), Variable::Alias("fr".to_string())));
         assert_ok!(variables.set("fs".to_string(), Variable::Alias("shift".to_string())));
         assert_ok!(variables.set("f-shift".to_string(), Variable::Alias("shift".to_string())));
+        assert_ok!(variables.set("f-shift-x".to_string(), Variable::Alias("fsx".to_string())));
         assert_ok!(variables.set("fw".to_string(), Variable::Alias("f-width".to_string())));
         assert_ok!(variables.set("fh".to_string(), Variable::Alias("f-height".to_string())));
         assert_ok!(variables.set("s-clear".to_string(), Variable::Alias("clear".to_string())));

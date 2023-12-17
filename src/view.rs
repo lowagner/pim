@@ -348,6 +348,47 @@ impl<R> View<R> {
         self.touch();
     }
 
+    /// Shifts pixels in each frame to the right by the passed-in amount with wrap around,
+    /// e.g., if +1, then shifts one pixel to the right, with the last column of the frame
+    /// becoming the first column.  If -1, then shifts one to the left, with the first
+    /// column becoming the last column.
+    pub fn shift_frames_x(&mut self, amount: i64) {
+        let count = self.fw as i64;
+        if count <= 1 {
+            return;
+        }
+        // Take `amount` mod `count`:
+        let amount = (((amount % count) + count) % count) as u32;
+        if amount == 0 {
+            return;
+        }
+        let (fw, fh) = (self.fw, self.fh);
+        self.ops.push(ViewOp::Clear(Rgba8::TRANSPARENT));
+        let new_front_start = amount;
+        let front_width = fw - new_front_start;
+        let back_width = new_front_start;
+        let old_back_start = front_width; /* == fw - back_width */
+        for i in 0..self.animation.len() {
+            let i = i as u32;
+            self.ops.push(ViewOp::Blit(
+                // Move the front chunk to the right:
+                Rect::new(0, 0, front_width, fh) + Vector2::new(fw * i, 0),
+                Rect::new(
+                    new_front_start,
+                    0,
+                    fw, /* == new_front_start + front_width */
+                    fh,
+                ) + Vector2::new(fw * i, 0),
+            ));
+            self.ops.push(ViewOp::Blit(
+                // Move the back chunk to the start:
+                Rect::new(old_back_start, 0, fw, fh) + Vector2::new(fw * i, 0),
+                Rect::new(0, 0, back_width, fh) + Vector2::new(fw * i, 0),
+            ));
+        }
+        self.touch();
+    }
+
     fn extend(&mut self) {
         let w = self.width();
         let (fw, fh) = (self.fw, self.fh);

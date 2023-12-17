@@ -10,7 +10,10 @@
 bind        '?'             (mode 'help')                       --  Show help
 bind-help   '?'             (mode 'normal')                     --  Hide help
 bind        <shift><;>      (mode 'command')                    --  Switch to command mode
-bind        'v'             (mode 'visual')                     --  Switch to visual mode
+-- TODO: we can make `normal` a command that returns 0 or 1, same with `visual`.  we can do `visual (not visual)`
+--       so that we could use `bind` instead of `bind-normal` and `bind-visual` here.
+bind-normal 'v'             (mode 'visual')                     --  Switch to visual mode
+bind-visual 'v'             (mode 'normal')                     --  Switch to normal mode
 bind        '.'             zoom++                              --  Zoom in active view
 bind        ','             zoom--                              --  Zoom out active view
 bind        '-'             (zoom 1)                            --  Reset active view zoom

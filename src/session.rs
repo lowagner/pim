@@ -2908,10 +2908,6 @@ impl Session {
         Ok(())
     }
 
-    fn shift_frames(&mut self, amount: i64) {
-        self.active_view_mut().shift_frames(amount);
-    }
-
     fn frame_index(&self, index: Option<i64>, what_for: &str) -> Result<usize, String> {
         let view = self.active_view();
         let max_frames = view.animation.len();
@@ -3009,7 +3005,14 @@ impl Session {
             OptionalI64For::FrameAdd => self.add_frame(optional_i64)?,
             OptionalI64For::FrameClone => self.clone_frame(optional_i64)?,
             OptionalI64For::FrameRemove => self.remove_frame(optional_i64)?,
-            OptionalI64For::FrameShift => self.shift_frames(optional_i64.unwrap_or(1)),
+            OptionalI64For::FrameShift => {
+                self.active_view_mut()
+                    .shift_frames(optional_i64.unwrap_or(1));
+            }
+            OptionalI64For::FrameShiftX => {
+                self.active_view_mut()
+                    .shift_frames_x(optional_i64.unwrap_or(1));
+            }
             OptionalI64For::Undo => {
                 // TODO: return the current history ID before the undo.
                 // We'll need to return an `ArgumentResult` here instead of VoidResult.
