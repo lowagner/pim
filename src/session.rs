@@ -3205,7 +3205,6 @@ impl Session {
     fn message_clear(&mut self) {
         self.message = Message::default();
     }
-
 }
 
 fn get_extension<'a>(path: &'a Path) -> Result<&'a str, io::Error> {

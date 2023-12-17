@@ -315,17 +315,17 @@ impl<R> View<R> {
     /// frame becoming the last frame.
     pub fn shift_frames(&mut self, amount: i64) {
         let count = self.animation.len() as i64;
-        if amount == 0 || count <= 1 {
+        if count <= 1 {
             return;
         }
         // Take `amount` mod `count`:
         let amount = (((amount % count) + count) % count) as u32;
+        if amount == 0 {
+            return;
+        }
         let width = self.width();
         let (fw, fh) = (self.fw, self.fh);
-        self.ops.push(ViewOp::ClearRect(
-            Rgba8::TRANSPARENT,
-            Rect::new(0, 0, width, fh),
-        ));
+        self.ops.push(ViewOp::Clear(Rgba8::TRANSPARENT));
         let new_front_start = fw * amount;
         let front_width = width - new_front_start;
         let back_width = new_front_start;
