@@ -277,6 +277,7 @@ impl fmt::Display for Command {
             Command::UsingOptionalI64(OptionalI64For::FrameAdd) => write!(f, "fa"),
             Command::UsingOptionalI64(OptionalI64For::FrameClone) => write!(f, "fc"),
             Command::UsingOptionalI64(OptionalI64For::FrameRemove) => write!(f, "fr"),
+            Command::UsingOptionalI64(OptionalI64For::FrameShift) => write!(f, "shift"),
             Command::UsingOptionalI64(OptionalI64For::Undo) => write!(f, "undo"),
             Command::UsingOptionalI64(OptionalI64For::Redo) => write!(f, "redo"),
             Command::UsingOptionalColor(OptionalColorFor::SelectionClear) => write!(f, "clear"),
@@ -380,6 +381,7 @@ impl FromStr for Command {
             "fa" => Ok(Command::UsingOptionalI64(OptionalI64For::FrameAdd)),
             "fc" => Ok(Command::UsingOptionalI64(OptionalI64For::FrameClone)),
             "fr" => Ok(Command::UsingOptionalI64(OptionalI64For::FrameRemove)),
+            "shift" => Ok(Command::UsingOptionalI64(OptionalI64For::FrameShift)),
             "undo" => Ok(Command::UsingOptionalI64(OptionalI64For::Undo)),
             "redo" => Ok(Command::UsingOptionalI64(OptionalI64For::Redo)),
             "clear" => Ok(Command::UsingOptionalColor(
@@ -478,6 +480,8 @@ pub enum OptionalI64For {
     FrameClone,
     /// Removes/deletes the frame at Some(i64), otherwise the current frame.
     FrameRemove,
+    /// Shifts the frames to the right by Some(i64), defaulting to 1.
+    FrameShift,
     /// Repeats undo the specified number of times, or 1.
     Undo,
     /// Repeats redo the specified number of times, or 1.

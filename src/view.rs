@@ -309,6 +309,45 @@ impl<R> View<R> {
         ));
     }
 
+    /// Shifts frames to the right by the passed-in amount with wrap around,
+    /// e.g., if +1, then shifts one to the right, with the last frame becoming
+    /// the first frame.  If -1, then shifts one to the left, with the first
+    /// frame becoming the last frame.
+    pub fn shift_frames(&mut self, amount: i64) {
+        let count = self.animation.len() as i64;
+        if amount == 0 || count <= 1 {
+            return;
+        }
+        // Take `amount` mod `count`:
+        let amount = (((amount % count) + count) % count) as u32;
+        let width = self.width();
+        let (fw, fh) = (self.fw, self.fh);
+        self.ops.push(ViewOp::ClearRect(
+            Rgba8::TRANSPARENT,
+            Rect::new(0, 0, width, fh),
+        ));
+        let new_front_start = fw * amount;
+        let front_width = width - new_front_start;
+        let back_width = new_front_start;
+        let old_back_start = front_width; /* == width - back_width */
+        self.ops.push(ViewOp::Blit(
+            // Move the front chunk to the right:
+            Rect::new(0, 0, front_width, fh),
+            Rect::new(
+                new_front_start,
+                0,
+                width, /* == new_front_start + front_width */
+                fh,
+            ),
+        ));
+        self.ops.push(ViewOp::Blit(
+            // Move the back chunk to the start:
+            Rect::new(old_back_start, 0, width, fh),
+            Rect::new(0, 0, back_width, fh),
+        ));
+        self.touch();
+    }
+
     fn extend(&mut self) {
         let w = self.width();
         let (fw, fh) = (self.fw, self.fh);
@@ -351,6 +390,7 @@ impl<R> View<R> {
 
     pub fn paint_color(&mut self, color: Rgba8, x: i32, y: i32) {
         self.ops.push(ViewOp::SetPixel(color, x, y));
+        // TODO: touch??
     }
 
     pub fn yank(&mut self, area: Rect<i32>) {
@@ -359,6 +399,7 @@ impl<R> View<R> {
 
     pub fn flip(&mut self, area: Rect<i32>, dir: Axis) {
         self.ops.push(ViewOp::Flip(area, dir));
+        // TODO: touch??
     }
 
     pub fn paste(&mut self, area: Rect<i32>) {

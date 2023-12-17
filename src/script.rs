@@ -1517,6 +1517,8 @@ impl Variables {
         assert_ok!(variables.set("f-clone".to_string(), Variable::Alias("fc".to_string())));
         assert_ok!(variables.set("f-index".to_string(), Variable::Alias("f".to_string())));
         assert_ok!(variables.set("f-remove".to_string(), Variable::Alias("fr".to_string())));
+        assert_ok!(variables.set("fs".to_string(), Variable::Alias("shift".to_string())));
+        assert_ok!(variables.set("f-shift".to_string(), Variable::Alias("shift".to_string())));
         assert_ok!(variables.set("fw".to_string(), Variable::Alias("f-width".to_string())));
         assert_ok!(variables.set("fh".to_string(), Variable::Alias("f-height".to_string())));
         assert_ok!(variables.set("s-clear".to_string(), Variable::Alias("clear".to_string())));
