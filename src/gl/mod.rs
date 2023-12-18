@@ -1034,6 +1034,9 @@ impl Renderer {
                         .map_err(Error::Texture)?;
                 }
                 ViewOp::Blit(src, dst) => {
+                    assert!(src.width() == dst.width());
+                    assert!(src.height() == dst.height());
+
                     let view = self
                         .view_data
                         .get_mut(&v.id)

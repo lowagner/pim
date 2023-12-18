@@ -352,7 +352,7 @@ impl<R> View<R> {
     /// e.g., if +1, then shifts one pixel to the right, with the last column of the frame
     /// becoming the first column.  If -1, then shifts one to the left, with the first
     /// column becoming the last column.
-    pub fn shift_frames_x(&mut self, amount: i64) {
+    pub fn shift_frame_x(&mut self, amount: i64) {
         let count = self.fw as i64;
         if count <= 1 {
             return;
@@ -386,6 +386,58 @@ impl<R> View<R> {
                 Rect::new(0, 0, back_width, fh) + Vector2::new(fw * i, 0),
             ));
         }
+        self.touch();
+    }
+
+    /// Shifts pixels in each frame down by the passed-in amount with wrap around,
+    /// e.g., if +1, then shifts one pixel down, with the last row of the frame
+    /// becoming the first row.  If -1, then shifts one up, with the first row
+    /// becoming the last row.
+    pub fn shift_frame_y(&mut self, amount: i64) {
+        let count = self.fh as i64;
+        if count <= 1 {
+            return;
+        }
+        // Take `amount` mod `count`:
+        let amount = (((amount % count) + count) % count) as u32;
+        if amount == 0 {
+            return;
+        }
+        let width = self.width();
+        let (fw, fh) = (self.fw, self.fh);
+        self.ops.push(ViewOp::Clear(Rgba8::TRANSPARENT));
+        /* TODO: this makes more sense to me, let's try to use y=0 (fh) as the top (bottom) internally
+        let new_top_start = amount;
+        let top_height = fh - new_top_start;
+        let bottom_height = new_top_start;
+        let old_bottom_start = top_height; /* == fh - bottom_height */
+        self.ops.push(ViewOp::Blit(
+            // Move the top chunk to the bottom:
+            Rect::new(0, 0, width, top_height),
+            Rect::new(
+                0,
+                new_top_start,
+                width,
+                fh,
+            ),
+        ));
+        self.ops.push(ViewOp::Blit(
+            // Move the bottom chunk to the top:
+            Rect::new(0, old_bottom_start, width, fh),
+            Rect::new(0, 0, width, bottom_height),
+        ));
+        */
+        // TODO: y = 0 as the bottom makes little sense to me, make above logic work somehow.
+        self.ops.push(ViewOp::Blit(
+            // Move the bottom chunk to the top:
+            Rect::new(0, 0, width, amount), // y = fh is the top for src // TODO: fix
+            Rect::new(0, 0, width, amount), // y = 0 is the top for dest
+        ));
+        self.ops.push(ViewOp::Blit(
+            // Move the top chunk down to the bottom:
+            Rect::new(0, amount, width, fh), // y = fh is the top for src // TODO: fix
+            Rect::new(0, amount, width, fh), // y = 0 is the top for dest
+        ));
         self.touch();
     }
 

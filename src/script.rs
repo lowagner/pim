@@ -1293,8 +1293,13 @@ impl Variables {
         );
         variables.add_built_in(
             Command::UsingOptionalI64(OptionalI64For::FrameShiftX),
-            "shifts each frame's columns by $0 pixels, defaulting to 1, with wrap-around, \
+            "shifts each frame's columns right by $0 pixels, defaulting to 1, with wrap-around, \
             e.g., `$$ -1` to move the first column left (to the end of the frame)",
+        );
+        variables.add_built_in(
+            Command::UsingOptionalI64(OptionalI64For::FrameShiftY),
+            "shifts each frame's rows down by $0 pixels, defaulting to 1, with wrap-around, \
+            e.g., `$$ -1` to move the first row up (to the bottom of the frame)",
         );
         variables.add_built_in(
             Command::UsingOptionalI64(OptionalI64For::Undo),
@@ -1511,6 +1516,7 @@ impl Variables {
         assert_ok!(variables.set("fs".to_string(), Variable::Alias("shift".to_string())));
         assert_ok!(variables.set("f-shift".to_string(), Variable::Alias("shift".to_string())));
         assert_ok!(variables.set("f-shift-x".to_string(), Variable::Alias("fsx".to_string())));
+        assert_ok!(variables.set("f-shift-y".to_string(), Variable::Alias("fsy".to_string())));
         assert_ok!(variables.set("fw".to_string(), Variable::Alias("f-width".to_string())));
         assert_ok!(variables.set("fh".to_string(), Variable::Alias("f-height".to_string())));
         assert_ok!(variables.set("s-clear".to_string(), Variable::Alias("clear".to_string())));

@@ -278,6 +278,7 @@ impl fmt::Display for Command {
             Command::UsingOptionalI64(OptionalI64For::FrameRemove) => write!(f, "fr"),
             Command::UsingOptionalI64(OptionalI64For::FrameShift) => write!(f, "shift"),
             Command::UsingOptionalI64(OptionalI64For::FrameShiftX) => write!(f, "fsx"),
+            Command::UsingOptionalI64(OptionalI64For::FrameShiftY) => write!(f, "fsy"),
             Command::UsingOptionalI64(OptionalI64For::Undo) => write!(f, "undo"),
             Command::UsingOptionalI64(OptionalI64For::Redo) => write!(f, "redo"),
             Command::UsingOptionalColor(OptionalColorFor::SelectionClear) => write!(f, "clear"),
@@ -383,6 +384,7 @@ impl FromStr for Command {
             "fr" => Ok(Command::UsingOptionalI64(OptionalI64For::FrameRemove)),
             "shift" => Ok(Command::UsingOptionalI64(OptionalI64For::FrameShift)),
             "fsx" => Ok(Command::UsingOptionalI64(OptionalI64For::FrameShiftX)),
+            "fsy" => Ok(Command::UsingOptionalI64(OptionalI64For::FrameShiftY)),
             "undo" => Ok(Command::UsingOptionalI64(OptionalI64For::Undo)),
             "redo" => Ok(Command::UsingOptionalI64(OptionalI64For::Redo)),
             "clear" => Ok(Command::UsingOptionalColor(
@@ -485,6 +487,8 @@ pub enum OptionalI64For {
     FrameShift,
     /// Shifts each frame's columns to the right by Some(i64), defaulting to 1.
     FrameShiftX,
+    /// Shifts each frame's rows down by Some(i64), defaulting to 1.
+    FrameShiftY,
     /// Repeats undo the specified number of times, or 1.
     Undo,
     /// Repeats redo the specified number of times, or 1.

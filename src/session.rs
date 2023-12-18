@@ -3011,7 +3011,11 @@ impl Session {
             }
             OptionalI64For::FrameShiftX => {
                 self.active_view_mut()
-                    .shift_frames_x(optional_i64.unwrap_or(1));
+                    .shift_frame_x(optional_i64.unwrap_or(1));
+            }
+            OptionalI64For::FrameShiftY => {
+                self.active_view_mut()
+                    .shift_frame_y(optional_i64.unwrap_or(1));
             }
             OptionalI64For::Undo => {
                 // TODO: return the current history ID before the undo.
