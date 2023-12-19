@@ -20,6 +20,7 @@ bind        '-'             (zoom 1)                            --  Reset active
 -- TODO: switch `j`-`k` to move layers.
 bind-normal 'j'             v--                                 --  Go to previous view
 bind-normal 'k'             v++                                 --  Go to next view
+bind         <ctrl><s>      w                                   --  Save the current view
 bind         <ctrl><z>      undo                                --  Undo active view edit
 bind    <ctrl><shift><z>    redo                                --  Redo an earlier undo.
 bind        'x'             (fg (bg fg))                        --  Swap foreground-background colors

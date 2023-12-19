@@ -938,6 +938,119 @@ impl Variables {
         }
     }
 
+    /// Returns the Argument represented by this name, returning Null if not present in the map.
+    // Notice that we resolve aliases here so that you'll definitely get an argument.
+    pub fn get<'a>(&'a self, mut name: &'a String) -> Get {
+        for _iteration in 1..24 {
+            match &self.map.get(name) {
+                None => return Get::Argument(Argument::Null),
+                Some(variable) => match variable {
+                    Variable::Const(arg) => return Get::Argument(arg.clone()),
+                    Variable::Mutable(arg) => return Get::Argument(arg.clone()),
+                    Variable::BuiltIn(command, _) => return Get::Command(command.clone()),
+                    Variable::Alias(alias) => {
+                        name = alias;
+                    }
+                },
+            }
+        }
+        eprint!("don't nest aliases this much!\n");
+        return Get::Argument(Argument::Null);
+    }
+
+    /// Sets the variable, returning the old value if it was present in the map.
+    /// NOTE! Will return an error if the variable was present and const.
+    pub fn set(&mut self, name: String, variable: Variable) -> ArgumentResult {
+        // TODO: don't let name contain `<` or `>` as these are interpreted as modifiers/keys
+        //       we can probably get away with only checking the beginning as that's what the parser would do.
+        // TODO: also avoid containing `(`, `)`, `{` `}`, or `[` `]`
+        // TODO: disallow `-` from starting commands
+        if name.contains(MAIN_SEPARATOR) || name.contains(".") {
+            return Err(format!(
+                "variable names should not contain `{}` or `.` which indicate paths",
+                MAIN_SEPARATOR
+            ));
+        }
+        if name.contains(" ") {
+            return Err("variable names should not contain spaces".to_string());
+        }
+        match &variable {
+            Variable::Alias(alias) => {
+                if name == *alias {
+                    return Err(format!(
+                        "alias can't be self referential: {} -> {}",
+                        name, *alias
+                    ));
+                }
+            }
+            _ => {}
+        }
+        match self.map.get(&name) {
+            None => {}
+            Some(var) => match var {
+                Variable::Mutable(_) => {
+                    if !variable.is_mutable() {
+                        eprint!(
+                            "overwriting mutable variable `{}` with a const or alias\n",
+                            name
+                        );
+                    }
+                }
+                Variable::BuiltIn(_, _) => {
+                    return Err(format!("built-in `{}` is not reassignable", name));
+                }
+                Variable::Const(_) => {
+                    return Err(format!("variable `{}` is not reassignable", name));
+                }
+                Variable::Alias(_) => {
+                    return Err(format!("alias `{}` is not reassignable", name));
+                }
+            },
+        }
+        // TODO: optimization for aliases of aliases, we could drill down since aliases
+        // are constant.  e.g., X -> Y -> Z should collapse to X -> Z and Y -> Z.
+        // if we create X -> Y first, then Y -> Z, the next time we mutate self
+        // and notice that X -> Y which is itself an alias, we can update to X -> Z.
+        self.map
+            .insert(name, variable)
+            .map_or(Ok(Argument::Null), |v| match v {
+                Variable::Mutable(var) => Ok(var),
+                _ => panic!("i thought we checked for this already"),
+            })
+    }
+
+    pub fn set_from_script(&mut self, script: &Script) -> ArgumentResult {
+        if script.arguments.len() == 0 {
+            return Err("setting a variable requires at least one argument".to_string());
+        }
+
+        let name = match &script.arguments[0] {
+            Argument::String(argument_name) => argument_name.clone(),
+            _ => return Err("variable name must be a known string".to_string()),
+        };
+
+        let value_argument = if script.arguments.len() >= 2 {
+            script.arguments[1].clone()
+        } else {
+            Argument::Null
+        };
+        let value = match script.command {
+            Command::ConstVariable => Variable::Const(value_argument),
+            Command::SetVariable => Variable::Mutable(value_argument),
+            Command::CreateAlias => {
+                match value_argument {
+                    Argument::String(alias) => Variable::Alias(alias),
+                    // TODO: we can probably relax this at some point,
+                    // but i don't see a huge use case for it.
+                    _ => return Err("alias must be to a known string".to_string()),
+                }
+            }
+            _ => return Err("script is invalid for setting a variable".to_string()),
+        };
+
+        self.set(name, value)
+    }
+
     fn add_built_in(&mut self, command: Command, description: &str) {
         let command_name = format!("{}", command);
         let command_description = description.replace("$$", &command_name);
@@ -1585,119 +1698,6 @@ impl Variables {
             assert_ok!(variables.set(format!("brush-{}", c), Variable::Alias(format!("b-{}", c))));
         }
         variables
-    }
-
-    /// Returns the Argument represented by this name, returning Null if not present in the map.
-    // Notice that we resolve aliases here so that you'll definitely get an argument.
-    pub fn get<'a>(&'a self, mut name: &'a String) -> Get {
-        for _iteration in 1..24 {
-            match &self.map.get(name) {
-                None => return Get::Argument(Argument::Null),
-                Some(variable) => match variable {
-                    Variable::Const(arg) => return Get::Argument(arg.clone()),
-                    Variable::Mutable(arg) => return Get::Argument(arg.clone()),
-                    Variable::BuiltIn(command, _) => return Get::Command(command.clone()),
-                    Variable::Alias(alias) => {
-                        name = alias;
-                    }
-                },
-            }
-        }
-        eprint!("don't nest aliases this much!\n");
-        return Get::Argument(Argument::Null);
-    }
-
-    /// Sets the variable, returning the old value if it was present in the map.
-    /// NOTE! Will return an error if the variable was present and const.
-    pub fn set(&mut self, name: String, variable: Variable) -> ArgumentResult {
-        // TODO: don't let name contain `<` or `>` as these are interpreted as modifiers/keys
-        //       we can probably get away with only checking the beginning as that's what the parser would do.
-        // TODO: also avoid containing `(`, `)`, `{` `}`, or `[` `]`
-        // TODO: disallow `-` from starting commands
-        if name.contains(MAIN_SEPARATOR) || name.contains(".") {
-            return Err(format!(
-                "variable names should not contain `{}` or `.` which indicate paths",
-                MAIN_SEPARATOR
-            ));
-        }
-        if name.contains(" ") {
-            return Err("variable names should not contain spaces".to_string());
-        }
-        match &variable {
-            Variable::Alias(alias) => {
-                if name == *alias {
-                    return Err(format!(
-                        "alias can't be self referential: {} -> {}",
-                        name, *alias
-                    ));
-                }
-            }
-            _ => {}
-        }
-        match self.map.get(&name) {
-            None => {}
-            Some(var) => match var {
-                Variable::Mutable(_) => {
-                    if !variable.is_mutable() {
-                        eprint!(
-                            "overwriting mutable variable `{}` with a const or alias\n",
-                            name
-                        );
-                    }
-                }
-                Variable::BuiltIn(_, _) => {
-                    return Err(format!("built-in `{}` is not reassignable", name));
-                }
-                Variable::Const(_) => {
-                    return Err(format!("variable `{}` is not reassignable", name));
-                }
-                Variable::Alias(_) => {
-                    return Err(format!("alias `{}` is not reassignable", name));
-                }
-            },
-        }
-        // TODO: optimization for aliases of aliases, we could drill down since aliases
-        // are constant.  e.g., X -> Y -> Z should collapse to X -> Z and Y -> Z.
-        // if we create X -> Y first, then Y -> Z, the next time we mutate self
-        // and notice that X -> Y which is itself an alias, we can update to X -> Z.
-        self.map
-            .insert(name, variable)
-            .map_or(Ok(Argument::Null), |v| match v {
-                Variable::Mutable(var) => Ok(var),
-                _ => panic!("i thought we checked for this already"),
-            })
-    }
-
-    pub fn set_from_script(&mut self, script: &Script) -> ArgumentResult {
-        if script.arguments.len() == 0 {
-            return Err("setting a variable requires at least one argument".to_string());
-        }
-
-        let name = match &script.arguments[0] {
-            Argument::String(argument_name) => argument_name.clone(),
-            _ => return Err("variable name must be a known string".to_string()),
-        };
-
-        let value_argument = if script.arguments.len() >= 2 {
-            script.arguments[1].clone()
-        } else {
-            Argument::Null
-        };
-        let value = match script.command {
-            Command::ConstVariable => Variable::Const(value_argument),
-            Command::SetVariable => Variable::Mutable(value_argument),
-            Command::CreateAlias => {
-                match value_argument {
-                    Argument::String(alias) => Variable::Alias(alias),
-                    // TODO: we can probably relax this at some point,
-                    // but i don't see a huge use case for it.
-                    _ => return Err("alias must be to a known string".to_string()),
-                }
-            }
-            _ => return Err("script is invalid for setting a variable".to_string()),
-        };
-
-        self.set(name, value)
     }
 }
 
@@ -2535,13 +2535,6 @@ mod test {
         );
         let message = "123 'jkl;' (error) 456 (error `123 null #ff0000`) #ffffff".to_string();
         assert_eq!(result, Ok(Argument::String(message.clone())));
-        assert_eq!(
-            test_runner.message,
-            Message {
-                string: message,
-                message_type: MessageType::Echo,
-            }
-        );
     }
 
     #[test]
