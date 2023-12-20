@@ -603,7 +603,6 @@ fn draw_grid(session: &Session, batch: &mut shape2d::Batch) {
 fn draw_cursor(session: &Session, inverted: &mut sprite::Sprite, batch: &mut sprite2d::Batch) {
     let v = session.active_view();
     let c = session.cursor;
-    // TODO: use most recent active color (e.g., fg or bg depending on which was used last)
 
     if let Some(cursors::Cursor {
         rect,
@@ -678,7 +677,7 @@ fn draw_brush(session: &Session, brush: &Brush, shapes: &mut shape2d::Batch) {
                             (Stroke::new(1.0, Rgba::WHITE), Fill::Empty)
                         }
                     } else {
-                        (Stroke::NONE, Fill::Solid(session.fg.into()))
+                        (Stroke::NONE, Fill::Solid(brush.color.into()))
                     };
 
                     for p in brush.expand(view_coords.into(), v.extent()) {
