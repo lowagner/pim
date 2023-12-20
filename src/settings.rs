@@ -73,6 +73,10 @@ pub enum I64Setting {
     // we can split vertically, etc.
     /// The current view's history ID.
     History,
+    /// Whether we're in normal mode or not.  0 = no, 1 = yes.
+    /// If setting to 1, will bring to normal mode, otherwise will bring to command mode
+    /// if the old value is 1.
+    NormalMode,
 }
 
 #[derive(Eq, Hash, PartialEq, Debug, Clone, Copy, EnumIter)]

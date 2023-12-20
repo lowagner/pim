@@ -1353,6 +1353,11 @@ impl Variables {
             e.g., `$$` get the current ID which can be used to restore it later.",
         );
         variables.add_built_in(
+            Command::I64Setting(I64Setting::NormalMode),
+            "getter/swapper for the whether normal mode is active, \
+            e.g., `$$ 1` to switch to normal mode",
+        );
+        variables.add_built_in(
             Command::WithoutArguments(ZeroArgumentsFor::Reset),
             "`$$` resets all settings",
         );
@@ -1636,8 +1641,6 @@ impl Variables {
         assert_ok!(variables.set("s-erase".to_string(), Variable::Alias("erase".to_string())));
         assert_ok!(variables.set("s-copy".to_string(), Variable::Alias("copy".to_string())));
         assert_ok!(variables.set("s-cut".to_string(), Variable::Alias("cut".to_string())));
-        assert_ok!(variables.set("s-yank".to_string(), Variable::Alias("copy".to_string())));
-        assert_ok!(variables.set("yank".to_string(), Variable::Alias("copy".to_string())));
         assert_ok!(variables.set("s-paste".to_string(), Variable::Alias("paste".to_string())));
         assert_ok!(variables.set(
             "s-mirrorx".to_string(),

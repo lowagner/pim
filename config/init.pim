@@ -10,7 +10,8 @@
 bind        '?'             (mode 'help')                       --  Show help
 bind-help   '?'             (mode 'normal')                     --  Hide help
 bind        <shift><;>      (mode 'command')                    --  Switch to command mode
--- TODO: we can make `normal` a command that returns 0 or 1, same with `visual`.  we can do `visual (not visual)`
+bind        <esc>           (normal (not normal))               --  Toggle normal mode.
+-- TODO: do `visual (not visual)`
 --       so that we could use `bind` instead of `bind-normal` and `bind-visual` here.
 bind-normal 'v'             (mode 'visual')                     --  Switch to visual mode
 bind-visual 'v'             (mode 'normal')                     --  Switch to normal mode
@@ -23,7 +24,7 @@ bind-normal 'k'             v++                                 --  Go to next v
 bind         <ctrl><s>      w                                   --  Save the current view
 bind         <ctrl><z>      undo                                --  Undo active view edit
 bind    <ctrl><shift><z>    redo                                --  Redo an earlier undo.
-bind        'x'             (fg (bg fg))                        --  Swap foreground-background colors
+bind-normal 'x'             (fg (bg fg))                        --  Swap foreground-background colors
 bind-normal 'b'             (tool brusht)                       --  Reset brush
 bind-normal 'g'             (tool floodt)                       --  Flood tool
 -- commands with press and release scripts need to be tagged inputs, e.g., <e>
@@ -53,9 +54,9 @@ bind-visual 'h'             (s-move   -1  0)
 bind-visual 'l'             (s-move    1  0)
 bind-visual ']'             (s-offset  1  1)
 bind-visual '['             (s-offset -1 -1)
-bind-visual '\'             s-expand
-bind-visual 'y'             s-yank
-bind-visual 'd'             s-cut
+bind-visual '\'             s-expand                            --  Expand the selection
+bind-visual 'c'             s-copy                              --  Copy the selection
+bind-visual 'x'             s-cut
 bind-visual 'e'             s-erase
 bind-visual 'p'             s-paste
 bind-visual 'w'             (s-move fw 0)

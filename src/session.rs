@@ -2136,6 +2136,7 @@ impl Session {
             }
 
             match self.mode {
+                Mode::Normal => {}
                 Mode::Command => {
                     if state == InputState::Pressed {
                         match key {
@@ -2177,20 +2178,19 @@ impl Session {
                     }
                     return;
                 }
-                Mode::Normal => {
+                _ => {
                     if state == InputState::Pressed {
                         match key {
                             platform::Key::Escape => {
-                                self.toggle_mode(Mode::Command);
+                                self.switch_mode(Mode::Normal);
+                                return;
+                            }
+                            platform::Key::Return => {
+                                self.switch_mode(Mode::Visual(Visual::default()));
+                                return;
                             }
                             _ => {}
                         }
-                    }
-                }
-                _ => {
-                    if key == platform::Key::Escape && state == InputState::Pressed {
-                        self.switch_mode(Mode::Visual(Visual::default()));
-                        return;
                     }
                 }
             }
@@ -2716,6 +2716,7 @@ impl Session {
             I64Setting::FrameHeight => self.active_view().fh as i64,
             I64Setting::ImageSplit => self.active_view().animation.len() as i64,
             I64Setting::History => self.active_view().current_edit() as i64,
+            I64Setting::NormalMode => (self.mode == Mode::Normal) as i64,
         }
     }
 
@@ -2876,6 +2877,18 @@ impl Session {
             }
             I64Setting::History => {
                 self.active_view_mut().restore(new_value as EditId);
+            }
+            I64Setting::NormalMode => {
+                if new_value != 0 {
+                    self.switch_mode(Mode::Normal);
+                } else if self.mode == Mode::Normal {
+                    // new_value == 0 and we were Normal already,
+                    // so switch to Normal's opposite.
+                    self.switch_mode(Mode::Command);
+                } else {
+                    // new_value == 0 and mode != Normal,
+                    // so no change needed.
+                }
             }
         }
         Ok(())
