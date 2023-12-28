@@ -1163,10 +1163,9 @@ impl Session {
     /// loads all files within that directory.
     ///
     /// If a path doesn't exist, creates a blank view for that path.
-    pub fn edit_images<P: AsRef<Path>>(&mut self, paths: &[P]) {
+    pub fn edit_images<P: AsRef<Path>>(&mut self, paths: &[P]) -> VoidResult {
         if paths.is_empty() {
-            self.message("include file(s) to edit in the command", MessageType::Error);
-            return;
+            return Err("include file(s) to edit in the command".to_string());
         }
         match self.edit_internal(paths) {
             Ok((success_count, fail_count)) => {
@@ -1176,9 +1175,13 @@ impl Session {
                         MessageType::Info,
                     )
                 }
+                if fail_count > 0 {
+                    return Err("Error loading path(s)".to_string());
+                }
             }
-            Err(e) => self.message(format!("Error loading path(s): {}", e), MessageType::Error),
+            Err(e) => return Err(format!("Error loading path(s): {}", e)),
         }
+        Ok(())
     }
 
     /// Edit paths.
@@ -1240,6 +1243,10 @@ impl Session {
             }
         }
 
+        if success_count + fail_count == 0 {
+            return Err(io::Error::new(io::ErrorKind::Other, "no images to edit"));
+        }
+
         if let Some(id) = self.views.last().map(|v| v.id) {
             self.organize_views();
             self.edit_view(id);
@@ -1250,20 +1257,14 @@ impl Session {
 
     // TODO: it would also be nice to have a `append` command for adding to the current file.
     /// Loads the given paths into the session as frames in a new view.
-    pub fn concatenate_images<P: AsRef<Path>>(&mut self, paths: &[P]) {
+    pub fn concatenate_images<P: AsRef<Path>>(&mut self, paths: &[P]) -> VoidResult {
         if paths.is_empty() {
-            self.message(
-                "include files to concatenate in the command",
-                MessageType::Error,
-            );
-            return;
+            return Err("include files to concatentae in the command".to_string());
         }
         if let Err(e) = self.concatenate_internal(paths) {
-            self.message(
-                format!("Error concatenating image(s): {}", e),
-                MessageType::Error,
-            );
+            return Err(format!("Error concatenating image(s): {}", e));
         }
+        Ok(())
     }
 
     fn concatenate_internal<P: AsRef<Path>>(&mut self, paths: &[P]) -> io::Result<()> {
@@ -1305,7 +1306,10 @@ impl Session {
         if paths.is_empty() {
             // If our paths list is empty, don't add another view.
             // This can happen if we opened up an empty directory.
-            return Ok(());
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                "no images to concatenate",
+            ));
         }
 
         let (fw, fh, frame) = crate::io::concatenate_images(&paths)?;
@@ -3082,10 +3086,15 @@ impl Session {
                 }
             }
             StringsFor::Edit => {
-                self.edit_images(&strings);
+                self.edit_images(&strings)?;
             }
+            /*
+            StringsFor::Append => {
+                self.append_images(&strings)?;
+            }
+            */
             StringsFor::Concatenate => {
-                self.concatenate_images(&strings);
+                self.concatenate_images(&strings)?;
             }
         }
         Ok(())
