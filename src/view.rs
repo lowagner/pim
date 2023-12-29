@@ -97,15 +97,13 @@ pub enum ViewOp {
     /// Clear to a color.
     Clear(Rgba8),
     /// Clear a rectangle and set it to a given color.
+    // TODO: make these i32 Rects
     ClearRect(Rgba8, Rect<u32>),
     /// Copy an area of the view to another area.
     Blit(Rect<u32>, Rect<u32>),
     /// Swap two areas of the view.
     /// The passed-in `Rect`s must be the same width and height.
     Swap(Rect<u32>, Rect<u32>),
-    /// Shift the pixels so that [left][right] becomes [right][left];
-    /// unlike Swap, the `Rect`s can be different widths.
-    // TODO: Wrap(Rect<u32> left, Rect<u32> right)
     /// Yank the given area into the paste buffer.
     Yank(Rect<i32>),
     /// Flips a given area horizontally or vertically.
@@ -319,6 +317,7 @@ impl<R> View<R> {
             return;
         }
         // Take `amount` mod `count`:
+        // TODO: just use Blit with negative i32 pixels
         let amount = (((amount % count) + count) % count) as u32;
         if amount == 0 {
             return;
@@ -357,6 +356,7 @@ impl<R> View<R> {
         if count <= 1 {
             return;
         }
+        // TODO: just use Blit with negative i32 pixels
         // Take `amount` mod `count`:
         let amount = (((amount % count) + count) % count) as u32;
         if amount == 0 {
@@ -398,6 +398,7 @@ impl<R> View<R> {
         if count <= 1 {
             return;
         }
+        // TODO: just use Blit with negative i32 pixels
         // Take `amount` mod `count`:
         let amount = (((amount % count) + count) % count) as u32;
         if amount == 0 {
@@ -438,6 +439,17 @@ impl<R> View<R> {
             Rect::new(0, amount, width, fh), // y = fh is the top for src // TODO: fix
             Rect::new(0, amount, width, fh), // y = 0 is the top for dest
         ));
+        self.touch();
+    }
+
+    /// Removes pixels from `src` and puts them onto the `dst`.
+    /// Effectively "cuts" pixels (clears `src`) and then pastes to `dst`,
+    /// but without using a clipboard.
+    pub fn move_pixels(&mut self, src: Rect<i32>, dst: Rect<i32>) {
+        /* TODO: when Blit/ClearRect take i32s
+        self.ops.push(ViewOp::ClearRect(Rgba8::TRANSPARENT, src));
+        self.ops.push(ViewOp::Blit(src, dst));
+        */
         self.touch();
     }
 
@@ -595,6 +607,7 @@ impl<R> View<R> {
 
     /// View should be considered damaged and needs to be restored from snapshot.
     /// Used when undoing or redoing changes.
+    // TODO: rename to `damage`
     pub fn damaged(&mut self, extent: Option<ViewExtent>) {
         self.state = ViewState::Damaged(extent);
     }

@@ -393,6 +393,7 @@ impl<T> Rect<T> {
     /// let r = Rect::new(4, 4, 5, 5);
     /// assert!(r.intersection(other).is_empty());
     /// ```
+    // TODO: rename to `intersect`
     pub fn intersection(&self, other: Rect<T>) -> Self
     where
         T: Ord + Copy,

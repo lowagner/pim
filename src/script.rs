@@ -1476,6 +1476,11 @@ impl Variables {
             e.g., `$$ 7 -9` to move +7 in X and -9 in Y",
         );
         variables.add_built_in(
+            Command::UsingTwoI64s(TwoI64sFor::SelectionShift),
+            "moves the pixels in the selection box by ($0, $1) with defaults of 0, \
+            e.g., `$$ 7 -9` to move +7 in X and -9 in Y, moving the box as well",
+        );
+        variables.add_built_in(
             Command::PaletteColor,
             "getter/swapper for palette color $0 if $1 is null/present, \
             e.g., `$$ 7 #123456` to set palette color 7 to #123456",

@@ -3152,6 +3152,13 @@ impl Session {
                     // TODO: wrap around if s.0.y >= height of drawing
                 }
             }
+            TwoI64sFor::SelectionShift => {
+                if let Some(ref mut s) = self.selection {
+                    let src = s.0;
+                    let dst = src + Vector2::new(x as i32, y as i32);
+                    self.active_view_mut().move_pixels(src, dst);
+                }
+            }
         }
         Ok(Argument::Null)
     }

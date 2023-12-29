@@ -291,6 +291,7 @@ impl fmt::Display for Command {
             Command::UsingTwoI64s(TwoI64sFor::SelectionDelta) => write!(f, "s-delta"),
             Command::UsingTwoI64s(TwoI64sFor::SelectionDeltaSymmetric) => write!(f, "s-delta2"),
             Command::UsingTwoI64s(TwoI64sFor::SelectionMove) => write!(f, "s-move"),
+            Command::UsingTwoI64s(TwoI64sFor::SelectionShift) => write!(f, "s-shift"),
             Command::PaletteColor => write!(f, "pc"),
             Command::PaletteAddColor => write!(f, "p-add"),
             Command::PaletteAddGradient => write!(f, "p-gradient"),
@@ -400,6 +401,7 @@ impl FromStr for Command {
             "s-delta" => Ok(Command::UsingTwoI64s(TwoI64sFor::SelectionDelta)),
             "s-delta2" => Ok(Command::UsingTwoI64s(TwoI64sFor::SelectionDeltaSymmetric)),
             "s-move" => Ok(Command::UsingTwoI64s(TwoI64sFor::SelectionMove)),
+            "s-shift" => Ok(Command::UsingTwoI64s(TwoI64sFor::SelectionShift)),
             "pc" => Ok(Command::PaletteColor),
             "p-add" => Ok(Command::PaletteAddColor),
             "p-gradient" => Ok(Command::PaletteAddGradient),
@@ -535,6 +537,9 @@ pub enum TwoI64sFor {
     /// Move the selection (i.e., for Visual mode).
     SelectionMove,
     // TODO: add SelectionResize that does absolute values
+    /// Moves the pixels in the selection by ($0, $1) for (X, Y).
+    SelectionShift,
+    // TODO: SelectionFrameShift - Moves the pixels in the selection by ($0, $1) in each frame.
 }
 
 /*
