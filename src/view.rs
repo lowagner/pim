@@ -97,7 +97,6 @@ pub enum ViewOp {
     /// Clear to a color.
     Clear(Rgba8),
     /// Clear a rectangle and set it to a given color.
-    // TODO: make these i32 Rects
     ClearRect(Rgba8, Rect<u32>),
     /// Copy an area of the view to another area.
     Blit(Rect<u32>, Rect<u32>),
@@ -317,7 +316,6 @@ impl<R> View<R> {
             return;
         }
         // Take `amount` mod `count`:
-        // TODO: just use Blit with negative i32 pixels
         let amount = (((amount % count) + count) % count) as u32;
         if amount == 0 {
             return;
@@ -356,7 +354,6 @@ impl<R> View<R> {
         if count <= 1 {
             return;
         }
-        // TODO: just use Blit with negative i32 pixels
         // Take `amount` mod `count`:
         let amount = (((amount % count) + count) % count) as u32;
         if amount == 0 {
@@ -398,7 +395,6 @@ impl<R> View<R> {
         if count <= 1 {
             return;
         }
-        // TODO: just use Blit with negative i32 pixels
         // Take `amount` mod `count`:
         let amount = (((amount % count) + count) % count) as u32;
         if amount == 0 {
@@ -446,7 +442,7 @@ impl<R> View<R> {
     /// Effectively "cuts" pixels (clears `src`) and then pastes to `dst`,
     /// but without using a clipboard.
     pub fn move_pixels(&mut self, src: Rect<i32>, dst: Rect<i32>) {
-        /* TODO: when Blit/ClearRect take i32s
+        /* TODO
         self.ops.push(ViewOp::ClearRect(Rgba8::TRANSPARENT, src));
         self.ops.push(ViewOp::Blit(src, dst));
         */

@@ -369,6 +369,19 @@ impl<T> Rect<T> {
         )
     }
 
+    /// Returns a rectangle in standard form if this rectangle is properly ordered
+    /// (i.e., z1 < z2 for z=x,y), otherwise returns a zero rectangle.
+    pub fn standardize_or_zero(&self) -> Rect<T>
+    where
+        T: Ord + math::Zero + Clone,
+    {
+        if self.x2 <= self.x1 || self.y2 <= self.y1 {
+            Rect::zero()
+        } else {
+            self.clone()
+        }
+    }
+
     /// Return the intersection between two rectangles.
     ///
     /// # Examples
@@ -405,6 +418,55 @@ impl<T> Rect<T> {
 
         Rect::new(x1, y1, T::max(x1, x2), T::max(y1, y2))
     }
+}
+
+pub fn ensure_within<T>(width: T, height: T, mut a: Rect<T>, mut b: Rect<T>) -> (Rect<T>, Rect<T>)
+where
+    T: Ord
+        + Copy
+        + Clone
+        + std::fmt::Debug
+        + math::Zero
+        + std::ops::SubAssign<T>
+        + std::ops::AddAssign<T>
+        + std::ops::Sub<T, Output = T>
+        + std::ops::Add<T, Output = T>,
+{
+    let zero = T::zero();
+    assert_eq!(a.width(), b.width());
+    assert_eq!(a.height(), b.height());
+
+    let delta = if a.x1 < zero || b.x1 < zero {
+        T::max(zero - a.x1, zero - b.x1)
+    } else {
+        zero
+    };
+    a.x1 += delta;
+    b.x1 += delta;
+    let delta = if a.x2 > width || b.x2 > width {
+        T::max(a.x2 - width, b.x2 - width)
+    } else {
+        zero
+    };
+    a.x2 -= delta;
+    b.x2 -= delta;
+
+    let delta = if a.y1 < zero || b.y1 < zero {
+        T::max(zero - a.y1, zero - b.y1)
+    } else {
+        zero
+    };
+    a.y1 += delta;
+    b.y1 += delta;
+    let delta = if a.y2 > height || b.y2 > height {
+        T::max(a.y2 - height, b.y2 - height)
+    } else {
+        zero
+    };
+    a.y2 -= delta;
+    b.y2 -= delta;
+
+    (a.standardize_or_zero(), b.standardize_or_zero())
 }
 
 impl<T> std::ops::Add<Vector2<T>> for Rect<T>
@@ -476,5 +538,83 @@ where
             x2: self.x2 * s,
             y2: self.y2 * s,
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_ensure_within() {
+        // when width is bigger
+        assert_eq!(
+            ensure_within(
+                200,
+                110,
+                Rect::new(-5, -3, 10, 22),
+                Rect::new(10, 95, 25, 120),
+            ),
+            (
+                Rect {
+                    x1: 0,
+                    y1: 0,
+                    x2: 10,
+                    y2: 12
+                },
+                Rect {
+                    x1: 15,
+                    y1: 98,
+                    x2: 25,
+                    y2: 110
+                }
+            )
+        );
+
+        // when height is bigger
+        assert_eq!(
+            ensure_within(
+                50,
+                300,
+                Rect::new(5, -10, 10, 60),
+                Rect::new(48, -5, 53, 65),
+            ),
+            (
+                Rect {
+                    x1: 5,
+                    y1: 0,
+                    x2: 7,
+                    y2: 60
+                },
+                Rect {
+                    x1: 48,
+                    y1: 5,
+                    x2: 50,
+                    y2: 65
+                }
+            )
+        );
+
+        // when width causes things to zero out
+        assert_eq!(
+            ensure_within(
+                50,
+                300,
+                Rect::new(50, -10, 60, 60),
+                Rect::new(30, -5, 40, 65),
+            ),
+            (Rect::default(), Rect::default())
+        );
+
+        // when height causes things to zero out
+        assert_eq!(
+            ensure_within(
+                50,
+                300,
+                Rect::new(50, -10, 60, 40),
+                Rect::new(30, 300, 40, 350),
+            ),
+            (Rect::default(), Rect::default())
+        );
     }
 }
