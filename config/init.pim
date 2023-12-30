@@ -61,6 +61,10 @@ bind-visual 'e'             s-erase
 bind-visual 'p'             s-paste
 bind-visual 'w'             (s-move fw 0)
 bind-visual 'b'             (s-move (* -1 fw) 0)
+bind-visual <shift><up>     (s-shift 0 1)
+bind-visual <shift><down>   (s-shift 0 -1)
+bind-visual <shift><left>   (s-shift -1 0)
+bind-visual <shift><right>  (s-shift 1 0)
 
 scale% 100                                                      --  Set interface scale to 100%
 checker 0                                                       --  Turn off alpha checker

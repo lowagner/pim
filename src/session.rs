@@ -3154,8 +3154,10 @@ impl Session {
             }
             TwoI64sFor::SelectionShift => {
                 if let Some(ref mut s) = self.selection {
-                    let src = s.0;
-                    let dst = src + Vector2::new(x as i32, y as i32);
+                    // TODO: convert to pixel coordinates here.  the selection box has positive y as up.
+                    let src = s.0.abs();
+                    s.0 += Vector2::new(x as i32, y as i32);
+                    let dst = s.0.abs();
                     self.active_view_mut().move_pixels(src, dst);
                 }
             }

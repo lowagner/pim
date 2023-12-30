@@ -8,7 +8,7 @@ use crate::command::Axis;
 use crate::session::{Direction, Session, SessionCoords};
 
 use crate::gfx::math::*;
-use crate::gfx::rect::Rect;
+use crate::gfx::rect::{ensure_within, Rect};
 use crate::gfx::{Point, Rgba8};
 
 use nonempty::NonEmpty;
@@ -440,12 +440,12 @@ impl<R> View<R> {
 
     /// Removes pixels from `src` and puts them onto the `dst`.
     /// Effectively "cuts" pixels (clears `src`) and then pastes to `dst`,
-    /// but without using a clipboard.
+    /// but without using a clipboard.  Like `shift_frame*` methods but will
+    /// not wrap pixels.
     pub fn move_pixels(&mut self, src: Rect<i32>, dst: Rect<i32>) {
-        /* TODO
+        let (src, dst) = ensure_within(self.width(), self.height(), src, dst);
         self.ops.push(ViewOp::ClearRect(Rgba8::TRANSPARENT, src));
         self.ops.push(ViewOp::Blit(src, dst));
-        */
         self.touch();
     }
 
