@@ -484,7 +484,7 @@ impl Parse for Mode {
                 match id.as_str() {
                     "command" => Ok((Mode::Command, p)),
                     "normal" => Ok((Mode::Normal, p)),
-                    "visual" => Ok((Mode::Visual(Visual::default()), p)),
+                    "select" => Ok((Mode::Visual(Visual::default()), p)),
                     mode => Err((
                         memoir::result::Error::new(format!("unknown mode: {}", mode)),
                         input,

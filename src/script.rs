@@ -526,7 +526,7 @@ macro_rules! script_runner {
                         let modes = match bind {
                             Bind::Modes => vec![Mode::Normal, Mode::Visual(Visual::Selecting)],
                             Bind::Normal => vec![Mode::Normal],
-                            Bind::Visual => vec![Mode::Visual(Visual::Selecting)],
+                            Bind::Select => vec![Mode::Visual(Visual::Selecting)],
                             Bind::Help => vec![Mode::Help],
                         };
 
@@ -1176,9 +1176,9 @@ impl Variables {
             `$$ <shift><p> (p cx cy #123456) (p cx cy #654321)` to paint",
         );
         variables.add_built_in(
-            Command::Bind(Bind::Visual),
+            Command::Bind(Bind::Select),
             "adds input $0 binding with script $1 on press, optional $2 on release, \
-            to visual mode, e.g., `$$ <ctrl><z> undo` to undo, or \
+            to select mode, e.g., `$$ <ctrl><z> undo` to undo, or \
             `$$ <shift><p> (p cx cy #123456) (p cx cy #654321)` to paint",
         );
         variables.add_built_in(

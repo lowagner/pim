@@ -231,7 +231,7 @@ impl fmt::Display for Command {
             Command::CreateAlias => write!(f, "alias"),
             Command::Bind(Bind::Modes) => write!(f, "bind"),
             Command::Bind(Bind::Normal) => write!(f, "bind-normal"),
-            Command::Bind(Bind::Visual) => write!(f, "bind-visual"),
+            Command::Bind(Bind::Select) => write!(f, "bind-select"),
             Command::Bind(Bind::Help) => write!(f, "bind-help"),
             Command::ColorSetting(ColorSetting::UiBackground) => write!(f, "ui-bg"),
             Command::ColorSetting(ColorSetting::UiGrid) => write!(f, "grid-color"),
@@ -335,7 +335,7 @@ impl FromStr for Command {
             "alias" => Ok(Command::CreateAlias),
             "bind" => Ok(Command::Bind(Bind::Modes)),
             "bind-normal" => Ok(Command::Bind(Bind::Normal)),
-            "bind-visual" => Ok(Command::Bind(Bind::Visual)),
+            "bind-select" => Ok(Command::Bind(Bind::Select)),
             "bind-help" => Ok(Command::Bind(Bind::Help)),
             "ui-bg" => Ok(Command::ColorSetting(ColorSetting::UiBackground)),
             "grid-color" => Ok(Command::ColorSetting(ColorSetting::UiGrid)),
@@ -446,8 +446,8 @@ pub enum Bind {
     Modes,
     /// Just the normal mode.
     Normal,
-    /// Just the visual mode, technically just Visual::Selecting.
-    Visual,
+    /// Just the select mode, technically just Visual::Selecting.
+    Select,
     /// Just the help mode.
     Help,
     // TODO: Command, if we can do it right.

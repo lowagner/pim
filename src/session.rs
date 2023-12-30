@@ -78,9 +78,9 @@ impl fmt::Display for Mode {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Normal => "normal".fmt(f),
-            Self::Visual(Visual::Selecting) => "visual".fmt(f),
-            Self::Visual(Visual::Dragging) => "visual (dragging)".fmt(f),
-            Self::Visual(Visual::Pasting) => "visual (pasting)".fmt(f),
+            Self::Visual(Visual::Selecting) => "select".fmt(f),
+            Self::Visual(Visual::Dragging) => "select (dragging)".fmt(f),
+            Self::Visual(Visual::Pasting) => "select (pasting)".fmt(f),
             Self::Command => "command".fmt(f),
             Self::Help => "help".fmt(f),
         }
@@ -96,7 +96,7 @@ impl FromStr for Mode {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.trim() {
             "normal" => Ok(Mode::Normal),
-            "visual" => Ok(Mode::Visual(Visual::default())),
+            "select" => Ok(Mode::Visual(Visual::default())),
             "command" => Ok(Mode::Command),
             "help" => Ok(Mode::Help),
             _ => Err(ModeParseError),
