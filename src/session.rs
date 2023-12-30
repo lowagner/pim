@@ -142,6 +142,7 @@ impl Selection {
 
     /// Return the selection bounds as a non-empty rectangle. This function
     /// will never return an empty rectangle.
+    // TODO: i think this isn't true if we're not in standard form.
     pub fn bounds(&self) -> Rect<i32> {
         Rect::new(self.x1, self.y1, self.x2 + 1, self.y2 + 1)
     }
@@ -2977,6 +2978,16 @@ impl Session {
         Ok(())
     }
 
+    fn active_view_rect(&self, mut r: Rect<i32>) -> Rect<i32> {
+        let v = self.active_view();
+        Rect {
+            x1: r.x1,
+            y1: v.fh as i32 - r.y2,
+            x2: r.x2,
+            y2: v.fh as i32 - r.y1,
+        }
+    }
+
     pub fn script_zero(&mut self, for_what: ZeroArgumentsFor) -> ArgumentResult {
         match for_what {
             ZeroArgumentsFor::Reset => {
@@ -3147,18 +3158,19 @@ impl Session {
             }
             TwoI64sFor::SelectionMove => {
                 if let Some(ref mut s) = self.selection {
-                    s.translate(x as i32, y as i32);
-                    // TODO: wrap around if s.0.x >= width of drawing
-                    // TODO: wrap around if s.0.y >= height of drawing
+                    s.translate(x as i32, -y as i32);
                 }
             }
             TwoI64sFor::SelectionShift => {
-                if let Some(ref mut s) = self.selection {
-                    // TODO: convert to pixel coordinates here.  the selection box has positive y as up.
-                    let src = s.0.abs();
-                    s.0 += Vector2::new(x as i32, y as i32);
-                    let dst = s.0.abs();
+                // Need to do this in two stages because `active_view_rect` should have immutable `self`.
+                if let Some(s) = self.selection {
+                    let src = self.active_view_rect(s.abs().bounds());
+                    let dst = src + Vector2::new(x as i32, y as i32);
                     self.active_view_mut().move_pixels(src, dst);
+                }
+                if let Some(ref mut s) = self.selection {
+                    // negative y is up for pixel coordinates but positive y is up in selection coordinates.
+                    s.0 += Vector2::new(x as i32, -y as i32);
                 }
             }
         }

@@ -36,10 +36,10 @@ bind-normal '['             b-size--                            --  Decrease bru
 bind-normal  <ctrl>         (tool samplert) (tool $0)           --  Sample color (hold)
 bind-help    <space>        (tool pant) (tool $0)               --  Pan help (hold)
 bind         <space>        (tool pant) (tool $0)               --  Pan workspace (hold)
-bind         <up>           (pan  0  1)                         --  Pan view up
-bind         <down>         (pan  0 -1)                         --  Pan view down
-bind         <left>         (pan -1  0)                         --  Pan view left
-bind         <right>        (pan  1  0)                         --  Pan view right
+bind-normal  <up>           (pan  0  1)                         --  Pan view up
+bind-normal  <down>         (pan  0 -1)                         --  Pan view down
+bind-normal  <left>         (pan -1  0)                         --  Pan view left
+bind-normal  <right>        (pan  1  0)                         --  Pan view right
 bind         <return>       f-add                               --  Add a frame to the view
 bind         <backspace>    f-remove                            --  Remove a frame from the view
 bind         <del>          f-remove                            --  Remove a frame from the view
@@ -61,8 +61,12 @@ bind-visual 'e'             s-erase
 bind-visual 'p'             s-paste
 bind-visual 'w'             (s-move fw 0)
 bind-visual 'b'             (s-move (* -1 fw) 0)
-bind-visual <shift><up>     (s-shift 0 1)
-bind-visual <shift><down>   (s-shift 0 -1)
+bind-visual <up>            (s-move 0 -1)
+bind-visual <down>          (s-move 0 1)
+bind-visual <left>          (s-move -1 0)
+bind-visual <right>         (s-move 1 0)
+bind-visual <shift><up>     (s-shift 0 -1)
+bind-visual <shift><down>   (s-shift 0 1)
 bind-visual <shift><left>   (s-shift -1 0)
 bind-visual <shift><right>  (s-shift 1 0)
 
