@@ -443,9 +443,19 @@ impl<R> View<R> {
     /// but without using a clipboard.  Like `shift_frame*` methods but will
     /// not wrap pixels.
     pub fn move_pixels(&mut self, src: Rect<i32>, dst: Rect<i32>) {
+        let height = self.height();
         let (src, dst) = ensure_within(self.width(), self.height(), src, dst);
         self.ops.push(ViewOp::ClearRect(Rgba8::TRANSPARENT, src));
-        self.ops.push(ViewOp::Blit(src, dst));
+        // TODO: src should not be flipped with height
+        self.ops.push(ViewOp::Blit(
+            Rect {
+                x1: src.x1,
+                x2: src.x2,
+                y1: height - src.y2,
+                y2: height - src.y1,
+            },
+            dst,
+        ));
         self.touch();
     }
 
