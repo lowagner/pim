@@ -420,31 +420,29 @@ impl<T> Rect<T> {
     }
 }
 
-pub fn ensure_within<T>(width: T, height: T, mut a: Rect<T>, mut b: Rect<T>) -> (Rect<T>, Rect<T>)
-where
-    T: Ord
-        + Copy
-        + Clone
-        + std::fmt::Debug
-        + math::Zero
-        + std::ops::SubAssign<T>
-        + std::ops::AddAssign<T>
-        + std::ops::Sub<T, Output = T>
-        + std::ops::Add<T, Output = T>,
-{
-    let zero = T::zero();
+pub fn ensure_within(
+    region_width: u32,
+    region_height: u32,
+    mut a: Rect<i32>,
+    mut b: Rect<i32>,
+) -> (Rect<u32>, Rect<u32>) {
     assert_eq!(a.width(), b.width());
     assert_eq!(a.height(), b.height());
+    assert!(region_width < i32::MAX as u32);
+    assert!(region_height < i32::MAX as u32);
+    let region_width = region_width as i32;
+    let region_height = region_height as i32;
+    let zero = 0;
 
     let delta = if a.x1 < zero || b.x1 < zero {
-        T::max(zero - a.x1, zero - b.x1)
+        i32::max(zero - a.x1, zero - b.x1)
     } else {
         zero
     };
     a.x1 += delta;
     b.x1 += delta;
-    let delta = if a.x2 > width || b.x2 > width {
-        T::max(a.x2 - width, b.x2 - width)
+    let delta = if a.x2 > region_width || b.x2 > region_width {
+        i32::max(a.x2 - region_width, b.x2 - region_width)
     } else {
         zero
     };
@@ -452,21 +450,24 @@ where
     b.x2 -= delta;
 
     let delta = if a.y1 < zero || b.y1 < zero {
-        T::max(zero - a.y1, zero - b.y1)
+        i32::max(zero - a.y1, zero - b.y1)
     } else {
         zero
     };
     a.y1 += delta;
     b.y1 += delta;
-    let delta = if a.y2 > height || b.y2 > height {
-        T::max(a.y2 - height, b.y2 - height)
+    let delta = if a.y2 > region_height || b.y2 > region_height {
+        i32::max(a.y2 - region_height, b.y2 - region_height)
     } else {
         zero
     };
     a.y2 -= delta;
     b.y2 -= delta;
 
-    (a.standardize_or_zero(), b.standardize_or_zero())
+    (
+        a.standardize_or_zero().map(|v| v as u32),
+        b.standardize_or_zero().map(|v| v as u32),
+    )
 }
 
 impl<T> std::ops::Add<Vector2<T>> for Rect<T>
