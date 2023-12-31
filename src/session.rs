@@ -993,12 +993,13 @@ impl Session {
         };
 
         if was_select && now_select {
-            // If we are transitioning from select to a different select, should we still release inputs?
-            eprint!("TODO: should we avoid releasing inputs?\n");
+            // If we are transitioning from select to a different select, don't release inputs.
+            // This is important for Select::Dragging, which would otherwise reset the mouse press.
+            // We also don't change the previous mode.
+        } else {
+            self.release_inputs();
+            self.prev_mode = Some(self.mode);
         }
-        self.release_inputs();
-        // TODO: should select mode always go back to Selecting here?
-        self.prev_mode = Some(self.mode);
         self.mode = new;
     }
 
@@ -2014,7 +2015,7 @@ impl Session {
                     Mode::Select(Select::Dragging) => {
                         let view = self.active_view().layer_bounds();
 
-                        // Resize selection.
+                        // TODO: Resize selection for rmb_state Pressed
                         if self.lmb_state == InputState::Pressed && p != prev_p {
                             if let Some(ref mut s) = self.selection {
                                 // TODO: (rgx) Better API.
