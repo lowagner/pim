@@ -2013,18 +2013,27 @@ impl Session {
                         }
                     }
                     Mode::Select(Select::Dragging) => {
+                        if p == prev_p || self.selection.is_none() {
+                            return;
+                        }
                         let view = self.active_view().layer_bounds();
 
                         // TODO: Resize selection for rmb_state Pressed
-                        if self.lmb_state == InputState::Pressed && p != prev_p {
-                            if let Some(ref mut s) = self.selection {
-                                // TODO: (rgx) Better API.
-                                let delta = *p - Vector2::new(prev_p.x, prev_p.y);
-                                let delta = Vector2::new(delta.x as i32, delta.y as i32);
-                                let t = Selection::from(s.bounds() + delta);
+                        if self.lmb_state == InputState::Pressed {
+                            let s = self.selection.unwrap();
+                            let start = self.active_view_rect(s.abs().bounds());
 
-                                if view.intersects(t.abs().bounds()) {
-                                    *s = t;
+                            let s: &mut Selection = self.selection.as_mut().unwrap();
+                            // TODO: (rgx) Better API.
+                            let delta = *p - Vector2::new(prev_p.x, prev_p.y);
+                            let delta = Vector2::new(delta.x as i32, delta.y as i32);
+                            let t = Selection::from(s.bounds() + delta);
+
+                            if view.intersects(t.abs().bounds()) {
+                                *s = t;
+                                if modifiers.ctrl {
+                                    let end = self.active_view_rect(t.abs().bounds());
+                                    self.active_view_mut().move_pixels(start, end);
                                 }
                             }
                         }

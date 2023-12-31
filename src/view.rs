@@ -445,6 +445,8 @@ impl<R> View<R> {
     pub fn move_pixels(&mut self, src: Rect<i32>, dst: Rect<i32>) {
         let height = self.height();
         let (src, dst) = ensure_within(self.width(), self.height(), src, dst);
+        // TODO: we should figure out a good way to avoid clearing everything here.
+        //       probably that looks like copy->paste.
         self.ops.push(ViewOp::ClearRect(Rgba8::TRANSPARENT, src));
         // TODO: src should not be flipped with height
         self.ops.push(ViewOp::Blit(
