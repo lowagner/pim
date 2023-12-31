@@ -24,9 +24,9 @@ bind-normal 'k'             v++                                 --  Go to next v
 bind         <ctrl><s>      w                                   --  Save the current view
 bind         <ctrl><z>      undo                                --  Undo active view edit
 bind    <ctrl><shift><z>    redo                                --  Redo an earlier undo.
-bind-normal 'x'             (fg (bg fg))                        --  Swap foreground-background colors
-bind-normal 'b'             (tool brusht)                       --  Reset brush
-bind-normal 'g'             (tool floodt)                       --  Flood tool
+bind-normal 'x'             (fg (bg fg))        ()              --  Swap foreground-background colors
+bind-normal 'b'             (tool brusht)       ()              --  Reset brush
+bind-normal 'g'             (tool floodt)       ()              --  Flood tool
 -- commands with press and release scripts need to be tagged inputs, e.g., <e>
 bind-normal <e>             (b-erase 1) (b-erase 0)             --  Erase (hold)
 bind-normal <shift>         (b-multi 1) (b-multi 0)             --  Multi-brush (hold)
@@ -40,9 +40,9 @@ bind-normal  <up>           (pan  0  1)                         --  Pan view up
 bind-normal  <down>         (pan  0 -1)                         --  Pan view down
 bind-normal  <left>         (pan -1  0)                         --  Pan view left
 bind-normal  <right>        (pan  1  0)                         --  Pan view right
-bind         <return>       f-add                               --  Add a frame to the view
-bind         <backspace>    f-remove                            --  Remove a frame from the view
-bind         <del>          f-remove                            --  Remove a frame from the view
+bind         <return>       f-add              ()               --  Add a frame to the view
+bind         <backspace>    f-remove           ()               --  Remove a frame from the view
+bind         <del>          f-remove           ()               --  Remove a frame from the view
 bind-normal 'h'             f--                                 --  Navigate to previous frame
 bind-normal 'l'             f++                                 --  Navigate to next frame
 
@@ -54,11 +54,11 @@ bind-select 'k'             (s-move    0 -1)
 bind-select 'l'             (s-move    1  0)
 bind-select ']'             (s-offset  1  1)
 bind-select '['             (s-offset -1 -1)
-bind-select '\'             s-expand                            --  Expand the selection
-bind-select 'c'             s-copy                              --  Copy the selection
-bind-select 'x'             s-cut
-bind-select 'e'             s-erase
-bind-select 'p'             s-paste
+bind-select '\'             s-expand           ()               --  Expand the selection
+bind-select 'c'             s-copy             ()               --  Copy the selection
+bind-select 'x'             s-cut              ()
+bind-select 'e'             s-erase            ()
+bind-select 'p'             s-paste            ()
 bind-select 'w'             (s-move fw 0)
 bind-select 'b'             (s-move (* -1 fw) 0)
 bind-select <up>            (s-move  0 -1)

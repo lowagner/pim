@@ -2112,7 +2112,6 @@ impl Session {
                     .key_bindings
                     .find(Input::Key(modifiers, key), self.mode)
                 {
-                    // TODO: we can allow repeats if there is no on_release for this binding.
                     if !repeat {
                         // TODO: maybe figure out a way to pass every argument evaluated in the on_trigger
                         //       script into this argument list.  might need a different command, might be impossible.
@@ -2133,6 +2132,11 @@ impl Session {
                                 );
                             }
                             _ => {}
+                        }
+                    } else if kb.on_release.is_none() {
+                        // We can allow repeats if there is no on_release for this binding.
+                        if let Err(e) = kb.on_trigger.run(self) {
+                            self.message(e, MessageType::Error);
                         }
                     }
                     return;
