@@ -271,7 +271,7 @@ pub fn init<P: AsRef<Path>>(paths: &[P], options: Options<'_>) -> std::io::Resul
                     session.quit(ExitReason::Normal);
                 }
                 WindowEvent::CursorMoved { position } => {
-                    session_events.push(Event::CursorMoved(position));
+                    session_events.push(Event::CursorMoved(position, modifiers_count.into()));
                 }
                 WindowEvent::MouseInput { state, button, .. } => {
                     session_events.push(Event::MouseInput(button, state));

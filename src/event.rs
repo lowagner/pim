@@ -67,9 +67,7 @@ pub enum Event {
     //      so we can do things like Ctrl+Click, etc.
     MouseInput(platform::MouseButton, platform::InputState),
     MouseWheel(platform::LogicalDelta, platform::ModifiersState),
-    // TODO: probably should add ModifiersState to CursorMoved
-    //      so we can do things like Ctrl+Drag, etc.
-    CursorMoved(platform::LogicalPosition),
+    CursorMoved(platform::LogicalPosition, platform::ModifiersState),
     KeyboardInput(platform::KeyboardInput),
     ReceivedCharacter(char, platform::ModifiersState),
     Paste(Option<String>),
@@ -84,8 +82,8 @@ impl From<Event> for String {
             Event::MouseWheel(delta, mods) => {
                 format!("mouse/wheel {} {} {}", mods, delta.x, delta.y)
             }
-            Event::CursorMoved(platform::LogicalPosition { x, y }) => {
-                format!("cursor/moved {} {}", x, y)
+            Event::CursorMoved(platform::LogicalPosition { x, y }, mods) => {
+                format!("cursor/moved {} {} {}", mods, x, y)
             }
             Event::KeyboardInput(platform::KeyboardInput { key, state, .. }) => {
                 let state = match state {
@@ -136,7 +134,13 @@ impl FromStr for Event {
                     .followed_by(end())
                     .parse(p)
                     .map_err(|(e, _)| e)?;
-                Ok((Event::CursorMoved(platform::LogicalPosition::new(x, y)), p))
+                Ok((
+                    Event::CursorMoved(
+                        platform::LogicalPosition::new(x, y),
+                        platform::ModifiersState::default(),
+                    ),
+                    p,
+                ))
             }
             "keyboard/input" => {
                 let ((k, s), p) = parser::param::<platform::Key>()

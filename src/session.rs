@@ -716,7 +716,7 @@ impl Session {
             // A common case is that we have multiple `CursorMoved` events
             // in one update. In that case we keep only the last one,
             // since the in-betweens will never be seen.
-            if events.len() > 1 && events.iter().all(|e| matches!(e, Event::CursorMoved(_))) {
+            if events.len() > 1 && events.iter().all(|e| matches!(e, Event::CursorMoved(_, _))) {
                 events.drain(..events.len() - 1);
             }
 
@@ -1766,9 +1766,9 @@ impl Session {
             Event::MouseWheel(delta, modifiers) => {
                 self.handle_mouse_wheel(delta, modifiers);
             }
-            Event::CursorMoved(position) => {
+            Event::CursorMoved(position, modifiers) => {
                 let coords = self.window_to_session_coords(position);
-                self.handle_cursor_moved(coords);
+                self.handle_cursor_moved(coords, modifiers);
             }
             Event::KeyboardInput(input) => self.handle_keyboard_input(input, exec),
             Event::ReceivedCharacter(c, mods) => self.handle_received_character(c, mods),
@@ -1959,7 +1959,7 @@ impl Session {
         }
     }
 
-    fn handle_cursor_moved(&mut self, cursor: SessionCoords) {
+    fn handle_cursor_moved(&mut self, cursor: SessionCoords, modifiers: ModifiersState) {
         if self.cursor == cursor {
             return;
         }
