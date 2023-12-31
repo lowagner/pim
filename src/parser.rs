@@ -8,7 +8,7 @@ use crate::command::*;
 use crate::gfx::Rgba8;
 use crate::platform;
 use crate::script::{get_single_rune, Argument, Input, Script, Use};
-use crate::session::{Direction, Mode, Visual};
+use crate::session::{Direction, Mode, Select};
 
 use std::ffi::OsString;
 use std::path::MAIN_SEPARATOR;
@@ -467,26 +467,6 @@ impl Parse for BrushMode {
                         .map(|((_, snap), p)| (BrushMode::Line(snap), p)),
                     mode => Err((
                         memoir::result::Error::new(format!("unknown brush mode '{}'", mode)),
-                        input,
-                    )),
-                }
-            },
-            "<mode>",
-        )
-    }
-}
-
-impl Parse for Mode {
-    fn parser() -> Parser<Self> {
-        Parser::new(
-            |input| {
-                let (id, p) = identifier().parse(input)?;
-                match id.as_str() {
-                    "command" => Ok((Mode::Command, p)),
-                    "normal" => Ok((Mode::Normal, p)),
-                    "select" => Ok((Mode::Visual(Visual::default()), p)),
-                    mode => Err((
-                        memoir::result::Error::new(format!("unknown mode: {}", mode)),
                         input,
                     )),
                 }

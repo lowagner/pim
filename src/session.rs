@@ -67,7 +67,7 @@ pub enum Mode {
     #[default]
     Normal,
     /// Allows pixels to be selected, copied and manipulated visually.
-    Visual(Visual),
+    Select(Select),
     /// Allows commands to be run.
     Command,
     /// Activated with the `:help` command.
@@ -78,9 +78,9 @@ impl fmt::Display for Mode {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Normal => "normal".fmt(f),
-            Self::Visual(Visual::Selecting) => "select".fmt(f),
-            Self::Visual(Visual::Dragging) => "select (dragging)".fmt(f),
-            Self::Visual(Visual::Pasting) => "select (pasting)".fmt(f),
+            Self::Select(Select::Selecting) => "select".fmt(f),
+            Self::Select(Select::Dragging) => "select (dragging)".fmt(f),
+            Self::Select(Select::Pasting) => "select (pasting)".fmt(f),
             Self::Command => "command".fmt(f),
             Self::Help => "help".fmt(f),
         }
@@ -96,7 +96,7 @@ impl FromStr for Mode {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.trim() {
             "normal" => Ok(Mode::Normal),
-            "select" => Ok(Mode::Visual(Visual::default())),
+            "select" => Ok(Mode::Select(Select::default())),
             "command" => Ok(Mode::Command),
             "help" => Ok(Mode::Help),
             _ => Err(ModeParseError),
@@ -105,7 +105,7 @@ impl FromStr for Mode {
 }
 
 #[derive(Eq, PartialEq, Copy, Clone, Debug, Hash)]
-pub enum Visual {
+pub enum Select {
     /// Determining the selection by holding click to determine the box size.
     Selecting,
     /// Dragging the current selection, i.e., to move it around.
@@ -119,7 +119,7 @@ pub enum Visual {
     // TODO: Moving -- ctrl+LMB-drag -- moves the pixels in the selection
 }
 
-impl Default for Visual {
+impl Default for Select {
     fn default() -> Self {
         Self::Selecting
     }
@@ -961,8 +961,8 @@ impl Session {
             return;
         }
 
-        let was_visual = match old {
-            Mode::Visual(_) => true,
+        let was_select = match old {
+            Mode::Select(_) => true,
             Mode::Command => {
                 // TODO: put this into history
                 self.cmdline.clear();
@@ -971,10 +971,10 @@ impl Session {
             _ => false,
         };
 
-        let now_visual = match new {
-            // TODO: if we're switching to Visual::Dragging etc. but we don't have
-            //       a self.selection, we should probably switch to Visual::Selecting
-            Mode::Visual(_) => true,
+        let now_select = match new {
+            // TODO: if we're switching to Select::Dragging etc. but we don't have
+            //       a self.selection, we should probably switch to Select::Selecting
+            Mode::Select(_) => true,
             Mode::Normal => {
                 self.selection = None;
                 false
@@ -992,12 +992,12 @@ impl Session {
             _ => false,
         };
 
-        if !(was_visual && now_visual) {
-            // If we are transitioning from visual to visual, should we still release inputs?
+        if was_select && now_select {
+            // If we are transitioning from select to a different select, should we still release inputs?
             eprint!("TODO: should we avoid releasing inputs?\n");
         }
         self.release_inputs();
-        // TODO: should visual mode always go back to Selecting here?
+        // TODO: should select mode always go back to Selecting here?
         self.prev_mode = Some(self.mode);
         self.mode = new;
     }
@@ -1650,7 +1650,7 @@ impl Session {
         //       use that buffer when pasting.
         // TODO: longer term, keep track of last Z yanks (e.g., Z = 10, maybe make it a setting),
         //       allow pasting from any of these.
-        if let (Mode::Visual(Visual::Selecting), Some(s)) = (self.mode, self.selection) {
+        if let (Mode::Select(Select::Selecting), Some(s)) = (self.mode, self.selection) {
             let v = self.active_view_mut();
             let s = s.abs().bounds();
 
@@ -1660,7 +1660,7 @@ impl Session {
                 v.yank(s);
 
                 self.selection = Some(Selection::from(s));
-                self.switch_mode(Mode::Visual(Visual::Pasting));
+                self.switch_mode(Mode::Select(Select::Pasting));
 
                 return Some(s);
             }
@@ -1669,19 +1669,19 @@ impl Session {
     }
 
     fn paste_selection(&mut self) -> Option<Rect<i32>> {
-        if let (Mode::Visual(Visual::Pasting), Some(s)) = (self.mode, self.selection) {
+        if let (Mode::Select(Select::Pasting), Some(s)) = (self.mode, self.selection) {
             let bounds = s.abs().bounds();
             self.active_view_mut().paste(bounds);
             Some(bounds)
         } else {
-            // TODO: if there is a previous copied selection, we can paste even if we're not in visual mode
+            // TODO: if there is a previous copied selection, we can paste even if we're not in select mode
             //       e.g., paste to mouse cursor.
             None
         }
     }
 
     fn flip_selection(&mut self, axis: Axis) {
-        if let (Mode::Visual(Visual::Selecting), Some(s)) = (self.mode, self.selection) {
+        if let (Mode::Select(Select::Selecting), Some(s)) = (self.mode, self.selection) {
             let v = self.active_view_mut();
             let s = s.abs().bounds();
 
@@ -1694,13 +1694,13 @@ impl Session {
                 v.paste(s);
 
                 self.selection = Some(Selection::from(s));
-                self.switch_mode(Mode::Visual(Visual::Pasting));
+                self.switch_mode(Mode::Select(Select::Pasting));
             }
             // Note that the effects generated here will be processed *before* the
             // view operations.
             self.erase_selection();
             // TODO: i think we can just `switch_mode` here.
-            self.toggle_mode(Mode::Visual(Visual::Selecting));
+            self.toggle_mode(Mode::Select(Select::Selecting));
         }
     }
 
@@ -1871,15 +1871,15 @@ impl Session {
                             Mode::Command => {
                                 // TODO
                             }
-                            // TODO: Can we even get to Visual::Dragging without already having pressed
+                            // TODO: Can we even get to Select::Dragging without already having pressed
                             //       the mouse button?  i guess we'll want to support this via scripts.
-                            Mode::Visual(Visual::Selecting) | Mode::Visual(Visual::Dragging) => {
+                            Mode::Select(Select::Selecting) | Mode::Select(Select::Dragging) => {
                                 let p = p.map(|n| n as i32);
                                 let unit = Selection::new(p.x, p.y, p.x + 1, p.y + 1);
 
                                 if let Some(s) = &mut self.selection {
                                     if s.abs().bounds().contains(p) {
-                                        self.switch_mode(Mode::Visual(Visual::Dragging));
+                                        self.switch_mode(Mode::Select(Select::Dragging));
                                     } else {
                                         self.selection = Some(unit);
                                     }
@@ -1887,7 +1887,7 @@ impl Session {
                                     self.selection = Some(unit);
                                 }
                             }
-                            Mode::Visual(Visual::Pasting) => {
+                            Mode::Select(Select::Pasting) => {
                                 // Re-center the selection in-case we've switched layer.
                                 self.center_selection(self.cursor);
                                 self.paste_selection();
@@ -1901,17 +1901,17 @@ impl Session {
                 } else {
                     // Clicking outside a view...
                     match self.mode {
-                        Mode::Visual(Visual::Selecting) | Mode::Visual(Visual::Dragging) => {
+                        Mode::Select(Select::Selecting) | Mode::Select(Select::Dragging) => {
                             self.selection = None;
-                            self.mode = Mode::Visual(Visual::Selecting);
+                            self.mode = Mode::Select(Select::Selecting);
                         }
                         _ => {}
                     }
                 }
             }
             InputState::Released => match self.mode {
-                Mode::Visual(Visual::Dragging) => {
-                    self.switch_mode(Mode::Visual(Visual::Selecting));
+                Mode::Select(Select::Dragging) => {
+                    self.switch_mode(Mode::Select(Select::Selecting));
                 }
                 Mode::Normal => {
                     if let Tool::Brush = self.tool {
@@ -2004,14 +2004,14 @@ impl Session {
                         },
                         _ => {}
                     },
-                    Mode::Visual(Visual::Selecting) => {
+                    Mode::Select(Select::Selecting) => {
                         if self.lmb_state == InputState::Pressed {
                             if let Some(ref mut s) = self.selection {
                                 *s = Selection::new(s.x1, s.y1, p.x as i32 + 1, p.y as i32 + 1);
                             }
                         }
                     }
-                    Mode::Visual(Visual::Dragging) => {
+                    Mode::Select(Select::Dragging) => {
                         let view = self.active_view().layer_bounds();
 
                         // Resize selection.
@@ -2028,7 +2028,7 @@ impl Session {
                             }
                         }
                     }
-                    Mode::Visual(Visual::Pasting) => {
+                    Mode::Select(Select::Pasting) => {
                         self.center_selection(cursor);
                     }
                     _ => {}
@@ -2191,7 +2191,7 @@ impl Session {
                                 return;
                             }
                             platform::Key::Return => {
-                                self.switch_mode(Mode::Visual(Visual::default()));
+                                self.switch_mode(Mode::Select(Select::default()));
                                 return;
                             }
                             _ => {}
@@ -2462,7 +2462,7 @@ impl Session {
         let input = self.cmdline.input();
         // Always hide the command line before executing the command,
         // because commands will often require being in a specific mode, e.g.
-        // visual mode for commands that run on selections.
+        // select mode for commands that run on selections.
         self.cmdline_hide();
 
         if input.is_empty() {

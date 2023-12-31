@@ -524,9 +524,9 @@ macro_rules! script_runner {
                         let on_release = get_optional_script(2, "for release")?;
 
                         let modes = match bind {
-                            Bind::Modes => vec![Mode::Normal, Mode::Visual(Visual::Selecting)],
+                            Bind::Modes => vec![Mode::Normal, Mode::Select(Select::Selecting)],
                             Bind::Normal => vec![Mode::Normal],
-                            Bind::Select => vec![Mode::Visual(Visual::Selecting)],
+                            Bind::Select => vec![Mode::Select(Select::Selecting)],
                             Bind::Help => vec![Mode::Help],
                         };
 
@@ -1714,7 +1714,7 @@ mod test {
     use super::*;
     use crate::gfx::Point;
     use crate::message::*;
-    use crate::session::{KeyBinding, Mode, Visual};
+    use crate::session::{KeyBinding, Mode, Select};
     use crate::view::ViewExtent;
     use std::collections::HashSet;
     use strum::IntoEnumIterator;

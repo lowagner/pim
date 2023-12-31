@@ -3,7 +3,7 @@ use crate::color;
 use crate::execution::Execution;
 use crate::font::{TextAlign, TextBatch};
 use crate::platform;
-use crate::session::{Mode, Session, Tool, Visual};
+use crate::session::{Mode, Select, Session, Tool};
 use crate::settings::*;
 use crate::sprite;
 use crate::view::{View, ViewCoords};
@@ -82,8 +82,8 @@ pub mod cursors {
             Tool::FloodFill => self::FLOOD,
 
             Tool::Brush => match m {
-                Mode::Visual(_) if in_selection && in_view => self::OMNI,
-                Mode::Visual(Visual::Dragging) if in_selection => self::OMNI,
+                Mode::Select(_) if in_selection && in_view => self::OMNI,
+                Mode::Select(Select::Dragging) if in_selection => self::OMNI,
                 _ => {
                     if b.effectively_erases() {
                         self::ERASE
@@ -160,8 +160,8 @@ fn draw_ui(session: &Session, canvas: &mut shape2d::Batch, text: &mut TextBatch)
 
     if let Some(selection) = session.selection {
         let fill = match session.mode {
-            Mode::Visual(Visual::Selecting) => color::RED.alpha(0x55),
-            Mode::Visual(Visual::Dragging) => color::YELLOW.alpha(0x55),
+            Mode::Select(Select::Selecting) => color::RED.alpha(0x55),
+            Mode::Select(Select::Dragging) => color::YELLOW.alpha(0x55),
             // TODO: Handle different modes differently.
             _ => Rgba8::TRANSPARENT,
         };
@@ -225,7 +225,7 @@ fn draw_ui(session: &Session, canvas: &mut shape2d::Batch, text: &mut TextBatch)
         let (border_color, current_view_frame) = if session.is_active(v.id) {
             let color = match session.mode {
                 // TODO: (rgx) Use `Rgba8::alpha`.
-                Mode::Visual(_) => Rgba8::new(color::RED.r, color::RED.g, color::RED.b, 0xdd),
+                Mode::Select(_) => Rgba8::new(color::RED.r, color::RED.g, color::RED.b, 0xdd),
                 _ => color::WHITE,
             };
             (color.into(), session.current_frame())
@@ -635,7 +635,7 @@ fn draw_brush(session: &Session, brush: &Brush, shapes: &mut shape2d::Batch) {
     let z = v.zoom as f32;
 
     match session.mode {
-        Mode::Visual(Visual::Selecting) | Mode::Visual(Visual::Dragging) => {
+        Mode::Select(Select::Selecting) | Mode::Select(Select::Dragging) => {
             if session.is_selected(session.view_coords(v.id, c).into()) {
                 return;
             }
@@ -732,7 +732,7 @@ fn draw_brush(session: &Session, brush: &Brush, shapes: &mut shape2d::Batch) {
 }
 
 fn draw_paste(session: &Session, batch: &mut sprite2d::Batch) {
-    if let (Mode::Visual(Visual::Pasting), Some(s)) = (session.mode, session.selection) {
+    if let (Mode::Select(Select::Pasting), Some(s)) = (session.mode, session.selection) {
         batch.add(
             Rect::origin(batch.w as f32, batch.h as f32),
             Rect::new(s.x1 as f32, s.y1 as f32, s.x2 as f32 + 1., s.y2 as f32 + 1.),
