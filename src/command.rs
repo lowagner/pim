@@ -34,6 +34,9 @@ syntax:
 // Note these are designed to be quickly cloned, so don't put large amounts of data in them.
 #[derive(PartialEq, Debug, Clone)]
 pub enum Command {
+    /// Does nothing.
+    NoOp,
+
     /// *Does not evaluate* $0, returns info about the script/command instead.
     Help,
 
@@ -214,6 +217,7 @@ impl Command {
 impl fmt::Display for Command {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Command::NoOp => write!(f, "()"),
             Command::Help => write!(f, "?"),
             Command::Echo => write!(f, "echo"),
             Command::Error => write!(f, "error"),
@@ -319,6 +323,7 @@ impl FromStr for Command {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.trim() {
+            "()" => Ok(Command::NoOp),
             "?" => Ok(Command::Help),
             "echo" => Ok(Command::Echo),
             "error" => Ok(Command::Error),
@@ -835,6 +840,7 @@ mod test {
 
     #[test]
     fn test_command_parsing() {
+        assert_eq!(Command::from_str("()"), Ok(Command::NoOp));
         assert_eq!(Command::from_str("?"), Ok(Command::Help));
         assert_eq!(Command::from_str("push-pop"), Ok(Command::PushPop));
         assert_eq!(Command::from_str("run-all"), Ok(Command::RunAll));

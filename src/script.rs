@@ -362,6 +362,7 @@ macro_rules! script_runner {
                 script_stack: Vec<&Script>,
             ) -> ArgumentResult {
                 match command {
+                    Command::NoOp => Ok(Argument::Null),
                     Command::Help => {
                         if script.arguments.len() != 1 {
                             Ok(Argument::String(self.variables.describe(Command::Help)))
@@ -1088,6 +1089,11 @@ impl Variables {
     pub fn with_built_ins() -> Self {
         let mut variables = Variables::new();
 
+        variables.add_built_in(
+            Command::NoOp,
+            "no operation, does nothing, but useful to ensure a binding is not repeatable, \
+            e.g., `bind <x> (fg (bg fg)) $$` to ensure holding x won't keep swapping fg<->bg",
+        );
         variables.add_built_in(
             Command::Help,
             "explains what $0 does without evaluating it, \

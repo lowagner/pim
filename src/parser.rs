@@ -47,7 +47,7 @@ impl Parse for Script {
 
 fn get_script_parser(lookback: i32) -> Parser<Script> {
     // TODO: add some logic for seeing a comma, turning things into a `run-all`.
-    // e.g., `fg (pc 1), bg (pc 2)`
+    // e.g., `fg (pc 1), bg (pc 2)`, or maybe a semicolon.
     // TODO: i think it might be better to convert it into an arguments vector.
     // ideally we make it possible to run something on pressing a button, e.g.,
     // `f0, f1, (f2 arg0 arg1), ...` and then use those to populate the arguments
@@ -77,6 +77,12 @@ fn get_argument_parser(lookback: i32) -> Parser<Argument> {
             // Prevent stack overflow (script within argument recursion).
             // Only spin up another script parser if we're within a new `()` block.
             if input.starts_with('(') {
+                if input.starts_with("()") {
+                    return Ok((
+                        (Argument::Script(Script::zero_arg(Command::NoOp))),
+                        &input[2..],
+                    ));
+                }
                 let nested_script_parser = get_script_parser(lookback - 1);
                 return match nested_script_parser.parse(&input[1..]) {
                     Ok((nested_script, rest)) if rest.starts_with(')') => {
@@ -561,6 +567,32 @@ mod test {
                 command: Command::ColorSetting(ColorSetting::Background),
                 arguments: vec![],
             }
+        );
+    }
+
+    #[test]
+    fn test_script_with_noop() {
+        let p = Script::parser();
+
+        assert_eq!(
+            // We don't test "()ok" as a script because it's meaningless;
+            // a no-op only makes sense as an argument, not as the initial command.
+            p.parse("ok () (fg bg)").unwrap(),
+            (
+                Script {
+                    command: Command::Evaluate("ok".to_string()),
+                    arguments: vec![
+                        Argument::Script(Script::zero_arg(Command::NoOp)),
+                        Argument::Script(Script {
+                            command: Command::ColorSetting(ColorSetting::Foreground),
+                            arguments: vec![Argument::Script(Script::zero_arg(
+                                Command::ColorSetting(ColorSetting::Background)
+                            )),],
+                        }),
+                    ],
+                },
+                "",
+            ),
         );
     }
 
