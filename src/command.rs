@@ -154,9 +154,9 @@ pub enum Command {
     /// Uses $0 for the palette index, and $1 as an optional color to update the palette at that index.
     /// Returns the original color in the palette.
     PaletteColor,
-    /// Adds a new color to the palette if present in $0.  Returns the index of this color.
-    /// Will check the current palette before adding a new entry, in case this color is already present.
-    PaletteAddColor,
+    /// Adds colors specified by arguments to the palette.  Returns the index of the last color added.
+    /// Will check the current palette before adding a new entry, in case the colors are already present.
+    PaletteAddColors,
     /// Uses $0 for the first color, $1 for the second, and $2 as an optional number of
     /// colors to add, defaulting to 5.  Returns the number of added colors; can be
     /// different than $2 if a color in the gradient was already in the palette.
@@ -297,7 +297,7 @@ impl fmt::Display for Command {
             Command::UsingTwoI64s(TwoI64sFor::SelectionMove) => write!(f, "s-move"),
             Command::UsingTwoI64s(TwoI64sFor::SelectionShift) => write!(f, "s-shift"),
             Command::PaletteColor => write!(f, "pc"),
-            Command::PaletteAddColor => write!(f, "p-add"),
+            Command::PaletteAddColors => write!(f, "p-add"),
             Command::PaletteAddGradient => write!(f, "p-gradient"),
             Command::PaletteSort => write!(f, "p-sort"),
             Command::PaletteAddViewColors => write!(f, "p-view"),
@@ -408,7 +408,7 @@ impl FromStr for Command {
             "s-move" => Ok(Command::UsingTwoI64s(TwoI64sFor::SelectionMove)),
             "s-shift" => Ok(Command::UsingTwoI64s(TwoI64sFor::SelectionShift)),
             "pc" => Ok(Command::PaletteColor),
-            "p-add" => Ok(Command::PaletteAddColor),
+            "p-add" => Ok(Command::PaletteAddColors),
             "p-gradient" => Ok(Command::PaletteAddGradient),
             "p-sort" => Ok(Command::PaletteSort),
             "p-view" => Ok(Command::PaletteAddViewColors),
@@ -862,7 +862,7 @@ mod test {
             Ok(Command::ColorSetting(ColorSetting::Background))
         );
         assert_eq!(Command::from_str("pc"), Ok(Command::PaletteColor));
-        assert_eq!(Command::from_str("p-add"), Ok(Command::PaletteAddColor));
+        assert_eq!(Command::from_str("p-add"), Ok(Command::PaletteAddColors));
         assert_eq!(Command::from_str("p-clear"), Ok(Command::PaletteClear));
         assert_eq!(Command::from_str("p"), Ok(Command::Paint));
         assert_eq!(Command::from_str("w"), Ok(Command::Write));

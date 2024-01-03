@@ -652,9 +652,16 @@ macro_rules! script_runner {
                         }
                         Ok(Argument::Color(old_color))
                     }
-                    Command::PaletteAddColor => {
-                        let color = self.script_evaluate(&script_stack, Evaluate::Index(0))?.get_color(&self.palette)?;
-                        Ok(Argument::I64(self.palette.add(color) as i64))
+                    Command::PaletteAddColors => {
+                        let mut result = None;
+                        for i in 0..script.arguments.len() {
+                            let color = self.script_evaluate(&script_stack, Evaluate::Index(i as u32))?.get_color(&self.palette)?;
+                            result = Some(self.palette.add(color) as i64);
+                        }
+                        match result {
+                            None => Err("use `p-add #123 #456` to add colors to the palette".to_string()),
+                            Some(value) => Ok(Argument::I64(value)),
+                        }
                     }
                     Command::PaletteAddGradient => {
                         let color_start = self.script_evaluate(&script_stack, Evaluate::Index(0))?.get_color(&self.palette)?;
@@ -1492,8 +1499,8 @@ impl Variables {
             e.g., `$$ 7 #123456` to set palette color 7 to #123456",
         );
         variables.add_built_in(
-            Command::PaletteAddColor,
-            "adds color $0 to the palette if it's not already present, \
+            Command::PaletteAddColors,
+            "adds all colors specified by arguments to the palette, \
             e.g., `$$ #987654` to ensure #987654 is in the palette",
         );
         variables.add_built_in(
@@ -3188,7 +3195,7 @@ mod test {
         let initial_palette_size = test_runner.palette.colors.len();
 
         let result = Script {
-            command: Command::PaletteAddColor,
+            command: Command::PaletteAddColors,
             arguments: vec![Argument::Color(new_color)],
         }
         .run(&mut test_runner);
@@ -3196,9 +3203,9 @@ mod test {
         assert_eq!(
             test_runner.test_what_ran,
             Vec::from([
-                WhatRan::Begin(Command::PaletteAddColor),
+                WhatRan::Begin(Command::PaletteAddColors),
                 WhatRan::Evaluated(Ok(Argument::Color(new_color))),
-                WhatRan::End(Command::PaletteAddColor),
+                WhatRan::End(Command::PaletteAddColors),
             ])
         );
         assert_eq!(
@@ -3216,7 +3223,7 @@ mod test {
         let initial_palette_size = test_runner.palette.colors.len();
 
         let result = Script {
-            command: Command::PaletteAddColor,
+            command: Command::PaletteAddColors,
             arguments: vec![Argument::Color(already_present)],
         }
         .run(&mut test_runner);
@@ -3224,9 +3231,9 @@ mod test {
         assert_eq!(
             test_runner.test_what_ran,
             Vec::from([
-                WhatRan::Begin(Command::PaletteAddColor),
+                WhatRan::Begin(Command::PaletteAddColors),
                 WhatRan::Evaluated(Ok(Argument::Color(already_present))),
-                WhatRan::End(Command::PaletteAddColor),
+                WhatRan::End(Command::PaletteAddColors),
             ])
         );
         assert_eq!(result, Ok(Argument::I64(already_present_index as i64)));
