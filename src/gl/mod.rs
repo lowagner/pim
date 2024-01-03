@@ -752,16 +752,21 @@ impl<'a> renderer::Renderer<'a> for Renderer {
                                     .bind_texture(v.layer.fb.color_slot())
                                     .expect("binding textures never fails");
                                 let zoom = view.zoom as f32;
+                                let anim_height = zoom * view.height() as f32;
+                                let anim_y = if anim_height
+                                    > session.height - 2.0 * session.palette.cellsize
+                                {
+                                    // Show to the right of the current view:
+                                    session.offset.y
+                                } else {
+                                    // Show at the top of the screen.
+                                    session.height - session.palette.cellsize - anim_height
+                                };
                                 let t = Matrix4::from_translation(Vector3::new(
                                     // Always show the animation on the far right,
                                     // irrespective of session.offset.x:
                                     session.width - session.palette.cellsize,
-                                    // Show to the right of the current view:
-                                    /* TODO: enable a setting for this.
-                                    session.offset.y,
-                                    */
-                                    // Always show at the top of the screen.
-                                    session.height - session.palette.cellsize - zoom * view.height() as f32,
+                                    anim_y,
                                     0.0,
                                 ));
 
