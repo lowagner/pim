@@ -114,3 +114,5 @@ bind        <7>             (fg (pc 7))
 bind        <8>             (fg (pc 8))
 bind        <9>             (fg (pc 9))
 bind        <0>             (fg (pc 0))                         -- Set foreground to palette color 0
+
+source config.pim
