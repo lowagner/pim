@@ -2047,6 +2047,9 @@ impl Session {
     }
 
     fn handle_paste(&mut self, paste: Option<String>) {
+        if self.mode != Mode::Command {
+            return;
+        }
         if let Some(s) = paste {
             self.cmdline.puts(s.as_str())
         }

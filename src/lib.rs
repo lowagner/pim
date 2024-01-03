@@ -287,9 +287,9 @@ pub fn init<P: AsRef<Path>>(paths: &[P], options: Options<'_>) -> std::io::Resul
                         // reason I cannot comprehend. So we only read from clipboard when we
                         // need to paste.
                         platform::KeyboardInput {
-                            key: Some(platform::Key::Insert),
+                            key: Some(platform::Key::V),
                             state: platform::InputState::Pressed,
-                            modifiers: platform::ModifiersState { shift: true, .. },
+                            modifiers: platform::ModifiersState { ctrl: true, .. },
                         } => {
                             session_events.push(Event::Paste(win.clipboard()));
                             continue;
