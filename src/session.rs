@@ -1804,7 +1804,6 @@ impl Session {
     }
 
     fn handle_mouse_input(&mut self, button: platform::MouseButton, state: platform::InputState) {
-        // TODO: add right mouse button
         if button == platform::MouseButton::Left {
             self.lmb_state = state;
         } else if button == platform::MouseButton::Right {
@@ -2537,9 +2536,6 @@ impl Session {
 
     /// Picks the given color as foreground or background color, depending on mouse button.
     fn pick_color(&mut self, color: Rgba8, button: platform::MouseButton) {
-        if color.a == 0x0 {
-            return;
-        }
         if button == platform::MouseButton::Left {
             self.fg = color;
         } else {
