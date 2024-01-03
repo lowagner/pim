@@ -756,7 +756,12 @@ impl<'a> renderer::Renderer<'a> for Renderer {
                                     // Always show the animation on the far right,
                                     // irrespective of session.offset.x:
                                     session.width - session.palette.cellsize,
+                                    // Show to the right of the current view:
+                                    /* TODO: enable a setting for this.
                                     session.offset.y,
+                                    */
+                                    // Always show at the top of the screen.
+                                    session.height - session.palette.cellsize - zoom * view.height() as f32,
                                     0.0,
                                 ));
 
