@@ -636,8 +636,8 @@ macro_rules! script_runner {
                             None => return Err(format!("{} needs $0 for an palette index", command)),
                             Some(i64_value) => {
                                 let index = i64_value as usize;
-                                if index >= self.palette.colors.len() {
-                                    return Err(format!("{} needs $0 to be a valid palette index, got {}", command, i64_value));
+                                while index >= self.palette.colors.len() {
+                                    self.palette.colors.push(Rgba8::BLACK);
                                 }
                                 index
                             }
