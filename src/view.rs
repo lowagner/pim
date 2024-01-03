@@ -479,10 +479,43 @@ impl<R> View<R> {
         }
     }
 
-    /// Resize view frames to the given size.
-    pub fn resize_frames(&mut self, fw: u32, fh: u32) {
-        self.reset(ViewExtent::new(fw, fh, self.animation.len()));
+    /// Resize view frames to the given size.  Centers each old
+    /// frame's contents into the new frame's size.
+    pub fn resize_frames(&mut self, new_fw: u32, new_fh: u32) {
+        let (old_fw, old_fh) = (self.fw, self.fh);
+        if old_fw == new_fw && old_fh == new_fh {
+            return;
+        }
+        self.reset(ViewExtent::new(new_fw, new_fh, self.animation.len()));
         self.resized();
+        self.ops.push(ViewOp::Clear(Rgba8::TRANSPARENT));
+        let mut src = Rect::origin(old_fw as i32, old_fh as i32);
+        let mut dst = Rect::origin(new_fw as i32, new_fh as i32);
+        if new_fw >= old_fw {
+            // New is bigger, dst needs to shrink.
+            dst.x1 += (new_fw - old_fw) as i32 / 2;
+            dst.x2 = dst.x1 + old_fw as i32;
+        } else {
+            // New is smaller, src needs to shrink.
+            src.x1 += (old_fw - new_fw) as i32 / 2;
+            src.x2 = src.x1 + new_fw as i32;
+        }
+        if new_fh >= old_fh {
+            // New is bigger, dst needs to shrink.
+            dst.y1 += (new_fh - old_fh) as i32 / 2;
+            dst.y2 = dst.y1 + old_fh as i32;
+        } else {
+            // New is smaller, src needs to shrink.
+            src.y1 += (old_fh - new_fh) as i32 / 2;
+            src.y2 = src.y1 + new_fh as i32;
+        }
+        for f in 0..self.animation.len() {
+            let f = f as u32;
+            self.ops
+                .push(ViewOp::Blit(src.map(|v| v as u32), dst.map(|v| v as u32)));
+            src += Vector2::new(old_fw as i32, 0);
+            dst += Vector2::new(new_fw as i32, 0);
+        }
     }
 
     /// Clear the view to a color.
