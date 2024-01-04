@@ -55,10 +55,12 @@ bind-select 'l'             (s-move    1  0)
 bind-select ']'             (s-offset  1  1)
 bind-select '['             (s-offset -1 -1)
 bind-select '\'             s-expand           ()               --  Expand the selection
-bind-select 'c'             s-copy             ()               --  Copy the selection
+bind-select 'c'             s-copy             ()               --  Copy the selection and switch to pasting mode.
 bind-select 'x'             s-cut              ()
 bind-select 'e'             s-erase            ()
-bind-select 'p'             s-paste            ()
+bind-select 'v'             s-paste            ()
+bind-select <ctrl><v>       s-paste            ()
+bind-select <ctrl><c>       (run-all s-copy (mode 'select')) () --  Copy without switching to pasting mode.
 bind-select 'w'             (s-move fw 0)
 bind-select 'b'             (s-move (* -1 fw) 0)
 bind-select <up>            (s-move  0 -1)

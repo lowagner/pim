@@ -971,6 +971,7 @@ impl Renderer {
                     self.view_data.remove(&id);
                 }
                 Effect::ViewOps(id, ops) => {
+                    // TODO: add mutable session.selection here so we can update it.
                     self.handle_view_ops(session.view(id), &ops)?;
                 }
                 Effect::ViewDamaged(id, Some(extent)) => {
@@ -1170,8 +1171,13 @@ impl Renderer {
                         .upload_raw(GenMipmaps::No, body)
                         .map_err(Error::Texture)?;
                 }
-                ViewOp::Paste(dst) => {
+                ViewOp::Paste(mut dst) => {
                     let [paste_w, paste_h] = self.paste.size();
+                    if dst.area() == 1 {
+                        // TODO: update session.selection here
+                        dst.x2 = dst.x1 + paste_w as i32;
+                        dst.y1 = dst.y2 - paste_h as i32; // with graphics, y up is positive.
+                    }
                     let batch = sprite2d::Batch::singleton(
                         paste_w,
                         paste_h,

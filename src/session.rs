@@ -1670,13 +1670,11 @@ impl Session {
     }
 
     fn paste_selection(&mut self) -> Option<Rect<i32>> {
-        if let (Mode::Select(Select::Pasting), Some(s)) = (self.mode, self.selection) {
+        if let (Mode::Select(_), Some(s)) = (self.mode, self.selection) {
             let bounds = s.abs().bounds();
             self.active_view_mut().paste(bounds);
             Some(bounds)
         } else {
-            // TODO: if there is a previous copied selection, we can paste even if we're not in select mode
-            //       e.g., paste to mouse cursor.
             None
         }
     }

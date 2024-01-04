@@ -292,7 +292,7 @@ pub fn init<P: AsRef<Path>>(paths: &[P], options: Options<'_>) -> std::io::Resul
                             modifiers: platform::ModifiersState { ctrl: true, .. },
                         } => {
                             session_events.push(Event::Paste(win.clipboard()));
-                            continue;
+                            // "pass through" to allow the keyboard input as well.
                         }
                         // We need to keep track of modifiers here because Glfw::Scroll
                         // doesn't supply them.
