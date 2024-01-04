@@ -1072,60 +1072,6 @@ impl Renderer {
                         )
                         .map_err(Error::Texture)?;
                 }
-                ViewOp::Swap(a, b) => {
-                    if a.height() != b.height() || a.width() != b.width() {
-                        return Err(RendererError::InvalidArgument(format!(
-                            "{:?} and {:?} are not the same size for swap",
-                            a, b
-                        )));
-                    }
-                    let view = self
-                        .view_data
-                        .get_mut(&v.id)
-                        .expect("views must have associated view data");
-
-                    let (_, texels_a) = v
-                        .layer
-                        .get_snapshot_rect(&a.map(|n| n as i32))
-                        .ok_or_else(|| {
-                            RendererError::InvalidArgument(format!(
-                                "{:?} was an invalid swap area",
-                                a
-                            ))
-                        })?;
-                    let texels_a = util::align_u8(&texels_a);
-                    let (_, texels_b) = v
-                        .layer
-                        .get_snapshot_rect(&b.map(|n| n as i32))
-                        .ok_or_else(|| {
-                            RendererError::InvalidArgument(format!(
-                                "{:?} was an invalid swap area",
-                                b
-                            ))
-                        })?;
-                    let texels_b = util::align_u8(&texels_b);
-
-                    view.layer
-                        .fb
-                        .color_slot()
-                        .upload_part_raw(
-                            GenMipmaps::No,
-                            [a.x1, a.y1],
-                            [b.width(), b.height()],
-                            texels_b,
-                        )
-                        .map_err(Error::Texture)?;
-                    view.layer
-                        .fb
-                        .color_slot()
-                        .upload_part_raw(
-                            GenMipmaps::No,
-                            [b.x1, b.y1],
-                            [a.width(), a.height()],
-                            texels_a,
-                        )
-                        .map_err(Error::Texture)?;
-                }
                 ViewOp::Yank(src) => {
                     let (_, pixels) = v.layer.get_snapshot_rect(&src.map(|n| n)).unwrap();
                     let (w, h) = (src.width() as u32, src.height() as u32);

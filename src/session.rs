@@ -3148,6 +3148,9 @@ impl Session {
                 }
                 return Ok(Argument::I64(old_width * old_height));
             }
+            TwoI64sFor::FrameSwap => {
+                self.active_view_mut().swap_frames(x, y);
+            }
             TwoI64sFor::SelectionDelta => {
                 if let Some(ref mut s) = self.selection {
                     s.resize(x as i32, y as i32);

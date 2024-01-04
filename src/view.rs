@@ -100,9 +100,6 @@ pub enum ViewOp {
     ClearRect(Rgba8, Rect<u32>),
     /// Copy an area of the view to another area.
     Blit(Rect<u32>, Rect<u32>),
-    /// Swap two areas of the view.
-    /// The passed-in `Rect`s must be the same width and height.
-    Swap(Rect<u32>, Rect<u32>),
     /// Yank the given area into the paste buffer.
     Yank(Rect<i32>),
     /// Flips a given area horizontally or vertically.
@@ -458,6 +455,30 @@ impl<R> View<R> {
             },
             dst,
         ));
+        self.touch();
+    }
+
+    /// Swaps frames.
+    pub fn swap_frames(&mut self, f1: i64, f2: i64) {
+        let n = self.animation.len() as i64;
+        // Get in the range from 0 to n-1:
+        let f1 = ((f1 % n) + n) % n;
+        let f2 = ((f2 % n) + n) % n;
+        if f1 == f2 {
+            return;
+        }
+        let frame_rect = Rect::origin(self.fw, self.fh);
+        self.swap_regions(
+            frame_rect + Vector2::new(f1 as u32 * self.fw, 0),
+            frame_rect + Vector2::new(f2 as u32 * self.fw, 0),
+        );
+    }
+
+    fn swap_regions(&mut self, a: Rect<u32>, b: Rect<u32>) {
+        self.ops.push(ViewOp::ClearRect(Rgba8::TRANSPARENT, a));
+        self.ops.push(ViewOp::ClearRect(Rgba8::TRANSPARENT, b));
+        self.ops.push(ViewOp::Blit(a, b));
+        self.ops.push(ViewOp::Blit(b, a));
         self.touch();
     }
 

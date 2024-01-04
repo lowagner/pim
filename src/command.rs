@@ -141,7 +141,6 @@ pub enum Command {
 
     // TODO: some of these frame manipulation methods can't be used together unless
     //      we maybe handle the effects after every action.
-    // TODO: FrameSwap, "fs" with two indices
     // TODO: FrameClear "fc" with index and color, use view.clear_frame
     // TODO: FileAppend, keeps the same height but centers the contents in $0 (file name) and adds to animation
     // TODO: WrapHorizontally: moves the contents of a single frame over to the right by $0 amount,
@@ -292,6 +291,7 @@ impl fmt::Display for Command {
             Command::UsingStrings(StringsFor::Concatenate) => write!(f, "cat"),
             Command::UsingTwoI64s(TwoI64sFor::Pan) => write!(f, "pan"),
             Command::UsingTwoI64s(TwoI64sFor::FrameResize) => write!(f, "f-resize"),
+            Command::UsingTwoI64s(TwoI64sFor::FrameSwap) => write!(f, "swap"),
             Command::UsingTwoI64s(TwoI64sFor::SelectionDelta) => write!(f, "s-delta"),
             Command::UsingTwoI64s(TwoI64sFor::SelectionDeltaSymmetric) => write!(f, "s-delta2"),
             Command::UsingTwoI64s(TwoI64sFor::SelectionMove) => write!(f, "s-move"),
@@ -403,6 +403,7 @@ impl FromStr for Command {
             "cat" => Ok(Command::UsingStrings(StringsFor::Concatenate)),
             "pan" => Ok(Command::UsingTwoI64s(TwoI64sFor::Pan)),
             "f-resize" => Ok(Command::UsingTwoI64s(TwoI64sFor::FrameResize)),
+            "swap" => Ok(Command::UsingTwoI64s(TwoI64sFor::FrameSwap)),
             "s-delta" => Ok(Command::UsingTwoI64s(TwoI64sFor::SelectionDelta)),
             "s-delta2" => Ok(Command::UsingTwoI64s(TwoI64sFor::SelectionDeltaSymmetric)),
             "s-move" => Ok(Command::UsingTwoI64s(TwoI64sFor::SelectionMove)),
@@ -534,6 +535,8 @@ pub enum TwoI64sFor {
     /// it crops the frames to content.  Returns the number of pixels in one frame, i.e.,
     /// width * height, from *before* the operation.
     FrameResize,
+    /// Swaps frames $0 and $1.
+    FrameSwap,
     /// Expand (or shrink) the selection (i.e., for Visual mode), by deltas based on $0 and $1.
     /// Only moves the right/bottom sides of the selection box.
     SelectionDelta,

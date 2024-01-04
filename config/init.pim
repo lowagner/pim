@@ -26,23 +26,25 @@ bind         <ctrl><z>      undo                                --  Undo active 
 bind    <ctrl><shift><z>    redo                                --  Redo an earlier undo.
 bind-normal 'x'             (fg (bg fg))        ()              --  Swap foreground-background colors
 bind-normal 'b'             (tool brusht)       ()              --  Reset brush
-bind-normal 'g'             (tool floodt)       ()              --  Flood tool
+bind-normal 'f'             (tool buckett)      ()              --  Flood tool
 -- commands with press and release scripts need to be tagged inputs, e.g., <e>
 bind-normal <e>             (b-erase 1) (b-erase 0)             --  Erase (hold)
 bind-normal <shift>         (b-multi 1) (b-multi 0)             --  Multi-brush (hold)
 bind-normal '='             (b-perfect (not b-perfect))         --  Toggle pixel-perfect brush
 bind-normal ']'             b-size++                            --  Increase brush size
 bind-normal '['             b-size--                            --  Decrease brush size
-bind-normal  <ctrl>         (tool samplert) (tool $0)           --  Sample color (hold)
-bind-help    <space>        (tool pant) (tool $0)               --  Pan help (hold)
-bind         <space>        (tool pant) (tool $0)               --  Pan workspace (hold)
-bind-normal  <up>           (pan  0  1)                         --  Pan view up
-bind-normal  <down>         (pan  0 -1)                         --  Pan view down
-bind-normal  <left>         (pan -1  0)                         --  Pan view left
-bind-normal  <right>        (pan  1  0)                         --  Pan view right
-bind         <return>       f-add              ()               --  Add a frame to the view
-bind         <backspace>    f-remove           ()               --  Remove a frame from the view
-bind         <del>          f-remove           ()               --  Remove a frame from the view
+bind-normal <ctrl>          (tool samplert) (tool $0)           --  Sample color (hold)
+bind-help   <space>         (tool pant) (tool $0)               --  Pan help (hold)
+bind        <space>         (tool pant) (tool $0)               --  Pan workspace (hold)
+bind-normal <up>            (pan  0  1)                         --  Pan view up
+bind-normal <down>          (pan  0 -1)                         --  Pan view down
+bind-normal <left>          (pan -1  0)                         --  Pan view left
+bind-normal <right>         (pan  1  0)                         --  Pan view right
+bind-normal <ctrl><left>    (run-all (swap f (sum f -1)) f--)   --  Shift frame over to the left
+bind-normal <ctrl><right>   (run-all (swap f (sum f  1)) f++)   --  Shift frame over to the right
+bind        <return>        f-clone            ()               --  Add a frame to the view
+bind        <backspace>     f-remove           ()               --  Remove a frame from the view
+bind-normal <del>           f-remove           ()               --  Remove a frame from the view
 bind-normal 'h'             f--                                 --  Navigate to previous frame
 bind-normal 'l'             f++                                 --  Navigate to next frame
 
@@ -58,6 +60,7 @@ bind-select '\'             s-expand           ()               --  Expand the s
 bind-select 'c'             s-copy             ()               --  Copy the selection and switch to pasting mode.
 bind-select 'x'             s-cut              ()
 bind-select 'e'             s-erase            ()
+bind-select <del>           s-erase            ()
 bind-select 'v'             s-paste            ()
 bind-select <ctrl><v>       s-paste            ()
 bind-select <ctrl><c>       (run-all s-copy (mode 'select')) () --  Copy without switching to pasting mode.

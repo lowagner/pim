@@ -1474,6 +1474,11 @@ impl Variables {
             e.g., `$$ 12 34` to set to 12 pixels wide and 34 pixels high",
         );
         variables.add_built_in(
+            Command::UsingTwoI64s(TwoI64sFor::FrameSwap),
+            "swaps frames $0 and $1, \
+            e.g., `$$ 2 4` to swap the third and fifth frame",
+        );
+        variables.add_built_in(
             Command::UsingTwoI64s(TwoI64sFor::SelectionDelta),
             "expand or shrink the selection box by ($0, $1) with defaults of 0, \
             e.g., `$$ 5 -3` to increase 5 in width and decrease 3 in height",
@@ -1599,7 +1604,7 @@ impl Variables {
         // TODO: add `home` as a const variable to the home directory
 
         assert_ok!(variables.set(
-            "swap".to_string(),
+            "swap-fg-bg".to_string(),
             Variable::Const(Argument::Script(Script {
                 command: Command::ColorSetting(ColorSetting::Foreground),
                 arguments: vec![Argument::Script(Script {
@@ -1649,7 +1654,6 @@ impl Variables {
         assert_ok!(variables.set("f-clone".to_string(), Variable::Alias("fc".to_string())));
         assert_ok!(variables.set("f-index".to_string(), Variable::Alias("f".to_string())));
         assert_ok!(variables.set("f-remove".to_string(), Variable::Alias("fr".to_string())));
-        assert_ok!(variables.set("fs".to_string(), Variable::Alias("shift".to_string())));
         assert_ok!(variables.set("f-shift".to_string(), Variable::Alias("shift".to_string())));
         assert_ok!(variables.set("f-shift-x".to_string(), Variable::Alias("fsx".to_string())));
         assert_ok!(variables.set("f-shift-y".to_string(), Variable::Alias("fsy".to_string())));
@@ -3589,7 +3593,7 @@ mod test {
     #[test]
     fn test_variables_can_serialize_built_ins() {
         let variables = Variables::with_built_ins();
-        let name = "swap".to_string();
+        let name = "swap-fg-bg".to_string();
         let swap = variables
             .get(&name)
             .to_argument()
