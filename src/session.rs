@@ -2989,7 +2989,7 @@ impl Session {
         Ok(())
     }
 
-    fn active_view_rect(&self, mut r: Rect<i32>) -> Rect<i32> {
+    fn active_view_rect(&self, r: Rect<i32>) -> Rect<i32> {
         let v = self.active_view();
         Rect {
             x1: r.x1,

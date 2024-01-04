@@ -175,7 +175,7 @@ pub fn init<P: AsRef<Path>>(paths: &[P], options: Options<'_>) -> std::io::Resul
         Duration::default(),
         Duration::default(),
     );
-    renderer.init(effects, &session);
+    renderer.init(effects, &mut session);
 
     let mut render_timer = FrameTimer::new();
     let mut update_timer = FrameTimer::new();

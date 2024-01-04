@@ -4,7 +4,7 @@ use crate::execution::Execution;
 use crate::font::TextBatch;
 use crate::platform::{self, LogicalSize};
 use crate::renderer;
-use crate::session::{self, Blending, Effect, Session};
+use crate::session::{self, Blending, Effect, Selection, Session};
 use crate::settings::*;
 use crate::sprite;
 use crate::util;
@@ -464,7 +464,7 @@ impl<'a> renderer::Renderer<'a> for Renderer {
         })
     }
 
-    fn init(&mut self, effects: Vec<Effect>, session: &Session) {
+    fn init(&mut self, effects: Vec<Effect>, session: &mut Session) {
         self.handle_effects(effects, session).unwrap();
     }
 
@@ -947,7 +947,7 @@ impl Renderer {
     fn handle_effects(
         &mut self,
         mut effects: Vec<Effect>,
-        session: &Session,
+        session: &mut Session,
     ) -> Result<(), RendererError> {
         for eff in effects.drain(..) {
             match eff {
@@ -971,8 +971,12 @@ impl Renderer {
                     self.view_data.remove(&id);
                 }
                 Effect::ViewOps(id, ops) => {
-                    // TODO: add mutable session.selection here so we can update it.
-                    self.handle_view_ops(session.view(id), &ops)?;
+                    if let Some(rect) =
+                        self.handle_view_ops(session.view(id), session.selection, &ops)?
+                    {
+                        session.selection =
+                            Some(Selection::new(rect.x1, rect.y1, rect.x2, rect.y2));
+                    }
                 }
                 Effect::ViewDamaged(id, Some(extent)) => {
                     self.handle_view_resized(session.view(id), extent.width(), extent.height())?;
@@ -998,8 +1002,9 @@ impl Renderer {
     fn handle_view_ops(
         &mut self,
         v: &View<ViewResource>,
+        selection: Option<Selection>,
         ops: &[ViewOp],
-    ) -> Result<(), RendererError> {
+    ) -> Result<Option<Rect<i32>>, RendererError> {
         use RendererError as Error;
 
         for op in ops {
@@ -1173,11 +1178,13 @@ impl Renderer {
                 }
                 ViewOp::Paste(mut dst) => {
                     let [paste_w, paste_h] = self.paste.size();
-                    if dst.area() == 1 {
-                        // TODO: update session.selection here
+                    let result = if dst.area() == 1 {
                         dst.x2 = dst.x1 + paste_w as i32;
                         dst.y1 = dst.y2 - paste_h as i32; // with graphics, y up is positive.
-                    }
+                        Some(dst)
+                    } else {
+                        None
+                    };
                     let batch = sprite2d::Batch::singleton(
                         paste_w,
                         paste_h,
@@ -1193,6 +1200,7 @@ impl Renderer {
                         self.ctx
                             .tessellation::<_, Sprite2dVertex>(batch.vertices().as_slice()),
                     );
+                    return Ok(result);
                 }
                 ViewOp::SetPixel(rgba, x, y) => {
                     let fb = &mut self
@@ -1209,7 +1217,7 @@ impl Renderer {
                 }
             }
         }
-        Ok(())
+        Ok(None)
     }
 
     fn handle_view_damaged(&mut self, view: &View<ViewResource>) -> Result<(), RendererError> {
