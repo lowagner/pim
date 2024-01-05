@@ -752,7 +752,10 @@ impl<'a> renderer::Renderer<'a> for Renderer {
                                     .bind_texture(v.layer.fb.color_slot())
                                     .expect("binding textures never fails");
                                 let zoom = view.zoom as f32;
+                                let anim_width = zoom * view.fw as f32;
                                 let anim_height = zoom * view.height() as f32;
+                                let anim_y = session.offset.y;
+                                /* TODO: for some reason this code doesn't work well in certain zooms?
                                 let anim_y = if anim_height
                                     > session.height - 2.0 * session.palette.cellsize
                                 {
@@ -762,13 +765,17 @@ impl<'a> renderer::Renderer<'a> for Renderer {
                                     // Show at the top of the screen.
                                     session.height - session.palette.cellsize - anim_height
                                 };
-                                let t = Matrix4::from_translation(Vector3::new(
-                                    // Always show the animation on the far right,
-                                    // irrespective of session.offset.x:
-                                    session.width - session.palette.cellsize,
-                                    anim_y,
-                                    0.0,
-                                ));
+                                */
+                                let anim_x = if session.offset.x * zoom > view.width() as f32 * 0.55
+                                {
+                                    // Show on the left, give room for 32 palette colors
+                                    2.0 * session.palette.cellsize + anim_width
+                                } else {
+                                    // Show to the right
+                                    session.width - session.palette.cellsize
+                                };
+                                let t =
+                                    Matrix4::from_translation(Vector3::new(anim_x, anim_y, 0.0));
 
                                 // Render layer animation.
                                 // TODO: add a session.ui-bg square behind the animation in case it overlaps
