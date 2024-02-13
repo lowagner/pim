@@ -66,8 +66,10 @@ bind-select <del>           s-erase            ()
 bind-select 'v'             s-paste            ()
 bind-select <ctrl><v>       s-paste            ()
 bind-select <ctrl><c>       (run-all s-copy (mode 'select')) () --  Copy without switching to pasting mode.
-bind-select 'w'             (s-move fw 0)
-bind-select 'b'             (s-move (* -1 fw) 0)
+bind-select <w>             (mirrorx) ()
+bind-select <shift><w>      (mirrory) ()
+bind-select <a>             (s-move fw 0)                       -- Advance the selection one frame.
+bind-select <b>             (s-move (* -1 fw) 0)                -- Back the selection up one frame.
 bind-select <up>            (s-move  0 -1)
 bind-select <down>          (s-move  0  1)
 bind-select <left>          (s-move -1  0)
