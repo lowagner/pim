@@ -30,7 +30,7 @@ bind-normal 'f'             (tool buckett)      ()              --  Flood tool
 -- commands with press and release scripts need to be tagged inputs, e.g., <e>
 bind-normal <e>             (b-erase 1) (b-erase 0)             --  Erase (hold)
 bind-normal <shift>         (b-multi 1) (b-multi 0)             --  Multi-brush (hold)
-bind-normal '='             (b-perfect (not b-perfect))         --  Toggle pixel-perfect brush
+bind-normal <a>             (b-perfect (not b-perfect))         --  Toggle pixel-perfect brush
 bind-normal ']'             b-size++                            --  Increase brush size
 bind-normal '['             b-size--                            --  Decrease brush size
 bind-normal <ctrl>          (tool samplert) (tool $0)           --  Sample color (hold)
