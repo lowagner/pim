@@ -804,32 +804,14 @@ impl View<ViewResource> {
         };
 
         // Mark the view as saved at a specific snapshot and with the given path.
-        match self.file_status {
-            FileStatus::Modified(ref curr_fs) | FileStatus::New(ref curr_fs) => {
-                if curr_fs == storage {
-                    self.saved(edit_id, storage.clone());
-                }
-            }
-            FileStatus::NoFile | FileStatus::NoFileModified => {
-                self.saved(edit_id, storage.clone());
-            }
-            FileStatus::Saved(_) => {}
-        }
+        self.saved(edit_id, storage.clone());
 
         Ok(written)
     }
 
-    /// Save part of a layer to disk.
+    /// Save part of a layer to disk.  Will overwrite.
     fn save_rect_as(&mut self, rect: Rect<u32>, path: &std::path::Path) -> io::Result<EditId> {
-        // Only allow overwriting of files if it's the file of the view being saved.
-        if path.exists() && self.file_equals(path) {
-            return Err(io::Error::new(
-                io::ErrorKind::AlreadyExists,
-                format!("\"{}\" already exists", path.display()),
-            ));
-        }
         let (e_id, _) = self.save(rect, path)?;
-
         Ok(e_id)
     }
 }
