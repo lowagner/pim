@@ -1426,8 +1426,8 @@ impl Session {
     /// Private ///////////////////////////////////////////////////////////////////
 
     /// Export a view in a specific format.
-    fn export_as(&mut self, id: ViewId, path: &Path, scale: u32) -> io::Result<()> {
-        let ext = get_extension(&path)?;
+    fn export_as(&mut self, id: ViewId, path: &Path, scale: u32) -> ArgumentResult {
+        let ext = get_extension(&path).map_err(|e| format!("{}", e))?;
 
         let written = match ext {
             "gif" => {
@@ -1439,22 +1439,21 @@ impl Session {
                 // TODO: maybe just pass in `view.animation` so we have access to delay
                 //       as well as animation.len()
                 view.resource
-                    .save_gif(path, view.animation.delay, &palette, scale)?
+                    .save_gif(path, view.animation.delay, &palette, scale)
             }
-            "svg" => self.view(id).save_svg(path, scale)?,
-            "png" => self.view(id).save_png(path, scale)?,
-            _ => {
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidInput,
-                    format!("`{}` is not a supported export format", ext),
-                ));
-            }
-        };
-        self.message(
-            format!("\"{}\" {} pixels written", path.display(), written),
-            MessageType::Info,
-        );
-        Ok(())
+            "svg" => self.view(id).save_svg(path, scale),
+            "png" => self.view(id).save_png(path, scale),
+            _ => Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!("`{}` is not a supported export format", ext),
+            )),
+        }
+        .map_err(|e| format!("{}", e))?;
+        Ok(Argument::String(format!(
+            "\"{}\" {} pixels written",
+            path.display(),
+            written
+        )))
     }
 
     /// Load a view into the session.
@@ -3196,44 +3195,35 @@ impl Session {
         self.key_bindings.add(mode, key_binding);
     }
 
-    fn script_write(&mut self, arg0: Option<String>, arg1: Option<i64>) -> VoidResult {
+    fn script_write(&mut self, path: Option<String>, scale: Option<i64>) -> ArgumentResult {
         // TODO: clean up `export_as` and `save_view` logic
-        let scale = arg1.unwrap_or(1) as u32;
+        let scale = scale.unwrap_or(1) as u32;
         if scale < 1 || scale > 16 {
-            return Err(format!(
-                "invalid scale for writing to file: {}",
-                arg1.unwrap()
-            ));
+            return Err(format!("invalid scale for writing to file: {}", scale));
         }
-        let arg0 = arg0.as_ref().map(|p| Path::new(p));
+        let path = path.as_ref().map(|p| Path::new(p));
         let rewrite_save_file = scale == 1
-            && arg0.as_ref().map_or(true, |path| {
+            && path.as_ref().map_or(true, |path| {
                 get_extension(&path).map_or(false, |ext| ext == "png")
             });
-        match arg0 {
+        match path {
             None => match self.save_view(self.views.active_id) {
-                Ok((storage, written)) => self.message(
-                    format!("\"{}\" {} pixels written", storage, written),
-                    MessageType::Info,
-                ),
-                Err(err) => self.message(format!("Error: {}", err), MessageType::Error),
+                Ok((storage, written)) => Ok(Argument::String(format!(
+                    "\"{}\" {} pixels written",
+                    storage, written
+                ))),
+                Err(err) => Err(format!("{}", err)),
             },
             Some(path) if rewrite_save_file => match self.active_view_mut().save_as(&path.into()) {
-                Ok(written) => self.message(
-                    format!("\"{}\" {} pixels written", path.display(), written),
-                    MessageType::Info,
-                ),
-                Err(err) => self.message(format!("Error: {}", err), MessageType::Error),
+                Ok(written) => Ok(Argument::String(format!(
+                    "\"{}\" {} pixels written",
+                    path.display(),
+                    written
+                ))),
+                Err(err) => Err(format!("{}", err)),
             },
-            Some(path) => {
-                if let Err(err) = self.export_as(self.active_view().id, path, scale) {
-                    self.message(format!("Error: {}", err), MessageType::Error);
-                }
-                // TODO: probably should have an export message otherwise.
-            }
+            Some(path) => self.export_as(self.active_view().id, path, scale),
         }
-        // TODO: clean up self.message above, do it when hearing back from evaluations in script.rs.
-        Ok(())
     }
 
     pub fn script_quit(&mut self, quit: Quit) -> ArgumentResult {

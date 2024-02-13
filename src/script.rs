@@ -790,8 +790,7 @@ macro_rules! script_runner {
                             .script_evaluate(&script_stack, Evaluate::Index(0))?.get_optional_string("for path")?;
                         let arg1 = self
                             .script_evaluate(&script_stack, Evaluate::Index(1))?.get_optional_i64("for scale")?;
-                        self.script_write(arg0, arg1)?;
-                        Ok(Argument::Null)
+                        self.script_write(arg0, arg1)
                     }
                     Command::Quit(q) => self.script_quit(*q),
                 }
@@ -2015,10 +2014,10 @@ mod test {
                 .push(WhatRan::Mocked(format!("bind{:?}{:?}", mode, binding)));
         }
 
-        fn script_write(&mut self, arg0: Option<String>, arg1: Option<i64>) -> VoidResult {
+        fn script_write(&mut self, path: Option<String>, scale: Option<i64>) -> ArgumentResult {
             self.test_what_ran
-                .push(WhatRan::Mocked(format!("write{{{:?}, {:?}}}", arg0, arg1)));
-            Ok(())
+                .push(WhatRan::Mocked(format!("write{{{:?}, {:?}}}", path, scale)));
+            Ok(Argument::String("wrote some stuff".into()))
         }
 
         fn script_quit(&mut self, quit: Quit) -> ArgumentResult {
