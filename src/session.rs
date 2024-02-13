@@ -1235,11 +1235,7 @@ impl Session {
                     } else {
                         (Self::DEFAULT_VIEW_W, Self::DEFAULT_VIEW_H)
                     };
-                    self.blank(
-                        FileStatus::New(FileStorage::Single(path.with_extension("png"))),
-                        w,
-                        h,
-                    );
+                    self.blank(FileStatus::New(path.with_extension("png")), w, h);
                 }
                 success_count += 1;
             }
@@ -1393,8 +1389,8 @@ impl Session {
 
             if frames.clone().all(|(w, h, _)| w == fw && h == fh) {
                 let frames: Vec<_> = frames.map(|(_, _, pixels)| pixels).collect();
-                // TODO: don't use Range here.
-                self.add_view(FileStatus::Saved(FileStorage::Range(paths)), fw, fh, frames);
+                // TODO: should replace the current view, not create a new view.
+                self.add_view(FileStatus::NoFileModified, fw, fh, frames);
             } else {
                 return Err(io::Error::new(
                     io::ErrorKind::Other,
@@ -1463,10 +1459,7 @@ impl Session {
 
         debug!("load: {:?}", path);
 
-        if let Some(View { id, .. }) = self
-            .views
-            .find(|v| v.file_storage().map_or(false, |f| f.contains(&*path)))
-        {
+        if let Some(View { id, .. }) = self.views.find(|v| v.file_equals(&path)) {
             // View is already loaded.
             let id = *id;
             eprint!("centering {}\n", id);
@@ -1480,7 +1473,7 @@ impl Session {
                 let (width, height, pixels) = crate::io::load_image(&*path)?;
 
                 self.add_view(
-                    FileStatus::Saved(FileStorage::Single((*path).into())),
+                    FileStatus::Saved((*path).into()),
                     width,
                     height,
                     vec![pixels],
@@ -3210,16 +3203,20 @@ impl Session {
             None => match self.save_view(self.views.active_id) {
                 Ok((storage, written)) => Ok(Argument::String(format!(
                     "\"{}\" {} pixels written",
-                    storage, written
+                    storage.display(),
+                    written
                 ))),
                 Err(err) => Err(format!("{}", err)),
             },
             Some(path) if rewrite_save_file => match self.active_view_mut().save_as(&path.into()) {
-                Ok(written) => Ok(Argument::String(format!(
-                    "\"{}\" {} pixels written",
-                    path.display(),
-                    written
-                ))),
+                Ok(written) => {
+                    self.views.detach_inactive_from(path);
+                    Ok(Argument::String(format!(
+                        "\"{}\" {} pixels written",
+                        path.display(),
+                        written
+                    )))
+                }
                 Err(err) => Err(format!("{}", err)),
             },
             Some(path) => self.export_as(self.active_view().id, path, scale),

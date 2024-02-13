@@ -253,6 +253,10 @@ impl<R> View<R> {
         }
     }
 
+    pub fn file_equals(&self, path: &std::path::Path) -> bool {
+        self.file_storage().map_or(false, |f| f == path)
+    }
+
     /// Extend the view by one frame after the passed-in index.
     pub fn add_frame_after(&mut self, index: usize) {
         let (fw, fh) = (self.fw, self.fh);
@@ -787,27 +791,16 @@ impl View<ViewResource> {
 
     pub fn save_as(&mut self, storage: &FileStorage) -> io::Result<usize> {
         let ext = self.extent();
-        let (edit_id, written) = match &storage {
-            FileStorage::Single(path) => {
-                {
-                    let mut path_copy = path.clone();
-                    path_copy.pop();
-                    std::fs::create_dir_all(path_copy.as_path())?;
-                }
-
-                let edit_id = self.save_rect_as(ext.rect(), path)?;
-
-                (edit_id, (ext.width() * ext.height()) as usize)
+        let (edit_id, written) = {
+            {
+                let mut path_copy = storage.clone();
+                path_copy.pop();
+                std::fs::create_dir_all(path_copy.as_path())?;
             }
-            FileStorage::Range(paths) => {
-                for (i, path) in paths.iter().enumerate() {
-                    self.save_rect_as(ext.frame(i), path)?;
-                }
 
-                let edit_id = self.resource.current_edit();
+            let edit_id = self.save_rect_as(ext.rect(), storage)?;
 
-                (edit_id, paths.len() * (ext.fw * ext.fh) as usize)
-            }
+            (edit_id, (ext.width() * ext.height()) as usize)
         };
 
         // Mark the view as saved at a specific snapshot and with the given path.
@@ -829,7 +822,7 @@ impl View<ViewResource> {
     /// Save part of a layer to disk.
     fn save_rect_as(&mut self, rect: Rect<u32>, path: &std::path::Path) -> io::Result<EditId> {
         // Only allow overwriting of files if it's the file of the view being saved.
-        if path.exists() && self.file_storage().map_or(true, |f| !f.contains(path)) {
+        if path.exists() && self.file_equals(path) {
             return Err(io::Error::new(
                 io::ErrorKind::AlreadyExists,
                 format!("\"{}\" already exists", path.display()),
@@ -873,78 +866,15 @@ impl ToString for FileStatus {
         match self {
             FileStatus::NoFile => String::new(),
             FileStatus::NoFileModified => String::new(),
-            FileStatus::Saved(ref storage) => format!("{}", storage),
-            FileStatus::New(ref storage) => format!("{} [new]", storage),
-            FileStatus::Modified(ref storage) => format!("{} [modified]", storage),
+            FileStatus::Saved(ref storage) => format!("{}", storage.display()),
+            FileStatus::New(ref storage) => format!("{} [new]", storage.display()),
+            FileStatus::Modified(ref storage) => format!("{} [modified]", storage.display()),
         }
     }
 }
 
 /// Representation of the view data on disk.
-#[derive(PartialEq, Eq, Clone, Debug)]
-pub enum FileStorage {
-    /// Stored as a range of files.
-    // TODO: i think we might be able to remove this.
-    Range(NonEmpty<std::path::PathBuf>),
-    /// Stored as a single file.
-    Single(std::path::PathBuf),
-}
-
-impl fmt::Display for FileStorage {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Range(paths) => {
-                let parent = paths.first().parent();
-
-                if paths.iter().all(|p| p.parent() == parent) {
-                    let first = paths
-                        .first()
-                        .file_stem()
-                        .expect("the path has a file stem")
-                        .to_string_lossy()
-                        .into_owned();
-                    let last = paths
-                        .last()
-                        .file_name()
-                        .expect("the path has a file name")
-                        .to_string_lossy();
-
-                    let first = if let Some(parent) = parent {
-                        parent.join(first)
-                    } else {
-                        first.into()
-                    };
-
-                    write!(f, "{} .. {}", first.display(), last)
-                } else {
-                    write!(f, "*")
-                }
-            }
-            Self::Single(path) => write!(f, "{}", path.display()),
-        }
-    }
-}
-
-impl From<&std::path::Path> for FileStorage {
-    fn from(p: &std::path::Path) -> Self {
-        FileStorage::Single(p.into())
-    }
-}
-
-impl From<std::path::PathBuf> for FileStorage {
-    fn from(p: std::path::PathBuf) -> Self {
-        FileStorage::Single(p)
-    }
-}
-
-impl FileStorage {
-    pub fn contains<P: AsRef<std::path::Path>>(&self, p: P) -> bool {
-        match self {
-            Self::Single(buf) => buf.as_path() == p.as_ref(),
-            Self::Range(bufs) => bufs.iter().any(|buf| buf.as_path() == p.as_ref()),
-        }
-    }
-}
+pub type FileStorage = std::path::PathBuf;
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -1058,6 +988,19 @@ impl<R> ViewManager<R> {
     /// Get a view, mutably.
     pub fn get_mut(&mut self, id: ViewId) -> Option<&mut View<R>> {
         self.views.get_mut(&id)
+    }
+
+    /// If any inactive view uses the passed-in path, we'll detach the view
+    /// so that default saving won't overwrite that file.  This is used when
+    /// an active view saves as a different file name, which might already
+    /// exist in the list of views.
+    pub fn detach_inactive_from(&mut self, path: &std::path::Path) {
+        let active_id = self.active_id;
+        for v in self.iter_mut() {
+            if v.id != active_id && v.file_equals(path) {
+                v.file_status = FileStatus::NoFileModified;
+            }
+        }
     }
 
     /// Find a view.
