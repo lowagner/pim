@@ -1312,9 +1312,7 @@ impl Session {
 
         let (fw, fh, frame) = crate::io::concatenate_images(&paths)?;
         self.add_view(
-            // Don't save as a range; we want to allow the user to
-            // save this as a new file.
-            FileStatus::NoFile,
+            FileStatus::NoFileModified,
             fw,
             fh,
             vec![frame],
