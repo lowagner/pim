@@ -1198,6 +1198,7 @@ impl Session {
 
         let (mut success_count, mut fail_count) = (0usize, 0usize);
 
+        let mut first_loaded_id = None;
         for path in paths {
             let path = path.as_ref();
 
@@ -1214,9 +1215,16 @@ impl Session {
                         continue;
                     }
 
-                    if self.load_view(path).is_err() {
-                        fail_count += 1;
-                        continue;
+                    match self.load_view(path) {
+                        Ok(id) => {
+                            if first_loaded_id.is_none() {
+                                first_loaded_id = Some(id);
+                            }
+                        }
+                        Err(_) => {
+                            fail_count += 1;
+                            continue;
+                        }
                     }
 
                     success_count += 1;
@@ -1225,9 +1233,15 @@ impl Session {
                 self.source_dir(path).ok();
             } else {
                 if path.exists() {
-                    self.load_view(path)?;
+                    let id = self.load_view(path)?;
+                    if first_loaded_id.is_none() {
+                        first_loaded_id = Some(id);
+                    }
                 } else if !path.exists() && path.with_extension("png").exists() {
-                    self.load_view(path.with_extension("png"))?;
+                    let id = self.load_view(path.with_extension("png"))?;
+                    if first_loaded_id.is_none() {
+                        first_loaded_id = Some(id);
+                    }
                 } else {
                     let (w, h) = if !self.views.is_empty() {
                         let v = self.active_view();
@@ -1245,9 +1259,9 @@ impl Session {
             return Err(io::Error::new(io::ErrorKind::Other, "no images to edit"));
         }
 
-        if let Some(id) = self.views.last().map(|v| v.id) {
+        if let Some(last_id) = self.views.last().map(|v| v.id) {
             self.organize_views();
-            self.edit_view(id);
+            self.edit_view(first_loaded_id.unwrap_or(last_id));
         }
 
         Ok((success_count, fail_count))
@@ -1259,13 +1273,19 @@ impl Session {
         if paths.is_empty() {
             return Err("include files to concatentae in the command".to_string());
         }
-        if let Err(e) = self.concatenate_internal(paths) {
-            return Err(format!("Error concatenating image(s): {}", e));
+        match self.concatenate_internal(paths) {
+            Ok(id) => {
+                self.organize_views();
+                self.edit_view(id);
+            }
+            Err(e) => {
+                return Err(format!("Error concatenating image(s): {}", e));
+            }
         }
         Ok(())
     }
 
-    fn concatenate_internal<P: AsRef<Path>>(&mut self, paths: &[P]) -> io::Result<()> {
+    fn concatenate_internal<P: AsRef<Path>>(&mut self, paths: &[P]) -> io::Result<ViewId> {
         let completer = FileCompleter::new(&self.cwd, path::SUPPORTED_READ_FORMATS);
         // TODO: remove, don't source here.
         let mut dirs = Vec::new();
@@ -1311,21 +1331,12 @@ impl Session {
         }
 
         let (fw, fh, frame) = crate::io::concatenate_images(&paths)?;
-        self.add_view(
-            FileStatus::NoFileModified,
-            fw,
-            fh,
-            vec![frame],
-        );
+        let id = self.add_view(FileStatus::NoFileModified, fw, fh, vec![frame]);
 
-        if let Some(id) = self.views.last().map(|v| v.id) {
-            self.organize_views();
-            self.edit_view(id);
-        }
-
-        Ok(())
+        Ok(id)
     }
 
+    // TODO: return the ViewId and organize views if successful
     fn append_internal<P: AsRef<Path>>(&mut self, paths: &[P]) -> io::Result<()> {
         let completer = FileCompleter::new(&self.cwd, path::SUPPORTED_READ_FORMATS);
         // TODO: remove, don't source here.
@@ -1451,7 +1462,7 @@ impl Session {
     }
 
     /// Load a view into the session.
-    fn load_view<P: AsRef<Path>>(&mut self, path: P) -> io::Result<()> {
+    fn load_view<P: AsRef<Path>>(&mut self, path: P) -> io::Result<ViewId> {
         let path = path.as_ref();
         let path = view::Path::try_from(path)?;
 
@@ -1459,18 +1470,14 @@ impl Session {
 
         if let Some(View { id, .. }) = self.views.find(|v| v.file_equals(&path)) {
             // View is already loaded.
-            let id = *id;
-            eprint!("centering {}\n", id);
-            // TODO: for some reason this doesn't always center.
-            self.edit_view(id);
-            return Ok(());
+            return Ok(*id);
         }
 
         match path.format {
             view::Format::Png => {
                 let (width, height, pixels) = crate::io::load_image(&*path)?;
 
-                self.add_view(
+                let id = self.add_view(
                     FileStatus::Saved((*path).into()),
                     width,
                     height,
@@ -1480,6 +1487,7 @@ impl Session {
                     format!("\"{}\" {} pixels read", path.display(), width * height),
                     MessageType::Info,
                 );
+                Ok(id)
             }
             view::Format::Gif => {
                 return Err(io::Error::new(
@@ -1488,8 +1496,6 @@ impl Session {
                 ));
             }
         }
-
-        Ok(())
     }
 
     fn add_view(
