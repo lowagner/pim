@@ -9,7 +9,6 @@ use strum_macros::EnumIter;
 
 use std::fmt;
 use std::path::Path;
-use std::process::Command as Terminal;
 use std::str::FromStr;
 
 pub const COMMENT: char = '-';
@@ -617,8 +616,7 @@ impl CommandLine {
     }
 
     pub fn parse(&self, input: &str) -> Result<Script, Error> {
-        let input = preparse(input);
-        match self.parser.parse(&input) {
+        match self.parser.parse(input) {
             Ok((script, _)) => Ok(script),
             Err((err, _)) => Err(err),
         }
@@ -767,27 +765,6 @@ impl CommandLine {
 
     fn peek_back(&self) -> Option<char> {
         self.input[..self.cursor].chars().next_back()
-    }
-}
-
-fn preparse(input: &str) -> String {
-    // TODO: probably need to build our own implementation.
-    if cfg!(target_os = "windows") {
-        input.to_string()
-    } else {
-        // I tried to find a nice brace expansion in rust, I really did.
-        // But everyone interprets `hello {world,earth}` as [`hello world`, `hello earth`]
-        // and that's actually not what I want.  I only want connected brace expansion,
-        // i.e., `hello {world,earth}` becomes `hello world earth` and `h{i,ey,ello}!`
-        // becomes `hi! hey! hello!`
-        let output = vec!["echo", input].join(" ");
-        match Terminal::new("bash").arg("-c").arg(output).output() {
-            Ok(output) => match std::str::from_utf8(&output.stdout) {
-                Ok(output) if output.len() > 0 => output[..output.len() - 1].to_string(),
-                _ => input.to_string(),
-            },
-            Err(_) => input.to_string(),
-        }
     }
 }
 
@@ -1152,27 +1129,4 @@ mod test {
             assert_eq!(cli.peek_back(), Some('o'));
         }
     */
-
-    #[test]
-    fn test_preparse() {
-        assert_eq!(preparse("hello my test"), "hello my test".to_string());
-        assert_eq!(
-            preparse("hello {moon,earth,world}!"),
-            "hello moon! earth! world!".to_string()
-        );
-        assert_eq!(preparse("h{i,ey,ello}!"), "hi! hey! hello!".to_string());
-        assert_eq!(
-            preparse("!{hello,hi}{earth,world}?"),
-            "!helloearth? !helloworld? !hiearth? !hiworld?".to_string()
-        );
-        assert_eq!(
-            preparse("!{hello,hi}{earth,world}?"),
-            "!helloearth? !helloworld? !hiearth? !hiworld?".to_string()
-        );
-        assert_eq!(
-            // TODO: we shouldn't have to escape () here.  maybe?
-            preparse("my_cmd (x{1,3,7}y)"),
-            "my_cmd (x1y x3y x7y)".to_string()
-        );
-    }
 }
