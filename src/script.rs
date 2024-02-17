@@ -945,12 +945,14 @@ impl Variables {
         }
     }
 
-    /// Returns the Argument represented by this name, returning Null if not present in the map.
+    /// Returns the Argument represented by this name, returning a string if not present in the map.
+    /// Returning the string of the name is a bit brittle, but it might be expected if you
+    /// are trying to open a file name (without the .png extension), to avoid using quotes.
     // Notice that we resolve aliases here so that you'll definitely get an argument.
     pub fn get<'a>(&'a self, mut name: &'a String) -> Get {
         for _iteration in 1..24 {
             match &self.map.get(name) {
-                None => return Get::Argument(Argument::Null),
+                None => return Get::Argument(Argument::String(name.clone())),
                 Some(variable) => match variable {
                     Variable::Const(arg) => return Get::Argument(arg.clone()),
                     Variable::Mutable(arg) => return Get::Argument(arg.clone()),
@@ -3694,8 +3696,11 @@ mod test {
         let mut variables = Variables::new();
 
         let var_name = "wyzx".to_string();
-        // Nothing in variables yet:
-        assert_eq!(variables.get(&var_name).to_argument(), Argument::Null);
+        // Nothing useful in variables yet:
+        assert_eq!(
+            variables.get(&var_name).to_argument(),
+            Argument::String(var_name.clone())
+        );
 
         // First assignment is fine:
         assert_eq!(
@@ -3718,8 +3723,11 @@ mod test {
         let mut variables = Variables::new();
 
         let var_name = "cdef".to_string();
-        // Nothing in variables yet:
-        assert_eq!(variables.get(&var_name).to_argument(), Argument::Null);
+        // Nothing in variables yet, so it'll use the name as the return string:
+        assert_eq!(
+            variables.get(&var_name).to_argument(),
+            Argument::String(var_name.clone())
+        );
 
         // First assignment is fine:
         assert_eq!(
@@ -3786,13 +3794,13 @@ mod test {
         let z = "Z".to_string();
 
         _ = variables.set(x.clone(), Variable::Alias(y.clone()));
-        // If Y isn't defined yet:
-        assert_eq!(variables.get(&x).to_argument(), Argument::Null);
+        // If Y isn't defined yet, so it'll resolve to Y's name:
+        assert_eq!(variables.get(&x).to_argument(), Argument::String(y.clone()));
 
         _ = variables.set(y.clone(), Variable::Alias(z.clone()));
-        // Z isn't defined yet, either:
-        assert_eq!(variables.get(&x).to_argument(), Argument::Null);
-        assert_eq!(variables.get(&y).to_argument(), Argument::Null);
+        // Z isn't defined yet, either, so it'll resolve to Z's name:
+        assert_eq!(variables.get(&x).to_argument(), Argument::String(z.clone()));
+        assert_eq!(variables.get(&y).to_argument(), Argument::String(z.clone()));
 
         _ = variables.set(z.clone(), Variable::Const(Argument::I64(123)));
         assert_eq!(variables.get(&x).to_argument(), Argument::I64(123));
