@@ -48,6 +48,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "327762f6e5a765692301e5bb513e0d9fef63be86bbc14528052b1cd3e6f03e07"
 
 [[package]]
+name = "brace-expand"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c3adb80ee272c844254166ea32c8ae11c211b3639a293fdde41b1645b6be2c62"
+
+[[package]]
 name = "bumpalo"
 version = "3.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -522,6 +528,7 @@ name = "pim"
 version = "0.6.0"
 dependencies = [
  "arrayvec",
+ "brace-expand",
  "chrono",
  "claim",
  "digest",

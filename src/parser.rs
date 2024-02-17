@@ -77,14 +77,18 @@ fn get_argument_parser(lookback: i32) -> Parser<Argument> {
             // Prevent stack overflow (script within argument recursion).
             // Only spin up another script parser if we're within a new `()` block.
             if input.starts_with('(') {
-                if input.starts_with("()") {
+                // We could have ` ( command` so let's make sure that works.
+                // If we fire up the script parser immediately it won't work
+                // with leading whitespace.
+                let input = &input[1..].trim_start();
+                if input.starts_with(")") {
                     return Ok((
                         (Argument::Script(Script::zero_arg(Command::NoOp))),
-                        &input[2..],
+                        &input[1..],
                     ));
                 }
                 let nested_script_parser = get_script_parser(lookback - 1);
-                return match nested_script_parser.parse(&input[1..]) {
+                return match nested_script_parser.parse(input) {
                     Ok((nested_script, rest)) if rest.starts_with(')') => {
                         Ok((Argument::Script(nested_script), &rest[1..]))
                     }
@@ -195,6 +199,10 @@ pub fn word() -> Parser<String> {
     many(letter())
 }
 
+pub fn not_whitespace() -> Parser<String> {
+    many::<_, String>(satisfy(|c| !c.is_whitespace(), "!<whitespace>"))
+}
+
 /// The next run of consecutive, non-white-space characters that aren't `(` or `)`.
 /// We need to avoid () so that we can create scripts like this:
 /// `const 'my-script' (fg #123456)` and not get `(fg` lumped in one token
@@ -204,6 +212,10 @@ pub fn token() -> Parser<String> {
         |c| !c.is_whitespace() && c != '(' && c != ')',
         "!<whitespace>",
     ))
+}
+
+pub fn command_parentheses() -> Parser<String> {
+    many::<_, String>(satisfy(|c| c == '(' || c == ')', "<()>"))
 }
 
 pub fn comment() -> Parser<String> {
@@ -482,16 +494,30 @@ impl Parse for BrushMode {
     }
 }
 
+pub fn keep_quoted() -> Parser<String> {
+    single_quoted(true).or(double_quoted(true))
+}
+
 pub fn quoted() -> Parser<String> {
-    single_quoted().or(double_quoted())
+    single_quoted(false).or(double_quoted(false))
 }
 
-pub fn single_quoted() -> Parser<String> {
-    between('\'', '\'', until(symbol('\'')))
+fn single_quoted(keep_quotes: bool) -> Parser<String> {
+    let parser = between('\'', '\'', until(symbol('\'')));
+    if keep_quotes {
+        parser.map(|s| format!("'{}'", s))
+    } else {
+        parser
+    }
 }
 
-pub fn double_quoted() -> Parser<String> {
-    between('"', '"', until(symbol('"')))
+fn double_quoted(keep_quotes: bool) -> Parser<String> {
+    let parser = between('"', '"', until(symbol('"')));
+    if keep_quotes {
+        parser.map(|s| format!("\"{}\"", s))
+    } else {
+        parser
+    }
 }
 
 pub fn tuple<O>(x: Parser<O>, y: Parser<O>) -> Parser<(O, O)> {
@@ -600,8 +626,9 @@ mod test {
     fn test_script_with_nested_scripts() {
         let p = Script::parser();
 
+        // Ensure testing `(` with space or no space directly after.
         let (result, rest) = p
-            .parse("if $10 (hello 'world' (hi 42 \"earth\" $5)) (hey 'moon' -7 $93)")
+            .parse("if $10 (hello 'world' ( hi 42 \"earth\" $5 )) (  hey 'moon' -7 $93  )")
             .unwrap();
 
         assert_eq!(rest, "");

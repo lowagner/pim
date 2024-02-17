@@ -4,6 +4,7 @@ use crate::parser::*;
 use crate::script::Script;
 use crate::settings::*;
 
+use brace_expand::brace_expand;
 use memoir::*;
 use strum_macros::EnumIter;
 
@@ -616,7 +617,8 @@ impl CommandLine {
     }
 
     pub fn parse(&self, input: &str) -> Result<Script, Error> {
-        match self.parser.parse(input) {
+        let input = preparse(input);
+        match self.parser.parse(&input) {
             Ok((script, _)) => Ok(script),
             Err((err, _)) => Err(err),
         }
@@ -765,6 +767,21 @@ impl CommandLine {
 
     fn peek_back(&self) -> Option<char> {
         self.input[..self.cursor].chars().next_back()
+    }
+}
+
+fn preparse(input: &str) -> String {
+    let parser = many::<_, Vec<String>>(
+        command_parentheses()
+            // We want to ignore {} and , inside of quotes.
+            .or(keep_quoted())
+            .or(token().map(|string| brace_expand(&string).join(" ")))
+            .skip(optional(whitespace())),
+    );
+    match parser.parse(input) {
+        Ok((result, _rest)) => result.join(" "),
+        // Fall back on no brace expansions:
+        Err(_) => input.to_string(),
     }
 }
 
@@ -1129,4 +1146,63 @@ mod test {
             assert_eq!(cli.peek_back(), Some('o'));
         }
     */
+
+    #[test]
+    fn test_brace_expand() {
+        assert_eq!(brace_expand("(asdf 4 5)"), vec!["(asdf 4 5)"]);
+        assert_eq!(
+            brace_expand("asdf {1,2,3}"),
+            vec!["asdf 1", "asdf 2", "asdf 3"]
+        );
+        assert_eq!(
+            brace_expand("{1,2,3}{9,8,7}"),
+            vec!["19", "18", "17", "29", "28", "27", "39", "38", "37"]
+        );
+    }
+
+    #[test]
+    fn test_preparse() {
+        assert_eq!(preparse("bind ',' zoom--"), "bind ',' zoom--".to_string());
+        assert_eq!(preparse("hello my test"), "hello my test".to_string());
+        assert_eq!(preparse("a{bs,ce}"), "abs ace".to_string());
+        assert_eq!(preparse("a()b"), "a () b".to_string());
+        assert_eq!(
+            preparse("a({b,c}{d,e})f"),
+            "a ( bd be cd ce ) f".to_string()
+        );
+        assert_eq!(
+            preparse("hello {moon,earth,world}!"),
+            "hello moon! earth! world!".to_string()
+        );
+        assert_eq!(preparse("h{i,ey,ello}!"), "hi! hey! hello!".to_string());
+        assert_eq!(
+            preparse("!{hello,hi}{earth,world}?"),
+            "!helloearth? !helloworld? !hiearth? !hiworld?".to_string()
+        );
+        assert_eq!(
+            preparse("!{hello,hi}{earth,world}?"),
+            "!helloearth? !helloworld? !hiearth? !hiworld?".to_string()
+        );
+        assert_eq!(
+            preparse("my_cmd (x{1,3,7}y)"),
+            "my_cmd ( x1y x3y x7y )".to_string() // note some added whitespace.
+        );
+        assert_eq!(
+            preparse("my_cmd (what x{1,2}y{3,4}z)"),
+            "my_cmd ( what x1y3z x1y4z x2y3z x2y4z )".to_string() // note added whitespace.
+        );
+        assert_eq!(
+            preparse("bind '?' (mode 'help') -- Show help"),
+            "bind '?' ( mode 'help' ) -- Show help".to_string()
+        );
+        assert_eq!(
+            preparse("bind <shift><;> (mode 'command') (ui-bg #000)"),
+            "bind <shift><;> ( mode 'command' ) ( ui-bg #000 )".to_string()
+        );
+        // TODO: probably can optimize by not parsing the comment
+        assert_eq!(
+            preparse("-- whatever, stuff, {} etc."),
+            "-- whatever stuff  etc.".to_string()
+        );
+    }
 }
