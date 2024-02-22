@@ -289,7 +289,14 @@ fn draw_ui(session: &Session, canvas: &mut shape2d::Batch, text: &mut TextBatch)
         if current_view_frame < usize::MAX {
             // View info, but only for the current view.
             text.add(
-                &format!("{}x{}x{}", v.fw, v.fh, v.animation.len()),
+                &format!(
+                    "{}x{} {}/{}",
+                    v.fw,
+                    v.fh,
+                    current_view_frame,
+                    v.animation.len()
+                ),
+                // TODO: move over so it's always visible
                 offset.x,
                 offset.y - self::LINE_HEIGHT,
                 self::TEXT_LAYER,
