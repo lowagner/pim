@@ -272,6 +272,22 @@ fn draw_ui(session: &Session, canvas: &mut shape2d::Batch, text: &mut TextBatch)
                 Stroke::NONE,
                 Fill::Solid(color),
             ));
+            text.add(
+                &format!(
+                    "{}x{} f{}/{}",
+                    v.fw,
+                    v.fh,
+                    current_view_frame,
+                    v.animation.len()
+                ),
+                // Have text track along with the focused frame,
+                // so we can see it at all times.
+                rect_below.x1,
+                offset.y - self::LINE_HEIGHT,
+                self::TEXT_LAYER,
+                color::GREY,
+                TextAlign::Left,
+            );
         }
 
         // Frame lines
@@ -284,25 +300,6 @@ fn draw_ui(session: &Session, canvas: &mut shape2d::Batch, text: &mut TextBatch)
                 Rotation::ZERO,
                 Stroke::new(1.0, Rgba::new(1., 1., 1., 0.6)),
             ));
-        }
-
-        if current_view_frame < usize::MAX {
-            // View info, but only for the current view.
-            text.add(
-                &format!(
-                    "{}x{} {}/{}",
-                    v.fw,
-                    v.fh,
-                    current_view_frame,
-                    v.animation.len()
-                ),
-                // TODO: move over so it's always visible
-                offset.x,
-                offset.y - self::LINE_HEIGHT,
-                self::TEXT_LAYER,
-                color::GREY,
-                TextAlign::Left,
-            );
         }
     }
 }
