@@ -2582,6 +2582,8 @@ impl Session {
     }
 
     pub fn script_bucket(&mut self, x: i64, y: i64, color: Rgba8) -> ArgumentResult {
+        // TODO: figure out why doing invisible paint doesn't always work until we hit
+        // the brush once, then bucket.
         let start_time = time::Instant::now();
         let maybe_filler = FloodFiller::new(
             self.active_view(),
@@ -2880,6 +2882,8 @@ impl Session {
                 self.resize_frames(self.active_view().fw as i64, new_value)?;
             }
             I64Setting::ImageSplit => {
+                // TODO: figure out why newly opened files, if you split them then delete a frame,
+                // then undo, it goes back to split 1.  we should remember the split.
                 if !self.active_view_mut().slice(new_value as usize) {
                     return Err(format!(
                         "split: view width is not divisible by {}",
@@ -3232,10 +3236,14 @@ impl Session {
             Quit::Safe => self.quit_view_safe(self.views.active_id),
             Quit::AllSafe => {
                 let ids: Vec<ViewId> = self.views.ids().collect();
+                let mut result = Ok(Argument::Null);
                 for id in ids {
-                    self.quit_view_safe(id)?;
+                    // Don't stop at this file, try to quit everybody that you can.
+                    if let Err(error) = self.quit_view_safe(id) {
+                        result = Err(error);
+                    }
                 }
-                Ok(Argument::Null)
+                result
             }
             Quit::Forced => self.quit_view(self.views.active_id),
             Quit::AllForced => {
