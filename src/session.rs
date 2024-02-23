@@ -2910,9 +2910,15 @@ impl Session {
         Ok(())
     }
 
-    fn add_frame(&mut self, index: Option<i64>) -> VoidResult {
+    fn add_frame(&mut self, index: Option<i64>, after: bool) -> VoidResult {
         match self.frame_index(index, "add") {
-            Ok(index) => self.active_view_mut().add_frame_after(index),
+            Ok(index) => {
+                if after {
+                    self.active_view_mut().add_frame_after(index)
+                } else {
+                    self.active_view_mut().add_frame_before(index)
+                }
+            }
             // TODO: return the error here and make the script fire off the message.
             Err(e) => self.message(e, MessageType::Error),
         }
@@ -3041,7 +3047,8 @@ impl Session {
         optional_i64: Option<i64>,
     ) -> VoidResult {
         match for_what {
-            OptionalI64For::FrameAdd => self.add_frame(optional_i64)?,
+            OptionalI64For::FrameAdd => self.add_frame(optional_i64, true)?,
+            OptionalI64For::FrameInsert => self.add_frame(optional_i64, false)?,
             OptionalI64For::FrameClone => self.clone_frame(optional_i64)?,
             OptionalI64For::FrameRemove => self.remove_frame(optional_i64)?,
             OptionalI64For::FrameShift => {

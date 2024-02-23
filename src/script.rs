@@ -1409,6 +1409,11 @@ impl Variables {
             e.g., `$$ -1` to add a frame at the end",
         );
         variables.add_built_in(
+            Command::UsingOptionalI64(OptionalI64For::FrameInsert),
+            "adds a blank frame before index $0, or the current frame if $0 is null, \
+            e.g., `$$ 0` to add a frame at the start",
+        );
+        variables.add_built_in(
             Command::UsingOptionalI64(OptionalI64For::FrameClone),
             "clones the frame at index $0, or the current frame if $0 is null, \
             e.g., `$$ 2` to clone the third frame",
@@ -1652,6 +1657,7 @@ impl Variables {
         assert_ok!(variables.set("cx".to_string(), Variable::Alias("mx".to_string())));
         assert_ok!(variables.set("cy".to_string(), Variable::Alias("my".to_string())));
         assert_ok!(variables.set("f-add".to_string(), Variable::Alias("fa".to_string())));
+        assert_ok!(variables.set("f-insert".to_string(), Variable::Alias("fi".to_string())));
         assert_ok!(variables.set("f-clone".to_string(), Variable::Alias("fc".to_string())));
         assert_ok!(variables.set("f-index".to_string(), Variable::Alias("f".to_string())));
         assert_ok!(variables.set("f-remove".to_string(), Variable::Alias("fr".to_string())));

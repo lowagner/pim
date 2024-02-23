@@ -279,6 +279,7 @@ impl fmt::Display for Command {
             Command::WithoutArguments(ZeroArgumentsFor::SelectionMirrorX) => write!(f, "mirrorx"),
             Command::WithoutArguments(ZeroArgumentsFor::SelectionMirrorY) => write!(f, "mirrory"),
             Command::UsingOptionalI64(OptionalI64For::FrameAdd) => write!(f, "fa"),
+            Command::UsingOptionalI64(OptionalI64For::FrameInsert) => write!(f, "fi"),
             Command::UsingOptionalI64(OptionalI64For::FrameClone) => write!(f, "fc"),
             Command::UsingOptionalI64(OptionalI64For::FrameRemove) => write!(f, "fr"),
             Command::UsingOptionalI64(OptionalI64For::FrameShift) => write!(f, "shift"),
@@ -389,6 +390,7 @@ impl FromStr for Command {
                 ZeroArgumentsFor::SelectionMirrorY,
             )),
             "fa" => Ok(Command::UsingOptionalI64(OptionalI64For::FrameAdd)),
+            "fi" => Ok(Command::UsingOptionalI64(OptionalI64For::FrameInsert)),
             "fc" => Ok(Command::UsingOptionalI64(OptionalI64For::FrameClone)),
             "fr" => Ok(Command::UsingOptionalI64(OptionalI64For::FrameRemove)),
             "shift" => Ok(Command::UsingOptionalI64(OptionalI64For::FrameShift)),
@@ -490,6 +492,8 @@ pub enum ZeroArgumentsFor {
 pub enum OptionalI64For {
     /// Adds a blank frame after Some(i64), otherwise after the current frame.
     FrameAdd,
+    /// Adds a blank frame before Some(i64), otherwise before the current frame.
+    FrameInsert,
     /// Clones the frame at Some(i64), otherwise the current frame.
     FrameClone,
     /// Removes/deletes the frame at Some(i64), otherwise the current frame.

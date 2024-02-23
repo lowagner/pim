@@ -257,6 +257,19 @@ impl<R> View<R> {
         self.file_storage().map_or(false, |f| f == path)
     }
 
+    /// Extend the view by one frame before the passed-in index.
+    pub fn add_frame_before(&mut self, index: usize) {
+        let (fw, fh) = (self.fw, self.fh);
+
+        // We don't need to copy this frame but all future frames,
+        // so that we can clear out the frame at index+1.
+        self.clone_frame(index);
+        self.ops.push(ViewOp::ClearRect(
+            Rgba8::TRANSPARENT,
+            Rect::new(fw * (index + 0) as u32, 0, fw * (index + 1) as u32, fh),
+        ));
+    }
+
     /// Extend the view by one frame after the passed-in index.
     pub fn add_frame_after(&mut self, index: usize) {
         let (fw, fh) = (self.fw, self.fh);
