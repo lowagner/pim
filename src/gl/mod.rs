@@ -754,7 +754,7 @@ impl<'a> renderer::Renderer<'a> for Renderer {
                                 let zoom = view.zoom as f32;
                                 let anim_width = zoom * view.fw as f32;
                                 let anim_height = zoom * view.height() as f32;
-                                let anim_y = session.offset.y;
+                                let anim_y = session.offset.y + view.offset.y;
                                 /* TODO: for some reason this code doesn't work well in certain zooms?
                                 let anim_y = if anim_height
                                     > session.height - 2.0 * session.palette.cellsize
@@ -766,11 +766,15 @@ impl<'a> renderer::Renderer<'a> for Renderer {
                                     session.height - session.palette.cellsize - anim_height
                                 };
                                 */
+                                // TODO: we could actually determine this correctly.
+                                let rough_palette_width = 2.0 * session.palette.cellsize;
+                                // TODO: this heuristic isn't great but it's ok for
+                                //       switching between left and right.  improve:
                                 let anim_x = if view.offset.x * zoom
-                                    > (view.fw as f32 - view.width() as f32) * 0.5
+                                    > view.fw as f32 + rough_palette_width
                                 {
                                     // Show on the left, give room for 32 palette colors
-                                    2.0 * session.palette.cellsize + anim_width
+                                    rough_palette_width + anim_width
                                 } else {
                                     // Show to the right
                                     session.width - session.palette.cellsize

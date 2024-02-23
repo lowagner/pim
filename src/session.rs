@@ -400,6 +400,7 @@ pub struct Session {
     pub hover_view: Option<ViewId>,
 
     /// The workspace offset. Views are offset by this vector.
+    // TODO: convert this to an `offset_y` since we don't use `offset.x` (or shouldn't be)
     pub offset: Vector2<f32>,
     /// The help view offset.
     pub help_offset: Vector2<f32>,
@@ -833,10 +834,9 @@ impl Session {
 
     /// Snap the given session coordinates to the pixel grid.
     /// This only has an effect at zoom levels greater than `1.0`.
-    #[allow(dead_code)]
     pub fn snap(&self, p: SessionCoords, offx: f32, offy: f32, zoom: f32) -> SessionCoords {
         SessionCoords::new(
-            p.x - ((p.x - offx - self.offset.x) % zoom),
+            p.x - ((p.x - offx - self.active_view().offset.x) % zoom),
             p.y - ((p.y - offy - self.offset.y) % zoom),
         )
         .floor()
@@ -2299,7 +2299,7 @@ impl Session {
         p.y = self.height / 2. - n * p.cellsize / 2.;
     }
 
-    /// Vertically the active view in the workspace.
+    /// Vertically center the active view in the workspace.
     fn center_active_view_v(&mut self) {
         if let Some(v) = self.views.active() {
             let zoom = v.zoom as f32;
@@ -2312,11 +2312,11 @@ impl Session {
 
     /// Horizontally center the active view in the workspace.
     fn center_active_view_h(&mut self) {
-        if let Some(v) = self.views.active() {
-            let zoom = v.zoom as f32;
-            self.offset.x = (self.width / 2. - v.width() as f32 * zoom / 2. - v.offset.x).floor();
-            self.cursor_dirty();
-        }
+        let width = self.width;
+        let v = self.active_view_mut();
+        let zoom = v.zoom as f32;
+        v.offset.x = (width / 2. - v.width() as f32 * zoom / 2.).floor();
+        self.cursor_dirty();
     }
 
     /// Center the active view in the workspace.
@@ -2326,18 +2326,16 @@ impl Session {
     }
 
     /// Center the given frame of the active view in the workspace.
+    /// Doesn't update the vertical offset in case you want to keep that.
     fn center_active_view_frame(&mut self, frame: usize) {
-        self.center_active_view_v();
+        let width = self.width;
+        let v = self.active_view_mut();
+        let zoom = v.zoom as f32;
+        let offset = (frame as u32 * v.fw) as f32 * zoom;
 
-        if let Some(v) = self.views.active() {
-            let zoom = v.zoom as f32;
-            let offset = (frame as u32 * v.fw) as f32 * zoom;
+        v.offset.x = (width / 2. - offset - v.fw as f32 / 2. * zoom).floor();
 
-            self.offset.x = self.width / 2. - offset - v.offset.x - v.fw as f32 / 2. * zoom;
-            self.offset.x = self.offset.x.floor();
-
-            self.cursor_dirty();
-        }
+        self.cursor_dirty();
     }
 
     /// The session center.
@@ -2410,7 +2408,8 @@ impl Session {
 
     /// Set the active view zoom. Takes a center to zoom to.
     fn zoom(&mut self, z: u32, center: SessionCoords) {
-        let px = center.x - self.offset.x;
+        // TODO: this logic works but it's confusing, refactor into better variables.
+        let px = center.x - self.active_view().offset.x;
         let py = center.y - self.offset.y;
 
         let zprev = self.active_view().zoom;
@@ -2423,18 +2422,17 @@ impl Session {
 
         let v = self.active_view_mut();
 
-        let vx = v.offset.x;
         let vy = v.offset.y;
 
         v.zoom = z;
 
-        let dx = v.offset.x - (vx * zdiff);
         let dy = v.offset.y - (vy * zdiff);
 
-        offset.x -= dx;
         offset.y -= dy;
 
-        self.offset = offset.map(f32::floor);
+        let offset = offset.map(f32::floor);
+        v.offset.x = offset.x;
+        self.offset.y = offset.y;
         self.organize_views();
     }
 
@@ -2706,7 +2704,7 @@ impl Session {
             I64Setting::UiChecker => self.settings.ui_checker as i64,
             I64Setting::UiGrid => self.settings.ui_grid as i64,
             I64Setting::UiScalePercentage => self.settings.ui_scale_percentage as i64,
-            I64Setting::UiOffsetX => self.offset.x as i64,
+            I64Setting::UiOffsetX => self.active_view().offset.x as i64,
             I64Setting::UiOffsetY => self.offset.y as i64,
             I64Setting::Tool => self.tool as i64,
             I64Setting::PaletteHeight => self.palette.height as i64,
@@ -2779,7 +2777,7 @@ impl Session {
                 self.rescale((old_value as f64) / 100.0, (new_value as f64) / 100.0);
             }
             I64Setting::UiOffsetX => {
-                self.offset.x = new_value as f32;
+                self.active_view_mut().offset.x = new_value as f32;
             }
             I64Setting::UiOffsetY => {
                 self.offset.y = new_value as f32;
