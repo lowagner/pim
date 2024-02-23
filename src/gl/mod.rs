@@ -766,7 +766,8 @@ impl<'a> renderer::Renderer<'a> for Renderer {
                                     session.height - session.palette.cellsize - anim_height
                                 };
                                 */
-                                let anim_x = if session.offset.x * zoom > view.width() as f32 * 0.55
+                                let anim_x = if view.offset.x * zoom
+                                    > (view.fw as f32 - view.width() as f32) * 0.5
                                 {
                                     // Show on the left, give room for 32 palette colors
                                     2.0 * session.palette.cellsize + anim_width

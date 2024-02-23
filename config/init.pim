@@ -44,7 +44,10 @@ bind-normal <ctrl><left>    (run-all (swap f (sum f -1)) f--)   --  Shift frame 
 bind-normal <ctrl><right>   (run-all (swap f (sum f  1)) f++)   --  Shift frame over to the right
 bind-normal <shift><left>   f--
 bind-normal <shift><right>  f++
-bind        <return>        f-clone            ()               --  Add a frame to the view
+-- TODO: switch to `(f-insert f)` since this sometimes appends to the end.
+bind-normal <shift><return> (f-add (sum f -1))     ()           --  Add a frame to the view before the current frame
+bind-normal <return>        f-add              ()               --  Add a frame to the view
+bind-normal <ctrl><return>  f-clone            ()               --  Clones current frame
 bind        <backspace>     f-remove           ()               --  Remove a frame from the view
 bind-normal <del>           f-remove           ()               --  Remove a frame from the view
 bind-normal 'h'             f--                                 --  Navigate to previous frame

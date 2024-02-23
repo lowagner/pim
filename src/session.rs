@@ -890,7 +890,9 @@ impl Session {
                 }
             }
             _ => {
-                self.offset.x += x;
+                // Pan the individual views for x, so that
+                // we can have different offsets there.
+                self.active_view_mut().offset.x += x;
                 self.offset.y += y;
             }
         }

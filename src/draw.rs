@@ -753,7 +753,7 @@ pub fn draw_view_animation<R>(v: &View<R>) -> sprite2d::Batch {
         v.width(),
         v.fh,
         v.animation.val().map(|e| e as f32),
-        Rect::new(-(v.fw as f32), 0.0, 0.0, v.fh as f32) * v.zoom as f32 + v.offset,
+        Rect::new(-(v.fw as f32), 0.0, 0.0, v.fh as f32) * v.zoom as f32,
         self::VIEW_LAYER,
         Rgba::TRANSPARENT,
         1.,
