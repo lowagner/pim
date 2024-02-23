@@ -658,6 +658,9 @@ impl CommandLine {
 
     pub fn completion_next(&mut self) {
         let prefix = self.prefix();
+        // TODO: there's some weird stuff that happens if you change the prefix and still try to autocomplete
+        //       e.g., if `asdf.png` and `xyz.png` are in the directory, then `e asd|f.png` (cursor at |)
+        //       will allow autocompleting to `e asdxyz.png`.
 
         if let Some((completion, range)) = self.autocomplete.next(&prefix, self.cursor) {
             // Replace old completion with new one.
@@ -811,23 +814,26 @@ impl autocomplete::Completer for ScriptCompleter {
         // Not sure why we need the map_err, I implemented Display for EmptyCommandParseError
         // but am still getting this compile error if I don't map_err:
         // :::the trait `From<command::EmptyCommandParseError>` is not implemented for `String`
+        // TODO: we probably want to grab the command from the most recent `(` if present.
+        //       i.e., `:e asd[TAB]` should complete `e asdf.png` but
+        //       `:do_something (pwd asd[TAB]` should complete `pwd asdf_subdirectory`.
         let p =
             token().try_map(|input| Command::from_str(&input).map_err(|_| "no input".to_string()));
 
         match p.parse(input) {
             Ok((command, _)) => match command {
+                Command::UsingStrings(StringsFor::Edit)
+                | Command::UsingStrings(StringsFor::Concatenate)
+                | Command::UsingStrings(StringsFor::Source)
+                | Command::Write => {
+                    self.complete_path(input, Default::default())
+                }
                 /* TODO: switch to Command:: versions.
                 Cmd::ChangeDir(path) | Cmd::WriteFrames(path) => self.complete_path(
                     path.as_ref(),
                     input,
                     FileCompleterOpts { directories: true },
                 ),
-                Cmd::Source(path) | Cmd::Write(path) => {
-                    self.complete_path(path.as_ref(), input, Default::default())
-                }
-                Cmd::Edit(paths) | Cmd::EditFrames(paths) => {
-                    self.complete_path(paths.last(), input, Default::default())
-                }
                 */
                 _ => vec![],
             },
@@ -837,22 +843,20 @@ impl autocomplete::Completer for ScriptCompleter {
 }
 
 impl ScriptCompleter {
-    fn complete_path(
-        &self,
-        path: Option<&String>,
-        input: &str,
-        opts: FileCompleterOpts,
-    ) -> Vec<String> {
+    fn complete_path(&self, input: &str, opts: FileCompleterOpts) -> Vec<String> {
         use crate::autocomplete::Completer;
 
-        let empty = "".to_owned();
-        let path = path.unwrap_or(&empty);
-
-        // If there's whitespace between the path and the cursor, don't complete the path.
-        // Instead, complete as if the input was empty.
         match input.chars().next_back() {
-            Some(c) if c.is_whitespace() => self.file_completer.complete("", opts),
-            _ => self.file_completer.complete(path, opts),
+            Some(c) if c.is_whitespace() => {
+                // If there's whitespace between the path and the cursor, don't complete the path.
+                // Instead, complete as if the input was empty.
+                self.file_completer.complete("", opts)
+            }
+            _ => {
+                // Otherwise assume there's a path from the last space.
+                let path = input.rsplit_once(' ').map(|s| s.1);
+                self.file_completer.complete(path.unwrap_or(""), opts)
+            }
         }
     }
 }

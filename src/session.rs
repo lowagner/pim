@@ -2170,6 +2170,7 @@ impl Session {
                                 self.cmdline.cursor_forward();
                             }
                             platform::Key::Tab => {
+                                // TODO: if `Shift` is used, then do completion_prev()
                                 self.cmdline.completion_next();
                             }
                             platform::Key::Backspace => {
