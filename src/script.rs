@@ -1228,7 +1228,7 @@ impl Variables {
             e.g., `$$ 'normal'` to go to normal mode",
         );
         variables.add_built_in(
-            Command::StringSetting(StringSetting::Cwd),
+            Command::StringSetting(StringSetting::CurrentDirectory),
             "getter/swapper for the current working directory if $0 is null/present, \
             e.g., `$$ '/home/whatever'` to change directories",
         );
@@ -1624,6 +1624,8 @@ impl Variables {
         // TODO: add "red", "blue", etc. as Mutable color variables
         // e.g., add `red 1`, `red 2`, etc., using OkLab colors
 
+        assert_ok!(variables.set("pwd".to_string(), Variable::Alias("cd".to_string())));
+        assert_ok!(variables.set("cwd".to_string(), Variable::Alias("cd".to_string())));
         assert_ok!(variables.set("multiply".to_string(), Variable::Alias("*".to_string())));
         assert_ok!(variables.set("product".to_string(), Variable::Alias("*".to_string())));
         assert_ok!(variables.set("sum".to_string(), Variable::Alias("+".to_string())));

@@ -242,7 +242,7 @@ impl fmt::Display for Command {
             Command::ColorSetting(ColorSetting::Foreground) => write!(f, "fg"),
             Command::ColorSetting(ColorSetting::Background) => write!(f, "bg"),
             Command::StringSetting(StringSetting::Mode) => write!(f, "mode"),
-            Command::StringSetting(StringSetting::Cwd) => write!(f, "cwd"), // Directory
+            Command::StringSetting(StringSetting::CurrentDirectory) => write!(f, "cd"),
             Command::StringSetting(StringSetting::ConfigDirectory) => write!(f, "config-dir"),
             Command::I64Setting(I64Setting::Debug) => write!(f, "debug"),
             Command::I64Setting(I64Setting::UiAnimate) => write!(f, "ui-a"),
@@ -349,7 +349,7 @@ impl FromStr for Command {
             "fg" => Ok(Command::ColorSetting(ColorSetting::Foreground)),
             "bg" => Ok(Command::ColorSetting(ColorSetting::Background)),
             "mode" => Ok(Command::StringSetting(StringSetting::Mode)),
-            "cwd" => Ok(Command::StringSetting(StringSetting::Cwd)),
+            "cd" => Ok(Command::StringSetting(StringSetting::CurrentDirectory)),
             "config-dir" => Ok(Command::StringSetting(StringSetting::ConfigDirectory)),
             "debug" => Ok(Command::I64Setting(I64Setting::Debug)),
             "ui-a" => Ok(Command::I64Setting(I64Setting::UiAnimate)),
@@ -529,6 +529,7 @@ pub enum StringsFor {
     // TODO: `Append` for appending images in the horizontal direction to the current view
     // TODO: `Stack` for concatenating images vertically into one new image
     // TODO: `Layer` for appending images in the vertical direction to the current view
+    // TODO: `ListFiles` for listing files in the current directory (`ls`)
 }
 
 #[derive(Eq, Hash, PartialEq, Debug, Clone, Copy, EnumIter)]
@@ -811,11 +812,18 @@ impl autocomplete::Completer for ScriptCompleter {
     type Options = ();
 
     fn complete(&self, input: &str, _opts: ()) -> Vec<String> {
-        // Not sure why we need the map_err, I implemented Display for EmptyCommandParseError
-        // but am still getting this compile error if I don't map_err:
-        // :::the trait `From<command::EmptyCommandParseError>` is not implemented for `String`
-        let p =
-            token().try_map(|input| Command::from_str(&input).map_err(|_| "no input".to_string()));
+        let p = token()
+            .followed_by(
+                // Don't complete for a command that we haven't finished.
+                // That becomes something like `:e[TAB]` -> `:easdf.png`
+                satisfy(|c| c.is_whitespace() || c == '(', "command finisher)"),
+            )
+            .try_map(
+                // Not sure why we need the map_err, I implemented Display for EmptyCommandParseError
+                // but am still getting this compile error if I don't map_err:
+                // :::the trait `From<command::EmptyCommandParseError>` is not implemented for `String`
+                |input| Command::from_str(&input).map_err(|_| "no input".to_string()),
+            );
 
         // We want to grab the command from the most recent `(` if present.
         // i.e., `:e asd[TAB]` should complete `e asdf.png` but
@@ -824,17 +832,15 @@ impl autocomplete::Completer for ScriptCompleter {
         let input = input.rsplit_once('(').map(|s| s.1).unwrap_or(&input[1..]);
         match p.parse(input) {
             Ok((command, _)) => match command {
+                // Commands for file completion:
                 Command::UsingStrings(StringsFor::Edit)
                 | Command::UsingStrings(StringsFor::Concatenate)
                 | Command::UsingStrings(StringsFor::Source)
                 | Command::Write => self.complete_path(input, Default::default()),
-                /* TODO: switch to Command:: versions.
-                Cmd::ChangeDir(path) | Cmd::WriteFrames(path) => self.complete_path(
-                    path.as_ref(),
-                    input,
-                    FileCompleterOpts { directories: true },
-                ),
-                */
+                // Commands for directory completion:
+                Command::StringSetting(StringSetting::CurrentDirectory) => {
+                    self.complete_path(input, FileCompleterOpts { directories: true })
+                }
                 _ => vec![],
             },
             Err(_) => vec![],

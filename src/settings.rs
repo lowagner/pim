@@ -8,7 +8,7 @@ pub enum StringSetting {
     /// Current mode (e.g., normal, command, etc.).
     Mode,
     /// Current working directory
-    Cwd,
+    CurrentDirectory,
     /// Configuration directory, e.g., /home/.config/pim
     ConfigDirectory,
 }

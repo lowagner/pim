@@ -2668,7 +2668,7 @@ impl Session {
     pub fn get_string_setting(&self, setting: StringSetting) -> String {
         match setting {
             StringSetting::Mode => self.mode.to_string(),
-            StringSetting::Cwd => {
+            StringSetting::CurrentDirectory => {
                 std::env::current_dir().map_or("".to_string(), |cwd| cwd.display().to_string())
             }
             StringSetting::ConfigDirectory => self.proj_dirs.config_dir().display().to_string(),
@@ -2682,7 +2682,7 @@ impl Session {
                     Mode::from_str(&value).map_err(|_| format!("invalid mode: `{}`", value))?;
                 self.switch_mode(mode);
             }
-            StringSetting::Cwd => {
+            StringSetting::CurrentDirectory => {
                 let path = Path::new(&value).to_path_buf();
                 if std::env::set_current_dir(&path).is_err() {
                     return Err(format!("could not change directory to `{}`", value));
