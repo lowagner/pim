@@ -47,7 +47,7 @@ impl<T: Completer> Autocomplete<T> {
             None => {
                 let candidates = self
                     .completer
-                    .complete(&input[1..cursor], Default::default());
+                    .complete(&input[..cursor], Default::default());
                 let mut iter = candidates.into_iter().cycle().peekable();
 
                 iter.next().map(|completion| {

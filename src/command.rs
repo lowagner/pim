@@ -814,20 +814,20 @@ impl autocomplete::Completer for ScriptCompleter {
         // Not sure why we need the map_err, I implemented Display for EmptyCommandParseError
         // but am still getting this compile error if I don't map_err:
         // :::the trait `From<command::EmptyCommandParseError>` is not implemented for `String`
-        // TODO: we probably want to grab the command from the most recent `(` if present.
-        //       i.e., `:e asd[TAB]` should complete `e asdf.png` but
-        //       `:do_something (pwd asd[TAB]` should complete `pwd asdf_subdirectory`.
         let p =
             token().try_map(|input| Command::from_str(&input).map_err(|_| "no input".to_string()));
 
+        // We want to grab the command from the most recent `(` if present.
+        // i.e., `:e asd[TAB]` should complete `e asdf.png` but
+        // `:do_something (pwd asd[TAB]` should complete `pwd asdf_subdirectory`.
+        // Don't pass in the `:` at the start of this input or the `(` of the last paren:
+        let input = input.rsplit_once('(').map(|s| s.1).unwrap_or(&input[1..]);
         match p.parse(input) {
             Ok((command, _)) => match command {
                 Command::UsingStrings(StringsFor::Edit)
                 | Command::UsingStrings(StringsFor::Concatenate)
                 | Command::UsingStrings(StringsFor::Source)
-                | Command::Write => {
-                    self.complete_path(input, Default::default())
-                }
+                | Command::Write => self.complete_path(input, Default::default()),
                 /* TODO: switch to Command:: versions.
                 Cmd::ChangeDir(path) | Cmd::WriteFrames(path) => self.complete_path(
                     path.as_ref(),
