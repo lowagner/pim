@@ -390,8 +390,8 @@ pub struct Session {
     pub height: f32,
     /// The current working directory.
     pub cwd: PathBuf,
-    // TODO: add this and hold onto it for `cd` with no argument.
-    // pub initial_working_directory: PathBuf,
+    /// The initial working directory.
+    pub initial_working_directory: PathBuf,
     /// The cursor coordinates.
     pub cursor: SessionCoords,
 
@@ -520,6 +520,7 @@ impl Session {
             width: w as f32,
             height: h as f32,
             cwd: cwd.clone(),
+            initial_working_directory: cwd.clone(),
             cursor: SessionCoords::new(0., 0.),
             base_dirs,
             proj_dirs,
@@ -2709,23 +2710,35 @@ impl Session {
             }
             StringSetting::PresentWorkingDirectory => {
                 let path = Path::new(&value).to_path_buf();
-                if std::env::set_current_dir(&path).is_err() {
-                    return Err(format!("could not change directory to `{}`", value));
-                }
-                // In case `set_current_dir` has special characters (like `..`), we should get path directly:
-                match std::env::current_dir() {
-                    Ok(path) => {
-                        self.cwd = path.clone();
-                        self.cmdline.set_cwd(path.as_path());
-                    }
-                    Err(e) => {
-                        return Err(format!("could not recover path after setting to {}", value));
-                    }
-                }
+                self.set_pwd(path)?;
             }
             StringSetting::ConfigDirectory => {
                 // TODO: implement something here, maybe read a config file from new directory
                 return Err("cannot set config directory yet".to_string());
+            }
+        }
+        Ok(())
+    }
+
+    fn set_pwd(&mut self, path: PathBuf) -> VoidResult {
+        if std::env::set_current_dir(&path).is_err() {
+            return Err(format!(
+                "could not change directory to `{}`",
+                path.display()
+            ));
+        }
+        // In case `path` has special characters (like `..`), we should get path directly:
+        match std::env::current_dir() {
+            Ok(path) => {
+                eprintln!("setting path to {}", path.display());
+                self.cwd = path;
+                self.cmdline.set_cwd(self.cwd.as_path());
+            }
+            Err(e) => {
+                return Err(format!(
+                    "could not recover path after setting to {}",
+                    path.display()
+                ));
             }
         }
         Ok(())
@@ -3143,6 +3156,18 @@ impl Session {
 
     pub fn script_strings(&mut self, for_what: StringsFor, strings: Vec<String>) -> ArgumentResult {
         match for_what {
+            StringsFor::ChangeDirectory => {
+                if strings.len() == 0 {
+                    self.set_pwd(self.initial_working_directory.clone())?;
+                } else if strings.len() == 1 {
+                    let mut path = self.cwd.clone();
+                    path.push(&strings[0]);
+                    self.set_pwd(path)?;
+                } else {
+                    return Err("too many paths to change directory into".to_string());
+                }
+                return Ok(Argument::String(self.cwd.display().to_string()));
+            }
             StringsFor::Source => {
                 if strings.len() == 0 {
                     return Err("add files to source configuration from".to_string());

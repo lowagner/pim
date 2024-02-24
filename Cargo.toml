@@ -1,6 +1,6 @@
 [package]
 name = "pim"
-version = "0.6.0"
+version = "0.6.1"
 description = "a modern, minimalist pixel editor"
 license = "GPL-3.0-only"
 repository = "https://github.com/lowagner/pim"

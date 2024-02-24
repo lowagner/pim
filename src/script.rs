@@ -1452,6 +1452,11 @@ impl Variables {
             e.g., `$$ #123` to fill with color #123",
         );
         variables.add_built_in(
+            Command::UsingStrings(StringsFor::ChangeDirectory),
+            "changes directory to that in $0 if non-null, or the initial working directory otherwise, \
+            e.g., `$$ 'subdir'` to move into the 'subdir' directory",
+        );
+        variables.add_built_in(
             Command::UsingStrings(StringsFor::Source),
             "runs all commands in the files specified by the arguments, \
             e.g., `$$ 'hi.pim'` to execute 'hi.pim'",

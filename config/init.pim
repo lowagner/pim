@@ -80,6 +80,8 @@ bind-select <shift><up>     (s-move  0 -10)
 bind-select <shift><down>   (s-move  0  10)
 bind-select <shift><left>   (s-move -10  0)
 bind-select <shift><right>  (s-move  10  0)
+bind-select <ctrl><a>             (s-shift fw 0)                -- Move the pixels ahead one frame.
+bind-select <ctrl><b>             (s-shift (* -1 fw) 0)         -- Back the pixels up one frame.
 bind-select <ctrl><up>            (s-shift  0 -1)
 bind-select <ctrl><down>          (s-shift  0  1)
 bind-select <ctrl><left>          (s-shift -1  0)

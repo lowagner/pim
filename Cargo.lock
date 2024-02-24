@@ -525,7 +525,7 @@ checksum = "28b9b4df73455c861d7cbf8be42f01d3b373ed7f02e378d55fa84eafc6f638b1"
 
 [[package]]
 name = "pim"
-version = "0.6.0"
+version = "0.6.1"
 dependencies = [
  "arrayvec",
  "brace-expand",

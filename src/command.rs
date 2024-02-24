@@ -243,7 +243,6 @@ impl fmt::Display for Command {
             Command::ColorSetting(ColorSetting::Background) => write!(f, "bg"),
             Command::StringSetting(StringSetting::Mode) => write!(f, "mode"),
             Command::StringSetting(StringSetting::PresentWorkingDirectory) => write!(f, "pwd"),
-            // TODO: StringSetting::ChangeDirectory
             Command::StringSetting(StringSetting::ConfigDirectory) => write!(f, "config-dir"),
             Command::I64Setting(I64Setting::Debug) => write!(f, "debug"),
             Command::I64Setting(I64Setting::UiAnimate) => write!(f, "ui-a"),
@@ -289,6 +288,7 @@ impl fmt::Display for Command {
             Command::UsingOptionalI64(OptionalI64For::Undo) => write!(f, "undo"),
             Command::UsingOptionalI64(OptionalI64For::Redo) => write!(f, "redo"),
             Command::UsingOptionalColor(OptionalColorFor::SelectionClear) => write!(f, "clear"),
+            Command::UsingStrings(StringsFor::ChangeDirectory) => write!(f, "cd"),
             Command::UsingStrings(StringsFor::Source) => write!(f, "source"),
             Command::UsingStrings(StringsFor::Edit) => write!(f, "e"),
             Command::UsingStrings(StringsFor::Concatenate) => write!(f, "cat"),
@@ -405,6 +405,7 @@ impl FromStr for Command {
             "clear" => Ok(Command::UsingOptionalColor(
                 OptionalColorFor::SelectionClear,
             )),
+            "cd" => Ok(Command::UsingStrings(StringsFor::ChangeDirectory)),
             "source" => Ok(Command::UsingStrings(StringsFor::Source)),
             "e" => Ok(Command::UsingStrings(StringsFor::Edit)),
             "cat" => Ok(Command::UsingStrings(StringsFor::Concatenate)),
@@ -525,6 +526,8 @@ pub enum OptionalColorFor {
 
 #[derive(Eq, Hash, PartialEq, Debug, Clone, Copy, EnumIter)]
 pub enum StringsFor {
+    /// For use with appending to the current directory (a la `cd`).
+    ChangeDirectory,
     /// Path names to source, i.e. for configuration.
     Source,
     /// Path names to edit, i.e. as images.
@@ -845,7 +848,8 @@ impl autocomplete::Completer for ScriptCompleter {
                 | Command::UsingStrings(StringsFor::Source)
                 | Command::Write => self.complete_path(input, Default::default()),
                 // Commands for directory completion:
-                Command::StringSetting(StringSetting::PresentWorkingDirectory) => {
+                // TODO: StringSetting::PresentWorkingDirectory should technically complete but from root (/)
+                Command::UsingStrings(StringsFor::ChangeDirectory) => {
                     self.complete_path(input, FileCompleterOpts { directories: true })
                 }
                 _ => vec![],
