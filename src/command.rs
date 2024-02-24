@@ -272,6 +272,9 @@ impl fmt::Display for Command {
             Command::I64Setting(I64Setting::NormalMode) => write!(f, "normal"),
             Command::WithoutArguments(ZeroArgumentsFor::Reset) => write!(f, "reset"),
             Command::WithoutArguments(ZeroArgumentsFor::SelectionExpand) => write!(f, "s-expand"),
+            Command::WithoutArguments(ZeroArgumentsFor::SelectionToClipboardSize) => {
+                write!(f, "s-clipsize")
+            }
             Command::WithoutArguments(ZeroArgumentsFor::SelectionErase) => write!(f, "erase"),
             Command::WithoutArguments(ZeroArgumentsFor::SelectionCopy) => write!(f, "copy"),
             Command::WithoutArguments(ZeroArgumentsFor::SelectionCut) => write!(f, "cut"),
@@ -383,6 +386,9 @@ impl FromStr for Command {
             "normal" => Ok(Command::I64Setting(I64Setting::NormalMode)),
             "reset" => Ok(Command::WithoutArguments(ZeroArgumentsFor::Reset)),
             "s-expand" => Ok(Command::WithoutArguments(ZeroArgumentsFor::SelectionExpand)),
+            "s-clipsize" => Ok(Command::WithoutArguments(
+                ZeroArgumentsFor::SelectionToClipboardSize,
+            )),
             "erase" => Ok(Command::WithoutArguments(ZeroArgumentsFor::SelectionErase)),
             "copy" => Ok(Command::WithoutArguments(ZeroArgumentsFor::SelectionCopy)),
             "cut" => Ok(Command::WithoutArguments(ZeroArgumentsFor::SelectionCut)),
@@ -475,6 +481,8 @@ pub enum ZeroArgumentsFor {
     // TODO: BrushReset,
     /// Resets settings.
     Reset,
+    /// Resizes the selection to match the clipboard size.
+    SelectionToClipboardSize,
     /// Expands the selection to the encompassing frame(s).
     SelectionExpand,
     /// Erases what's in the selection.

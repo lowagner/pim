@@ -983,6 +983,7 @@ impl Renderer {
                     self.view_data.remove(&id);
                 }
                 Effect::ViewOps(id, ops) => {
+                    // TODO: probably could just pass session.selection as &mut
                     if let Some(rect) =
                         self.handle_view_ops(session.view(id), session.selection, &ops)?
                     {

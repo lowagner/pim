@@ -1373,6 +1373,10 @@ impl Variables {
             "`$$` resets all settings",
         );
         variables.add_built_in(
+            Command::WithoutArguments(ZeroArgumentsFor::SelectionToClipboardSize),
+            "`$$` ensures selection has same size as clipboard",
+        );
+        variables.add_built_in(
             Command::WithoutArguments(ZeroArgumentsFor::SelectionExpand),
             "`$$` expands selection to fill the overlapped frames",
         );

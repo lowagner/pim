@@ -158,6 +158,7 @@ impl Selection {
     }
 
     /// Resize the selection by a certain amount.
+    // TODO: this should be a `dx`, `dy` type name, e.g., `resize_delta`.
     pub fn resize(&mut self, x: i32, y: i32) {
         self.0.x2 += x;
         self.0.y2 -= y;
@@ -169,6 +170,11 @@ impl Selection {
         if self.0.y2 > self.0.y1 {
             std::mem::swap(&mut self.0.y1, &mut self.0.y2);
         }
+    }
+
+    pub fn resize_to(&mut self, width: i32, height: i32) {
+        self.0.x2 = self.0.x1 + width;
+        self.0.y2 = self.0.y1 - height;
     }
 }
 
@@ -438,6 +444,7 @@ pub struct Session {
 
     /// Current pixel selection.
     pub selection: Option<Selection>,
+    pub clipboard_size: Vector2<i32>,
 
     /// The session's current settings.
     pub settings: Settings,
@@ -555,6 +562,7 @@ impl Session {
             mode: Mode::Normal,
             prev_mode: Option::default(),
             selection: Option::default(),
+            clipboard_size: Vector2::new(8, 8),
             message: Message::default(),
             avg_time: time::Duration::from_secs(0),
             frame_number: 0,
@@ -1692,6 +1700,7 @@ impl Session {
 
                 v.yank(s);
 
+                self.clipboard_size = Vector2::new(s.width(), s.height());
                 self.selection = Some(Selection::from(s));
                 self.switch_mode(Mode::Select(Select::Pasting));
 
@@ -3068,6 +3077,11 @@ impl Session {
                     return Err(format!("{}", e));
                 }
                 self.message("Settings reset to default values", MessageType::Okay);
+            }
+            ZeroArgumentsFor::SelectionToClipboardSize => {
+                if let Some(ref mut selection) = self.selection {
+                    selection.resize_to(self.clipboard_size.x, self.clipboard_size.y);
+                }
             }
             ZeroArgumentsFor::SelectionExpand => {
                 self.expand_selection();
