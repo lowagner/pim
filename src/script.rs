@@ -610,10 +610,7 @@ macro_rules! script_runner {
                                 strings.push(string);
                             }
                         }
-                        if strings.len() > 0 {
-                            self.script_strings(*strings_for, strings)?;
-                        }
-                        Ok(Argument::Null)
+                        self.script_strings(*strings_for, strings)
                     }
                     Command::UsingTwoI64s(for_what) => {
                         let x = self
@@ -1228,8 +1225,8 @@ impl Variables {
             e.g., `$$ 'normal'` to go to normal mode",
         );
         variables.add_built_in(
-            Command::StringSetting(StringSetting::CurrentDirectory),
-            "getter/swapper for the current working directory if $0 is null/present, \
+            Command::StringSetting(StringSetting::PresentWorkingDirectory),
+            "getter/swapper for the present working directory if $0 is null/present, \
             e.g., `$$ '/home/whatever'` to change directories",
         );
         variables.add_built_in(
@@ -1470,6 +1467,11 @@ impl Variables {
             e.g., `$$ 'hi.png' 'hello.png'` to put them side by side",
         );
         variables.add_built_in(
+            Command::UsingStrings(StringsFor::ListFiles),
+            "lists files in the current directory that match all arguments, \
+            e.g., `$$ hi world` match `hi-world.png` and `world.hi`",
+        );
+        variables.add_built_in(
             Command::UsingTwoI64s(TwoI64sFor::Pan),
             "moves the view horizontally+vertically, \
             e.g., `$$ 11 23` pans (11, 23) in (X, Y) coordinates",
@@ -1624,8 +1626,7 @@ impl Variables {
         // TODO: add "red", "blue", etc. as Mutable color variables
         // e.g., add `red 1`, `red 2`, etc., using OkLab colors
 
-        assert_ok!(variables.set("pwd".to_string(), Variable::Alias("cd".to_string())));
-        assert_ok!(variables.set("cwd".to_string(), Variable::Alias("cd".to_string())));
+        assert_ok!(variables.set("cwd".to_string(), Variable::Alias("pwd".to_string())));
         assert_ok!(variables.set("multiply".to_string(), Variable::Alias("*".to_string())));
         assert_ok!(variables.set("product".to_string(), Variable::Alias("*".to_string())));
         assert_ok!(variables.set("sum".to_string(), Variable::Alias("+".to_string())));
@@ -2011,12 +2012,12 @@ mod test {
             Ok(Argument::Null)
         }
 
-        fn script_strings(&mut self, for_what: StringsFor, strings: Vec<String>) -> VoidResult {
+        fn script_strings(&mut self, for_what: StringsFor, strings: Vec<String>) -> ArgumentResult {
             for string in strings {
                 self.test_what_ran
                     .push(WhatRan::Mocked(format!("{:?}{{{:?}}}", for_what, string)));
             }
-            Ok(())
+            Ok(Argument::Null)
         }
 
         pub fn bind_key(&mut self, mode: Mode, binding: KeyBinding) {

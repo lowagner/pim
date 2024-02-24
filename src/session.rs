@@ -40,7 +40,7 @@ use strum_macros::EnumIter;
 use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
 use std::fmt;
-use std::fs::File;
+use std::fs;
 use std::io;
 
 use std::ops::Deref;
@@ -390,7 +390,8 @@ pub struct Session {
     pub height: f32,
     /// The current working directory.
     pub cwd: PathBuf,
-
+    // TODO: add this and hold onto it for `cd` with no argument.
+    // pub initial_working_directory: PathBuf,
     /// The cursor coordinates.
     pub cursor: SessionCoords,
 
@@ -1285,6 +1286,30 @@ impl Session {
             }
         }
         Ok(())
+    }
+
+    pub fn list_files(&mut self, paths: &Vec<String>) -> ArgumentResult {
+        let prefix = self.cwd.clone();
+        eprintln!("reading files from {}", prefix.display());
+        let file_iterator = fs::read_dir(prefix.clone())
+            .map_err(|e| e.to_string())?
+            .map(|e| {
+                e.unwrap()
+                    .path()
+                    .strip_prefix(&prefix)
+                    .expect("listing files in this directory should have this prefix")
+                    .display()
+                    .to_string()
+            })
+            .filter(|f| !f.starts_with('.')); // ignore hidden files
+        let results: Vec<String> = if paths.len() == 0 {
+            file_iterator.collect()
+        } else {
+            file_iterator
+                .filter(|f| paths.iter().all(|p| f.contains(p)))
+                .collect()
+        };
+        Ok(Argument::String(results.join(" ")))
     }
 
     fn concatenate_internal<P: AsRef<Path>>(&mut self, paths: &[P]) -> io::Result<ViewId> {
@@ -2234,8 +2259,8 @@ impl Session {
         debug!("source: {}", path.display());
 
         // TODO: if `path` is a directory, `source_dir`.
-        File::open(path)
-            .or_else(|_| File::open(self.proj_dirs.config_dir().join(path)))
+        fs::File::open(path)
+            .or_else(|_| fs::File::open(self.proj_dirs.config_dir().join(path)))
             .and_then(|f| self.source_reader(io::BufReader::new(f), path))
             .map_err(|e| {
                 io::Error::new(
@@ -2668,7 +2693,7 @@ impl Session {
     pub fn get_string_setting(&self, setting: StringSetting) -> String {
         match setting {
             StringSetting::Mode => self.mode.to_string(),
-            StringSetting::CurrentDirectory => {
+            StringSetting::PresentWorkingDirectory => {
                 std::env::current_dir().map_or("".to_string(), |cwd| cwd.display().to_string())
             }
             StringSetting::ConfigDirectory => self.proj_dirs.config_dir().display().to_string(),
@@ -2682,13 +2707,21 @@ impl Session {
                     Mode::from_str(&value).map_err(|_| format!("invalid mode: `{}`", value))?;
                 self.switch_mode(mode);
             }
-            StringSetting::CurrentDirectory => {
+            StringSetting::PresentWorkingDirectory => {
                 let path = Path::new(&value).to_path_buf();
                 if std::env::set_current_dir(&path).is_err() {
                     return Err(format!("could not change directory to `{}`", value));
                 }
-                self.cwd = path.clone();
-                self.cmdline.set_cwd(path.as_path());
+                // In case `set_current_dir` has special characters (like `..`), we should get path directly:
+                match std::env::current_dir() {
+                    Ok(path) => {
+                        self.cwd = path.clone();
+                        self.cmdline.set_cwd(path.as_path());
+                    }
+                    Err(e) => {
+                        return Err(format!("could not recover path after setting to {}", value));
+                    }
+                }
             }
             StringSetting::ConfigDirectory => {
                 // TODO: implement something here, maybe read a config file from new directory
@@ -3108,14 +3141,20 @@ impl Session {
         Ok(Argument::Null)
     }
 
-    pub fn script_strings(&mut self, for_what: StringsFor, strings: Vec<String>) -> VoidResult {
+    pub fn script_strings(&mut self, for_what: StringsFor, strings: Vec<String>) -> ArgumentResult {
         match for_what {
             StringsFor::Source => {
+                if strings.len() == 0 {
+                    return Err("add files to source configuration from".to_string());
+                }
                 for string in strings {
                     self.source_path(string).map_err(|e| e.to_string())?;
                 }
             }
             StringsFor::Edit => {
+                if strings.len() == 0 {
+                    return Err("add files to source configuration from".to_string());
+                }
                 self.edit_images(&strings)?;
             }
             /*
@@ -3124,10 +3163,16 @@ impl Session {
             }
             */
             StringsFor::Concatenate => {
+                if strings.len() == 0 {
+                    return Err("add files to source configuration from".to_string());
+                }
                 self.concatenate_images(&strings)?;
             }
+            StringsFor::ListFiles => {
+                return self.list_files(&strings);
+            }
         }
-        Ok(())
+        Ok(Argument::Null)
     }
 
     pub fn script_two_i64s(&mut self, for_what: TwoI64sFor, x: i64, y: i64) -> ArgumentResult {

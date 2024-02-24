@@ -242,7 +242,8 @@ impl fmt::Display for Command {
             Command::ColorSetting(ColorSetting::Foreground) => write!(f, "fg"),
             Command::ColorSetting(ColorSetting::Background) => write!(f, "bg"),
             Command::StringSetting(StringSetting::Mode) => write!(f, "mode"),
-            Command::StringSetting(StringSetting::CurrentDirectory) => write!(f, "cd"),
+            Command::StringSetting(StringSetting::PresentWorkingDirectory) => write!(f, "pwd"),
+            // TODO: StringSetting::ChangeDirectory
             Command::StringSetting(StringSetting::ConfigDirectory) => write!(f, "config-dir"),
             Command::I64Setting(I64Setting::Debug) => write!(f, "debug"),
             Command::I64Setting(I64Setting::UiAnimate) => write!(f, "ui-a"),
@@ -291,6 +292,7 @@ impl fmt::Display for Command {
             Command::UsingStrings(StringsFor::Source) => write!(f, "source"),
             Command::UsingStrings(StringsFor::Edit) => write!(f, "e"),
             Command::UsingStrings(StringsFor::Concatenate) => write!(f, "cat"),
+            Command::UsingStrings(StringsFor::ListFiles) => write!(f, "ls"),
             Command::UsingTwoI64s(TwoI64sFor::Pan) => write!(f, "pan"),
             Command::UsingTwoI64s(TwoI64sFor::FrameResize) => write!(f, "f-resize"),
             Command::UsingTwoI64s(TwoI64sFor::FrameSwap) => write!(f, "swap"),
@@ -349,7 +351,9 @@ impl FromStr for Command {
             "fg" => Ok(Command::ColorSetting(ColorSetting::Foreground)),
             "bg" => Ok(Command::ColorSetting(ColorSetting::Background)),
             "mode" => Ok(Command::StringSetting(StringSetting::Mode)),
-            "cd" => Ok(Command::StringSetting(StringSetting::CurrentDirectory)),
+            "pwd" => Ok(Command::StringSetting(
+                StringSetting::PresentWorkingDirectory,
+            )),
             "config-dir" => Ok(Command::StringSetting(StringSetting::ConfigDirectory)),
             "debug" => Ok(Command::I64Setting(I64Setting::Debug)),
             "ui-a" => Ok(Command::I64Setting(I64Setting::UiAnimate)),
@@ -404,6 +408,7 @@ impl FromStr for Command {
             "source" => Ok(Command::UsingStrings(StringsFor::Source)),
             "e" => Ok(Command::UsingStrings(StringsFor::Edit)),
             "cat" => Ok(Command::UsingStrings(StringsFor::Concatenate)),
+            "ls" => Ok(Command::UsingStrings(StringsFor::ListFiles)),
             "pan" => Ok(Command::UsingTwoI64s(TwoI64sFor::Pan)),
             "f-resize" => Ok(Command::UsingTwoI64s(TwoI64sFor::FrameResize)),
             "swap" => Ok(Command::UsingTwoI64s(TwoI64sFor::FrameSwap)),
@@ -529,7 +534,9 @@ pub enum StringsFor {
     // TODO: `Append` for appending images in the horizontal direction to the current view
     // TODO: `Stack` for concatenating images vertically into one new image
     // TODO: `Layer` for appending images in the vertical direction to the current view
-    // TODO: `ListFiles` for listing files in the current directory (`ls`)
+    /// List files that match all arguments in the current directory.
+    ListFiles,
+    // TODO: list files that match any argument in the current directory.
 }
 
 #[derive(Eq, Hash, PartialEq, Debug, Clone, Copy, EnumIter)]
@@ -838,7 +845,7 @@ impl autocomplete::Completer for ScriptCompleter {
                 | Command::UsingStrings(StringsFor::Source)
                 | Command::Write => self.complete_path(input, Default::default()),
                 // Commands for directory completion:
-                Command::StringSetting(StringSetting::CurrentDirectory) => {
+                Command::StringSetting(StringSetting::PresentWorkingDirectory) => {
                     self.complete_path(input, FileCompleterOpts { directories: true })
                 }
                 _ => vec![],
