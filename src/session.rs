@@ -161,6 +161,14 @@ impl Selection {
     pub fn resize(&mut self, x: i32, y: i32) {
         self.0.x2 += x;
         self.0.y2 -= y;
+        // This isn't exactly `self.0 = self.0.abs()` since we want y1 > y2.
+        if self.0.x1 > self.0.x2 {
+            std::mem::swap(&mut self.0.x1, &mut self.0.x2);
+        }
+        // Notice `y` is swapped:
+        if self.0.y2 > self.0.y1 {
+            std::mem::swap(&mut self.0.y1, &mut self.0.y2);
+        }
     }
 }
 

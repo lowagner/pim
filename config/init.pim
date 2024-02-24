@@ -68,28 +68,36 @@ bind-select <del>           s-erase            ()
 bind-select 'v'             s-paste            ()
 bind-select <ctrl><v>       s-paste            ()
 bind-select <ctrl><c>       (run-all s-copy (mode 'select')) () --  Copy without switching to pasting mode.
-bind-select <w>             (mirrorx) ()
-bind-select <shift><w>      (mirrory) ()
-bind-select <a>             (s-move fw 0)                       -- Advance the selection one frame.
-bind-select <b>             (s-move (* -1 fw) 0)                -- Back the selection up one frame.
+bind-select <r>                 (s-delta  1  0)                 --  Expand the selection to the right one pixel.
+bind-select <ctrl><r>           (s-delta -1  0)                 --  Reduce the selection width by one pixel.
+bind-select <shift><r>          (s-delta  8  0)                 --  Expand the selection to the right by more pixels.
+bind-select <shift><ctrl><r>    (s-delta -8  0)                 --  Reduce the selection width by more pixels.
+bind-select <d>                 (s-delta  0  1)                 --  Expand the selection down by one pixel.
+bind-select <ctrl><d>           (s-delta  0 -1)                 --  Reduce the selection height by one pixel.
+bind-select <shift><d>          (s-delta  0  8)                 --  Expand the selection down by more pixels.
+bind-select <shift><ctrl><d>    (s-delta  0 -8)                 --  Reduce the selection height by more pixels.
+bind-select <w>             (mirrorx) ()                        --  Mirror the selection in X ("w" is x-symmetric).
+bind-select <shift><w>      (mirrory) ()                        --  Mirror the selection in Y.
+bind-select <a>             (s-move fw 0)                       --  Advance the selection one frame.
+bind-select <b>             (s-move (* -1 fw) 0)                --  Back the selection up one frame.
 bind-select <up>            (s-move  0 -1)
 bind-select <down>          (s-move  0  1)
 bind-select <left>          (s-move -1  0)
 bind-select <right>         (s-move  1  0)
-bind-select <shift><up>     (s-move  0 -10)
-bind-select <shift><down>   (s-move  0  10)
-bind-select <shift><left>   (s-move -10  0)
-bind-select <shift><right>  (s-move  10  0)
-bind-select <ctrl><a>             (s-shift fw 0)                -- Move the pixels ahead one frame.
-bind-select <ctrl><b>             (s-shift (* -1 fw) 0)         -- Back the pixels up one frame.
+bind-select <shift><up>     (s-move  0 -8)
+bind-select <shift><down>   (s-move  0  8)
+bind-select <shift><left>   (s-move -8  0)
+bind-select <shift><right>  (s-move  8  0)
+bind-select <ctrl><a>             (s-shift fw 0)                --  Move the pixels ahead one frame.
+bind-select <ctrl><b>             (s-shift (* -1 fw) 0)         --  Back the pixels up one frame.
 bind-select <ctrl><up>            (s-shift  0 -1)
 bind-select <ctrl><down>          (s-shift  0  1)
 bind-select <ctrl><left>          (s-shift -1  0)
 bind-select <ctrl><right>         (s-shift  1  0)
-bind-select <ctrl><shift><up>     (s-shift  0 -10)
-bind-select <ctrl><shift><down>   (s-shift  0  10)
-bind-select <ctrl><shift><left>   (s-shift -10  0)
-bind-select <ctrl><shift><right>  (s-shift  10  0)
+bind-select <ctrl><shift><up>     (s-shift  0 -8)
+bind-select <ctrl><shift><down>   (s-shift  0  8)
+bind-select <ctrl><shift><left>   (s-shift -8  0)
+bind-select <ctrl><shift><right>  (s-shift  8  0)
 
 scale% 100                                                      --  Set interface scale to 100%
 checker 0                                                       --  Turn off alpha checker
