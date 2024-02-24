@@ -21,7 +21,7 @@ bind        '-'             (zoom 1)                            --  Reset active
 -- TODO: switch `j`-`k` to move layers.
 bind-normal 'j'             v--                                 --  Go to previous view
 bind-normal 'k'             v++                                 --  Go to next view
-bind         <ctrl><s>      w                                   --  Save the current view
+bind         <ctrl><s>      w                   ()              --  Save the current view
 bind         <ctrl><z>      undo                                --  Undo active view edit
 bind    <ctrl><shift><z>    redo                                --  Redo an earlier undo.
 bind-normal 'x'             (fg (bg fg))        ()              --  Swap foreground-background colors
@@ -60,14 +60,17 @@ bind-select 'k'             (s-move    0 -1)
 bind-select 'l'             (s-move    1  0)
 bind-select ']'             (s-offset  1  1)
 bind-select '['             (s-offset -1 -1)
-bind-select '\'             s-expand           ()               --  Expand the selection
-bind-select 'c'             s-copy             ()               --  Copy the selection and switch to pasting mode.
-bind-select 'x'             s-cut              ()
-bind-select 'e'             s-erase            ()
-bind-select <del>           s-erase            ()
-bind-select 'v'             s-paste            ()
-bind-select <ctrl><v>       s-paste            ()
+bind-select '\'             s-expand           ()               --  Expand the selection to fill the frame.
+bind-select <c>             s-copy             ()               --  Copy the selection and switch to pasting mode.
 bind-select <ctrl><c>       (run-all s-copy (mode 'select')) () --  Copy without switching to pasting mode.
+bind-select <del>           s-erase            ()
+bind-select <shift><x>      s-erase            ()               --  Erase the selection without copying it.
+bind-select <x>             s-cut              ()
+bind-select <ctrl><x>       (run-all s-cut (mode 'select')) ()  --  Cut without switching to pasting mode.
+-- TODO: one of <v> or <ctrl><v> should resize the selection to the copied size before pasting.  probably <ctrl><v>
+bind-select <v>             s-paste            ()
+-- TODO: <shift><v> should be cut and paste previous
+bind-select <ctrl><v>       s-paste            ()
 bind-select <r>                 (s-delta  1  0)                 --  Expand the selection to the right one pixel.
 bind-select <ctrl><r>           (s-delta -1  0)                 --  Reduce the selection width by one pixel.
 bind-select <shift><r>          (s-delta  8  0)                 --  Expand the selection to the right by more pixels.
@@ -76,6 +79,11 @@ bind-select <d>                 (s-delta  0  1)                 --  Expand the s
 bind-select <ctrl><d>           (s-delta  0 -1)                 --  Reduce the selection height by one pixel.
 bind-select <shift><d>          (s-delta  0  8)                 --  Expand the selection down by more pixels.
 bind-select <shift><ctrl><d>    (s-delta  0 -8)                 --  Reduce the selection height by more pixels.
+bind-select <e>                 (s-delta2  1  1)                --  Expand the selection by one pixel in each direction.
+-- bind-select <shift><e>          (s-delta2  8  8)                --  Expand the selection by more pixels in each direction.
+bind-select <shift><e>          s-expand           ()           --  Expand the selection to fill the frame.
+bind-select <ctrl><e>           (s-delta2 -1 -1)                --  Reduce the selection by one pixel in each direction.
+bind-select <shift><ctrl><e>    (s-delta2 -8 -8)                --  Reduce the selection by more pixels in each direction.
 bind-select <w>             (mirrorx) ()                        --  Mirror the selection in X ("w" is x-symmetric).
 bind-select <shift><w>      (mirrory) ()                        --  Mirror the selection in Y.
 bind-select <a>             (s-move fw 0)                       --  Advance the selection one frame.
