@@ -142,7 +142,7 @@ impl Selection {
 
     /// Return the selection bounds as a non-empty rectangle. This function
     /// will never return an empty rectangle.
-    // TODO: i think this isn't true if we're not in standard form.
+    // TODO: i think this isn't true if we're not in standard form. (i.e., y2 >= y1, x2 >= x1)
     pub fn bounds(&self) -> Rect<i32> {
         Rect::new(self.x1, self.y1, self.x2 + 1, self.y2 + 1)
     }
@@ -158,10 +158,10 @@ impl Selection {
     }
 
     /// Resize the selection by a certain amount.
-    // TODO: this should be a `dx`, `dy` type name, e.g., `resize_delta`.
-    pub fn resize(&mut self, x: i32, y: i32) {
-        self.0.x2 += x;
-        self.0.y2 -= y;
+    pub fn resize_delta(&mut self, dx: i32, dy: i32) {
+        self.0.x2 += dx;
+        self.0.y2 -= dy;
+        // TODO: do we really want this?  we probably can stop the resize if we would break the invariant.
         // This isn't exactly `self.0 = self.0.abs()` since we want y1 > y2.
         if self.0.x1 > self.0.x2 {
             std::mem::swap(&mut self.0.x1, &mut self.0.x2);
@@ -173,8 +173,10 @@ impl Selection {
     }
 
     pub fn resize_to(&mut self, width: i32, height: i32) {
-        self.0.x2 = self.0.x1 + width;
-        self.0.y2 = self.0.y1 - height;
+        self.0.x1 = self.0.x1.min(self.0.x2);
+        self.0.x2 = self.0.x1 + width - 1;
+        self.0.y2 = self.0.y1.max(self.0.y2);
+        self.0.y1 = self.0.y2 - height + 1;
     }
 }
 
@@ -1693,11 +1695,9 @@ impl Session {
         //       allow pasting from any of these.
         if let (Mode::Select(Select::Selecting), Some(s)) = (self.mode, self.selection) {
             let v = self.active_view_mut();
-            let s = s.abs().bounds();
+            let s = s.abs().bounds().intersection(v.layer_bounds());
 
-            if s.intersects(v.layer_bounds()) {
-                let s = s.intersection(v.layer_bounds());
-
+            if !s.is_empty() {
                 v.yank(s);
 
                 self.clipboard_size = Vector2::new(s.width(), s.height());
@@ -1710,13 +1710,31 @@ impl Session {
         None
     }
 
-    fn paste_selection(&mut self) -> Option<Rect<i32>> {
+    fn paste_selection(&mut self) {
         if let (Mode::Select(_), Some(s)) = (self.mode, self.selection) {
-            let bounds = s.abs().bounds();
-            self.active_view_mut().paste(bounds);
-            Some(bounds)
+            self.active_view_mut().paste(s.abs().bounds());
+        }
+    }
+
+    fn swap_cut(&mut self) {
+        let new_selection = if let (Mode::Select(_), Some(s)) = (self.mode, self.selection) {
+            let v = self.active_view_mut();
+            let paste_area = s.abs().bounds();
+            // The area that we cut out needs to be in bounds:
+            let cut_area = paste_area.intersection(v.layer_bounds());
+            if !cut_area.is_empty() {
+                self.active_view_mut()
+                    .swap_cut(paste_area, cut_area.map(|n| n as u32));
+                Some(cut_area)
+            } else {
+                None
+            }
         } else {
             None
+        };
+        if let (Some(ref mut selection), Some(new_selection)) = (self.selection, new_selection) {
+            *selection = Selection::from(new_selection);
+            self.clipboard_size = Vector2::new(new_selection.width(), new_selection.height());
         }
     }
 
@@ -3100,6 +3118,9 @@ impl Session {
             ZeroArgumentsFor::SelectionPaste => {
                 self.paste_selection();
             }
+            ZeroArgumentsFor::SelectionSwapCut => {
+                self.swap_cut();
+            }
             ZeroArgumentsFor::SelectionMirrorX => {
                 self.flip_selection(Axis::Horizontal);
             }
@@ -3253,7 +3274,7 @@ impl Session {
             }
             TwoI64sFor::SelectionDelta => {
                 if let Some(ref mut s) = self.selection {
-                    s.resize(x as i32, y as i32);
+                    s.resize_delta(x as i32, y as i32);
                 }
             }
             TwoI64sFor::SelectionDeltaSymmetric => {

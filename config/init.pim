@@ -69,8 +69,11 @@ bind-select <shift><x>      s-erase            ()               --  Erase the se
 bind-select <x>             s-cut              ()
 bind-select <ctrl><x>       (run-all s-cut (mode 'select')) ()  --  Cut without switching to pasting mode.
 bind-select <v>             s-paste            ()               --  Pastes the clipboard scaled to the selection size
--- TODO: <shift><v> should be cut and paste previous
 bind-select <ctrl><v>       (run-all s-clipsize s-paste)    ()  --  Pastes the clipboard but at 1x scale
+--  Cut and paste previous scaled:
+bind-select <shift><v>          (run-all s-swapcut (mode 'select')) ()
+--  Cut and paste previous at scale 1x:
+bind-select <ctrl><shift><v>    (run-all s-clipsize s-swapcut (mode 'select')) ()
 bind-select <r>                 (s-delta  1  0)                 --  Expand the selection to the right one pixel.
 bind-select <ctrl><r>           (s-delta -1  0)                 --  Reduce the selection width by one pixel.
 bind-select <shift><r>          (s-delta  8  0)                 --  Expand the selection to the right by more pixels.

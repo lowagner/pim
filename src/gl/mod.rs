@@ -983,13 +983,7 @@ impl Renderer {
                     self.view_data.remove(&id);
                 }
                 Effect::ViewOps(id, ops) => {
-                    // TODO: probably could just pass session.selection as &mut
-                    if let Some(rect) =
-                        self.handle_view_ops(session.view(id), session.selection, &ops)?
-                    {
-                        session.selection =
-                            Some(Selection::new(rect.x1, rect.y1, rect.x2, rect.y2));
-                    }
+                    self.handle_view_ops(session.view(id), &ops)?;
                 }
                 Effect::ViewDamaged(id, Some(extent)) => {
                     self.handle_view_resized(session.view(id), extent.width(), extent.height())?;
@@ -1015,9 +1009,8 @@ impl Renderer {
     fn handle_view_ops(
         &mut self,
         v: &View<ViewResource>,
-        selection: Option<Selection>,
         ops: &[ViewOp],
-    ) -> Result<Option<Rect<i32>>, RendererError> {
+    ) -> Result<(), RendererError> {
         use RendererError as Error;
 
         for op in ops {
@@ -1038,29 +1031,7 @@ impl Renderer {
                         .map_err(Error::Texture)?;
                 }
                 ViewOp::ClearRect(color, rect) => {
-                    let view = self
-                        .view_data
-                        .get_mut(&v.id)
-                        .expect("views must have associated view data");
-
-                    // TODO: this seems inefficient but haven't figured out the luminance
-                    //      API to see how to clear a texture in a given region.
-                    let texels = vec![
-                        (color.r, color.g, color.b, color.a);
-                        (rect.width() * rect.height()) as usize
-                    ];
-                    let texels = util::align_u8(&texels);
-
-                    view.layer
-                        .fb
-                        .color_slot()
-                        .upload_part_raw(
-                            GenMipmaps::No,
-                            [rect.x1, rect.y1],
-                            [rect.width(), rect.height()],
-                            texels,
-                        )
-                        .map_err(Error::Texture)?;
+                    self.clear_rect(v, *color, *rect);
                 }
                 ViewOp::Blit(src, dst) => {
                     assert!(src.width() == dst.width());
@@ -1083,21 +1054,6 @@ impl Renderer {
                             [src.width(), src.height()],
                             texels,
                         )
-                        .map_err(Error::Texture)?;
-                }
-                ViewOp::Yank(src) => {
-                    let (_, pixels) = v.layer.get_snapshot_rect(&src.map(|n| n)).unwrap();
-                    let (w, h) = (src.width() as u32, src.height() as u32);
-                    let [paste_w, paste_h] = self.paste.size();
-
-                    if paste_w != w || paste_h != h {
-                        self.paste = Texture::new(&mut self.ctx, [w, h], 0, self::SAMPLER)
-                            .map_err(Error::Texture)?;
-                    }
-                    let body = util::align_u8(&pixels);
-
-                    self.paste
-                        .upload_raw(GenMipmaps::No, body)
                         .map_err(Error::Texture)?;
                 }
                 ViewOp::Flip(src, dir) => {
@@ -1135,15 +1091,24 @@ impl Renderer {
                         .upload_raw(GenMipmaps::No, body)
                         .map_err(Error::Texture)?;
                 }
-                ViewOp::Paste(mut dst) => {
+                ViewOp::Copy(src) => {
+                    let (_, pixels) = v.layer.get_snapshot_rect(src).unwrap();
+                    let (w, h) = (src.width() as u32, src.height() as u32);
                     let [paste_w, paste_h] = self.paste.size();
-                    let result = if dst.area() == 1 {
-                        dst.x2 = dst.x1 + paste_w as i32;
-                        dst.y1 = dst.y2 - paste_h as i32; // with graphics, y up is positive.
-                        Some(dst)
-                    } else {
-                        None
-                    };
+
+                    if paste_w != w || paste_h != h {
+                        self.paste = Texture::new(&mut self.ctx, [w, h], 0, self::SAMPLER)
+                            .map_err(Error::Texture)?;
+                    }
+                    let body = util::align_u8(&pixels);
+
+                    self.paste
+                        .upload_raw(GenMipmaps::No, body)
+                        .map_err(Error::Texture)?;
+                }
+                ViewOp::Paste(dst) => {
+                    let [paste_w, paste_h] = self.paste.size();
+
                     let batch = sprite2d::Batch::singleton(
                         paste_w,
                         paste_h,
@@ -1159,7 +1124,48 @@ impl Renderer {
                         self.ctx
                             .tessellation::<_, Sprite2dVertex>(batch.vertices().as_slice()),
                     );
-                    return Ok(result);
+                }
+                ViewOp::SwapCut(paste_rect, mut cut_rect) => {
+                    let fh = v.fh;
+                    let (_, pixels) = v
+                        .layer
+                        .get_snapshot_rect(&cut_rect.map(|n| n as i32))
+                        .unwrap();
+                    let (w, h) = (cut_rect.width() as u32, cut_rect.height() as u32);
+
+                    let mut swap_paste = Texture::new(&mut self.ctx, [w, h], 0, self::SAMPLER)
+                        .map_err(Error::Texture)?;
+                    swap_paste
+                        .upload_raw(GenMipmaps::No, util::align_u8(&pixels))
+                        .map_err(Error::Texture)?;
+
+                    let (y1, y2) = (cut_rect.y1, cut_rect.y2);
+                    // source y is swapped in textures.  (y up is positive)
+                    cut_rect.y1 = fh - y2;
+                    cut_rect.y2 = fh - y1;
+                    self.clear_rect(v, Rgba8::TRANSPARENT, cut_rect);
+
+                    // Need to paste from `self.paste` now and not async in `self.paste_outputs`.
+                    /* TODO: need to fix x1/y1 in case we're off the image.
+                    let texels = self.paste.get_raw_texels().map_err(Error::Texture)?;
+                    let texels = util::align_u8(&texels);
+
+                    self.view_data
+                        .get_mut(&v.id)
+                        .expect("views must have associated view data")
+                        .layer
+                        .fb
+                        .color_slot()
+                        .upload_part_raw(
+                            GenMipmaps::No,
+                            [paste_rect.x1, paste_rect.y1],
+                            [paste_rect.width(), paste_rect.height()],
+                            texels,
+                        )
+                        .map_err(Error::Texture)?;
+                    */
+
+                    self.paste = swap_paste;
                 }
                 ViewOp::SetPixel(rgba, x, y) => {
                     let fb = &mut self
@@ -1176,7 +1182,37 @@ impl Renderer {
                 }
             }
         }
-        Ok(None)
+        Ok(())
+    }
+
+    fn clear_rect(
+        &mut self,
+        v: &View<ViewResource>,
+        color: Rgba8,
+        rect: Rect<u32>,
+    ) -> Result<(), RendererError> {
+        let view = self
+            .view_data
+            .get_mut(&v.id)
+            .expect("views must have associated view data");
+
+        // TODO: this seems inefficient but haven't figured out the luminance
+        //      API to see how to clear a texture in a given region.
+        let texels =
+            vec![(color.r, color.g, color.b, color.a); (rect.width() * rect.height()) as usize];
+        let texels = util::align_u8(&texels);
+
+        view.layer
+            .fb
+            .color_slot()
+            .upload_part_raw(
+                GenMipmaps::No,
+                [rect.x1, rect.y1],
+                [rect.width(), rect.height()],
+                texels,
+            )
+            .map_err(RendererError::Texture)?;
+        Ok(())
     }
 
     fn handle_view_damaged(&mut self, view: &View<ViewResource>) -> Result<(), RendererError> {

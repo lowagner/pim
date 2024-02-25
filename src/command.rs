@@ -278,9 +278,11 @@ impl fmt::Display for Command {
             Command::WithoutArguments(ZeroArgumentsFor::SelectionErase) => write!(f, "erase"),
             Command::WithoutArguments(ZeroArgumentsFor::SelectionCopy) => write!(f, "copy"),
             Command::WithoutArguments(ZeroArgumentsFor::SelectionCut) => write!(f, "cut"),
+            Command::WithoutArguments(ZeroArgumentsFor::SelectionSwapCut) => write!(f, "swapcut"),
             Command::WithoutArguments(ZeroArgumentsFor::SelectionPaste) => write!(f, "paste"),
             Command::WithoutArguments(ZeroArgumentsFor::SelectionMirrorX) => write!(f, "mirrorx"),
             Command::WithoutArguments(ZeroArgumentsFor::SelectionMirrorY) => write!(f, "mirrory"),
+            // TODO: OptionalI64For::SelectionRotate "rotate"
             Command::UsingOptionalI64(OptionalI64For::FrameAdd) => write!(f, "fa"),
             Command::UsingOptionalI64(OptionalI64For::FrameInsert) => write!(f, "fi"),
             Command::UsingOptionalI64(OptionalI64For::FrameClone) => write!(f, "fc"),
@@ -392,6 +394,9 @@ impl FromStr for Command {
             "erase" => Ok(Command::WithoutArguments(ZeroArgumentsFor::SelectionErase)),
             "copy" => Ok(Command::WithoutArguments(ZeroArgumentsFor::SelectionCopy)),
             "cut" => Ok(Command::WithoutArguments(ZeroArgumentsFor::SelectionCut)),
+            "swapcut" => Ok(Command::WithoutArguments(
+                ZeroArgumentsFor::SelectionSwapCut,
+            )),
             "paste" => Ok(Command::WithoutArguments(ZeroArgumentsFor::SelectionPaste)),
             "mirrorx" => Ok(Command::WithoutArguments(
                 ZeroArgumentsFor::SelectionMirrorX,
@@ -488,11 +493,14 @@ pub enum ZeroArgumentsFor {
     /// Erases what's in the selection.
     // TODO: i think we can delete this and just use selection-clear.
     SelectionErase,
-    /// Copies what is in the selection to the selection clipboard.
+    /// Copies what is in the selection to the clipboard.
     SelectionCopy,
-    /// Copies what is in the selection to the selection clipboard
+    /// Copies what is in the selection to the clipboard
     /// and erases what was there.
     SelectionCut,
+    /// Cuts what is in the selection to the clipboard
+    /// and pastes what *was* in the clipboard to the selection.
+    SelectionSwapCut,
     /// Pastes what is in the selection clipboard.
     SelectionPaste,
     /// Pastes what is in the selection clipboard flipped horizontally.

@@ -1393,6 +1393,10 @@ impl Variables {
             "`$$` copies the selection and clears the area",
         );
         variables.add_built_in(
+            Command::WithoutArguments(ZeroArgumentsFor::SelectionSwapCut),
+            "`$$` pastes what was in the clipboard and cuts what was in the selection",
+        );
+        variables.add_built_in(
             Command::WithoutArguments(ZeroArgumentsFor::SelectionPaste),
             "`$$` pastes what was copied in a previous selection",
         );
@@ -1682,6 +1686,10 @@ impl Variables {
         assert_ok!(variables.set("s-erase".to_string(), Variable::Alias("erase".to_string())));
         assert_ok!(variables.set("s-copy".to_string(), Variable::Alias("copy".to_string())));
         assert_ok!(variables.set("s-cut".to_string(), Variable::Alias("cut".to_string())));
+        assert_ok!(variables.set(
+            "s-swapcut".to_string(),
+            Variable::Alias("swapcut".to_string())
+        ));
         assert_ok!(variables.set("s-paste".to_string(), Variable::Alias("paste".to_string())));
         assert_ok!(variables.set(
             "s-mirrorx".to_string(),

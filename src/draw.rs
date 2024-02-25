@@ -67,6 +67,7 @@ pub mod cursors {
     const OMNI: Cursor = Cursor::new(Rect::new(32., 0., 48., 16.), -8., -8., false);
     const PAN: Cursor = Cursor::new(Rect::new(48., 0., 64., 16.), -8., -8., false);
     const ERASE: Cursor = Cursor::new(Rect::new(64., 0., 80., 16.), -8., -8., true);
+    // TODO: fix flood cursor offset, doesn't seem to hit the pixel where the bucket spill is located.
     const FLOOD: Cursor = Cursor::new(Rect::new(80., 0., 96., 16.), -8., -8., false);
 
     pub fn info(t: &Tool, b: &Brush, m: Mode, in_view: bool, in_selection: bool) -> Option<Cursor> {
@@ -167,6 +168,8 @@ fn draw_ui(session: &Session, canvas: &mut shape2d::Batch, text: &mut TextBatch)
         };
         let stroke = color::RED;
 
+        // TODO: when super zoomed-in, the red outline that boxes pixels
+        //       doesn't seem to be lined up correctly.
         let r = selection.abs().bounds();
         let offset = session.offset + view.offset;
 

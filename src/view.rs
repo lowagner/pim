@@ -100,12 +100,15 @@ pub enum ViewOp {
     ClearRect(Rgba8, Rect<u32>),
     /// Copy an area of the view to another area.
     Blit(Rect<u32>, Rect<u32>),
-    /// Yank the given area into the paste buffer.
-    Yank(Rect<i32>),
     /// Flips a given area horizontally or vertically.
     Flip(Rect<i32>, Axis),
+    /// Yank the given area into the paste buffer.
+    Copy(Rect<i32>),
     /// Blit the paste buffer into the given area.
     Paste(Rect<i32>),
+    /// Pastes the buffer into the first area and cuts the previous pixels
+    /// in the second area into the paste buffer.
+    SwapCut(Rect<i32>, Rect<u32>),
     /// Resize the view.
     Resize(u32, u32),
     /// Paint a single pixel.
@@ -578,7 +581,8 @@ impl<R> View<R> {
     }
 
     pub fn yank(&mut self, area: Rect<i32>) {
-        self.ops.push(ViewOp::Yank(area));
+        // TODO: we should check that `area` is within the `layer_bounds()` here.
+        self.ops.push(ViewOp::Copy(area));
     }
 
     pub fn flip(&mut self, area: Rect<i32>, dir: Axis) {
@@ -588,6 +592,11 @@ impl<R> View<R> {
 
     pub fn paste(&mut self, area: Rect<i32>) {
         self.ops.push(ViewOp::Paste(area));
+        self.touch();
+    }
+
+    pub fn swap_cut(&mut self, paste_area: Rect<i32>, cut_area: Rect<u32>) {
+        self.ops.push(ViewOp::SwapCut(paste_area, cut_area));
         self.touch();
     }
 
