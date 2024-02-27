@@ -1128,7 +1128,7 @@ impl Renderer {
                             .tessellation::<_, Sprite2dVertex>(batch.vertices().as_slice()),
                     );
                 }
-                ViewOp::SwapCut(paste_rect, mut cut_rect) => {
+                ViewOp::SwapCut(mut paste_rect, mut cut_rect) => {
                     // TODO: ensure that paste_rect has the same size as existing pixels.
                     let (_, pixels) = v
                         .layer
@@ -1148,9 +1148,13 @@ impl Renderer {
                     cut_rect.y2 = v.fh - y1;
                     self.clear_rect(v, Rgba8::TRANSPARENT, cut_rect);
 
+                    let (y1, y2) = (paste_rect.y1, paste_rect.y2);
+                    // source y is swapped in textures.  (y up is positive)
+                    paste_rect.y1 = v.fh as i32 - y2;
+                    paste_rect.y2 = v.fh as i32 - y1;
                     // Need to paste from `self.paste` now and not async in `self.paste_outputs`.
                     std::mem::swap(&mut self.paste, &mut swap_paste);
-                    self.paste_now(swap_paste, v, *paste_rect);
+                    self.paste_now(swap_paste, v, paste_rect);
                 }
                 ViewOp::SetPixel(rgba, x, y) => {
                     let fb = &mut self
@@ -1206,28 +1210,23 @@ impl Renderer {
         v: &View<ViewResource>,
         paste_rect: Rect<i32>,
     ) -> Result<(), RendererError> {
-        let max_paste_size = to_paste.size();
-        let src_rect = Rect::origin(max_paste_size[0] as i32, max_paste_size[1] as i32);
+        let [paste_w, paste_h] = to_paste.size();
+        let src_rect = Rect::origin(paste_w as i32, paste_h as i32);
         let width = v.width();
         let (src_rect, paste_rect) = ensure_within(width, v.fh, src_rect, paste_rect);
         // The src_rect was (0,0) to (width, fh) so we can convert to usize:
         let src_rect = src_rect.map(|n| n as usize);
         let src_texels = to_paste.get_raw_texels().map_err(RendererError::Texture)?;
-        let mut texel_vec = vec![];
-        texel_vec.reserve_exact(src_rect.area());
-        eprintln!(
-            "src rect {:?} -> paste rect {:?}, areas {} and {}",
-            src_rect,
-            paste_rect,
-            src_rect.area(),
-            paste_rect.area()
-        );
+        let mut texel_vec = Vec::with_capacity(4 * src_rect.area());
+
         for y in src_rect.y1..src_rect.y2 {
-            let row_offset = y * width as usize;
-            texel_vec
-                .extend_from_slice(&src_texels[row_offset + src_rect.x1..row_offset + src_rect.x2]);
+            let row_offset = y * paste_w as usize;
+            let z1 = row_offset + src_rect.x1;
+            let z2 = row_offset + src_rect.x2;
+            // Raw texels don't take into account each channel, so multiply
+            // by the channel count here (RGBA = 4)
+            texel_vec.extend_from_slice(&src_texels[4 * z1 as usize..4 * z2 as usize]);
         }
-        eprintln!("texel vec has size {}", texel_vec.len());
         let src_texels = util::align_u8(&texel_vec);
 
         self.view_data
