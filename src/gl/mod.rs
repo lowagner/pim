@@ -12,8 +12,9 @@ use crate::view::resource::ViewResource;
 use crate::view::{View, ViewId, ViewOp, ViewState};
 use crate::{data, data::Assets, image};
 
+use crate::gfx::rect::{ensure_within, Rect};
 use crate::gfx::{shape2d, sprite2d, Origin, Rgba, Rgba8, ZDepth};
-use crate::gfx::{Matrix4, Rect, Repeat, Vector3};
+use crate::gfx::{Matrix4, Repeat, Vector3};
 
 use luminance::context::GraphicsContext;
 use luminance::depth_test::DepthComparison;
@@ -128,6 +129,8 @@ struct Screen2dInterface {
     framebuffer: Uniform<TextureBinding<Dim2, pixel::NormUnsigned>>,
 }
 
+pub type SrgbaTexture = Texture<Backend, Dim2, pixel::SRGBA8UI>;
+
 pub struct Renderer {
     pub win_size: LogicalSize,
 
@@ -144,10 +147,10 @@ pub struct Renderer {
     staging_batch: shape2d::Batch,
     final_batch: shape2d::Batch,
 
-    font: Texture<Backend, Dim2, pixel::SRGBA8UI>,
-    cursors: Texture<Backend, Dim2, pixel::SRGBA8UI>,
-    checker: Texture<Backend, Dim2, pixel::SRGBA8UI>,
-    paste: Texture<Backend, Dim2, pixel::SRGBA8UI>,
+    font: SrgbaTexture,
+    cursors: SrgbaTexture,
+    checker: SrgbaTexture,
+    paste: SrgbaTexture,
     paste_outputs: Vec<Tess<Backend, Sprite2dVertex>>,
 
     sprite2d: Program<Backend, VertexSemantics, (), Sprite2dInterface>,
@@ -1126,7 +1129,7 @@ impl Renderer {
                     );
                 }
                 ViewOp::SwapCut(paste_rect, mut cut_rect) => {
-                    let fh = v.fh;
+                    // TODO: ensure that paste_rect has the same size as existing pixels.
                     let (_, pixels) = v
                         .layer
                         .get_snapshot_rect(&cut_rect.map(|n| n as i32))
@@ -1141,31 +1144,13 @@ impl Renderer {
 
                     let (y1, y2) = (cut_rect.y1, cut_rect.y2);
                     // source y is swapped in textures.  (y up is positive)
-                    cut_rect.y1 = fh - y2;
-                    cut_rect.y2 = fh - y1;
+                    cut_rect.y1 = v.fh - y2;
+                    cut_rect.y2 = v.fh - y1;
                     self.clear_rect(v, Rgba8::TRANSPARENT, cut_rect);
 
                     // Need to paste from `self.paste` now and not async in `self.paste_outputs`.
-                    /* TODO: need to fix x1/y1 in case we're off the image.
-                    let texels = self.paste.get_raw_texels().map_err(Error::Texture)?;
-                    let texels = util::align_u8(&texels);
-
-                    self.view_data
-                        .get_mut(&v.id)
-                        .expect("views must have associated view data")
-                        .layer
-                        .fb
-                        .color_slot()
-                        .upload_part_raw(
-                            GenMipmaps::No,
-                            [paste_rect.x1, paste_rect.y1],
-                            [paste_rect.width(), paste_rect.height()],
-                            texels,
-                        )
-                        .map_err(Error::Texture)?;
-                    */
-
-                    self.paste = swap_paste;
+                    std::mem::swap(&mut self.paste, &mut swap_paste);
+                    self.paste_now(swap_paste, v, *paste_rect);
                 }
                 ViewOp::SetPixel(rgba, x, y) => {
                     let fb = &mut self
@@ -1213,6 +1198,51 @@ impl Renderer {
             )
             .map_err(RendererError::Texture)?;
         Ok(())
+    }
+
+    fn paste_now(
+        &mut self,
+        to_paste: SrgbaTexture,
+        v: &View<ViewResource>,
+        paste_rect: Rect<i32>,
+    ) -> Result<(), RendererError> {
+        let max_paste_size = to_paste.size();
+        let src_rect = Rect::origin(max_paste_size[0] as i32, max_paste_size[1] as i32);
+        let width = v.width();
+        let (src_rect, paste_rect) = ensure_within(width, v.fh, src_rect, paste_rect);
+        // The src_rect was (0,0) to (width, fh) so we can convert to usize:
+        let src_rect = src_rect.map(|n| n as usize);
+        let src_texels = to_paste.get_raw_texels().map_err(RendererError::Texture)?;
+        let mut texel_vec = vec![];
+        texel_vec.reserve_exact(src_rect.area());
+        eprintln!(
+            "src rect {:?} -> paste rect {:?}, areas {} and {}",
+            src_rect,
+            paste_rect,
+            src_rect.area(),
+            paste_rect.area()
+        );
+        for y in src_rect.y1..src_rect.y2 {
+            let row_offset = y * width as usize;
+            texel_vec
+                .extend_from_slice(&src_texels[row_offset + src_rect.x1..row_offset + src_rect.x2]);
+        }
+        eprintln!("texel vec has size {}", texel_vec.len());
+        let src_texels = util::align_u8(&texel_vec);
+
+        self.view_data
+            .get_mut(&v.id)
+            .expect("views must have associated view data")
+            .layer
+            .fb
+            .color_slot()
+            .upload_part_raw(
+                GenMipmaps::No,
+                [paste_rect.x1, paste_rect.y1],
+                [paste_rect.width(), paste_rect.height()],
+                src_texels,
+            )
+            .map_err(RendererError::Texture)
     }
 
     fn handle_view_damaged(&mut self, view: &View<ViewResource>) -> Result<(), RendererError> {
