@@ -2635,12 +2635,21 @@ impl Session {
     }
 
     pub fn script_paint(&mut self, x: i64, y: i64, color: Rgba8) -> ArgumentResult {
+        let v = self.active_view();
+        let swapped_y = v.fh as i64 - 1 - y;
+        if x < 0 || y < 0 || swapped_y < 0 {
+            return Err("out of bounds".to_string());
+        }
+        // TODO: fix this swap requirement, `color_at` shouldn't need to do this.
+        let result = if let Some(color) = v.color_at(ViewCoords::new(x as u32, swapped_y as u32)) {
+            Ok(Argument::Color(*color))
+        } else {
+            return Err("out of bounds".to_string());
+        };
+
         self.active_view_mut()
             .paint_color(color, x as i32, y as i32);
-
-        // TODO: there's probably something better to return here, e.g., the pixel
-        // color that was under the cursor.
-        Ok(Argument::Color(color))
+        result
     }
 
     pub fn script_bucket(&mut self, x: i64, y: i64, color: Rgba8) -> ArgumentResult {

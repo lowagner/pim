@@ -72,6 +72,7 @@ impl Palette {
     }
 
     pub fn handle_cursor_moved(&mut self, p: SessionCoords) {
+        // TODO: fix y-offset here, it's not grabbing each palette.
         let (x, y) = (p.x, p.y);
         let relative_x = x as i32 - self.x as i32;
         let relative_y = y as i32 - self.y as i32;
