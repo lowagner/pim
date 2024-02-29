@@ -261,6 +261,8 @@ fn draw_ui(session: &Session, canvas: &mut shape2d::Batch, text: &mut TextBatch)
                 offset.y - rect_height,
             );
             let rect_above = rect_below + Vector2::new(0.0, rect_height + zoom * v.fh as f32);
+            // TODO: there's a hard-to-repro bug where these selection elements obscure the text.
+            //       for now, just moving the text below them.
             canvas.add(Shape::Rectangle(
                 rect_above,
                 self::UI_LAYER,
@@ -286,7 +288,7 @@ fn draw_ui(session: &Session, canvas: &mut shape2d::Batch, text: &mut TextBatch)
                 // Have text track along with the focused frame,
                 // so we can see it at all times.
                 rect_below.x1,
-                offset.y - self::LINE_HEIGHT,
+                rect_below.y2 - self::LINE_HEIGHT,
                 self::TEXT_LAYER,
                 color::GREY,
                 TextAlign::Left,
