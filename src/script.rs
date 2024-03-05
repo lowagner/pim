@@ -627,6 +627,7 @@ macro_rules! script_runner {
                     Command::PaletteColor => {
                         // TODO: pull out palette_index logic into a helper function
                         //       so we can re-use it for PaletteRepaint
+                        let old_palette_size = self.palette.size();
                         let palette_index = match self.script_evaluate(
                             &script_stack, Evaluate::Index(0)
                         )?.get_optional_i64("for palette index")? {
@@ -643,9 +644,10 @@ macro_rules! script_runner {
                         let color_arg = self.script_evaluate(&script_stack, Evaluate::Index(1))?
                             .get_optional_color(&self.palette)?;
                         if let Some(color) = color_arg {
-                            // TODO: do something special after mutating the color, e.g., to check if
-                            // we already have that color somewhere else.
                             self.palette.colors[palette_index] = color;
+                        }
+                        if old_palette_size != self.palette.size() {
+                            self.center_palette();
                         }
                         Ok(Argument::Color(old_color))
                     }
@@ -655,6 +657,7 @@ macro_rules! script_runner {
                             let color = self.script_evaluate(&script_stack, Evaluate::Index(i as u32))?.get_color(&self.palette)?;
                             result = Some(self.palette.add(color) as i64);
                         }
+                        self.center_palette();
                         match result {
                             None => Err("use `p-add #123 #456` to add colors to the palette".to_string()),
                             Some(value) => Ok(Argument::I64(value)),
@@ -667,7 +670,9 @@ macro_rules! script_runner {
                         if gradient_count < 0 {
                             return Err(format!("gradient count should be >= 0, got {}", gradient_count));
                         }
-                        Ok(Argument::I64(self.palette.gradient(color_start, color_end, gradient_count as usize) as i64))
+                        let result = self.palette.gradient(color_start, color_end, gradient_count as usize);
+                        self.center_palette();
+                        Ok(Argument::I64(result as i64))
                     }
                     Command::PaletteSort => {
                         self.palette.sort();
@@ -1796,6 +1801,7 @@ mod test {
         End(Command),
         Evaluated(ArgumentResult),
         Mocked(String),
+        SideEffect(String),
     }
 
     #[derive(PartialEq, Debug, Clone, Copy)]
@@ -1823,6 +1829,7 @@ mod test {
             b: 252,
             a: 251,
         };
+
         fn new() -> Self {
             let mut palette = Palette::new(12.0, 50);
             palette.add(Rgba8::BLACK);
@@ -2035,6 +2042,11 @@ mod test {
                     .push(WhatRan::Mocked(format!("{:?}{{{:?}}}", for_what, string)));
             }
             Ok(Argument::Null)
+        }
+
+        fn center_palette(&mut self) {
+            self.test_what_ran
+                .push(WhatRan::SideEffect("center_palette".to_string()));
         }
 
         pub fn bind_key(&mut self, mode: Mode, binding: KeyBinding) {
@@ -3236,6 +3248,7 @@ mod test {
             Vec::from([
                 WhatRan::Begin(Command::PaletteAddColors),
                 WhatRan::Evaluated(Ok(Argument::Color(new_color))),
+                WhatRan::SideEffect("center_palette".to_string()),
                 WhatRan::End(Command::PaletteAddColors),
             ])
         );
@@ -3264,6 +3277,7 @@ mod test {
             Vec::from([
                 WhatRan::Begin(Command::PaletteAddColors),
                 WhatRan::Evaluated(Ok(Argument::Color(already_present))),
+                WhatRan::SideEffect("center_palette".to_string()),
                 WhatRan::End(Command::PaletteAddColors),
             ])
         );
@@ -3299,6 +3313,7 @@ mod test {
                 WhatRan::Evaluated(Ok(Argument::Color(new_color))),
                 WhatRan::Evaluated(Ok(Argument::I64(3))),
                 WhatRan::Evaluated(Ok(Argument::Null)), // number of colors
+                WhatRan::SideEffect("center_palette".to_string()),
                 WhatRan::End(Command::PaletteAddGradient),
             ])
         );
@@ -3367,6 +3382,7 @@ mod test {
                 WhatRan::Evaluated(Ok(Argument::I64(5))),
                 WhatRan::Evaluated(Ok(Argument::Color(new_color))),
                 WhatRan::Evaluated(Ok(Argument::I64(4))), // number of colors
+                WhatRan::SideEffect("center_palette".to_string()),
                 WhatRan::End(Command::PaletteAddGradient),
             ])
         );

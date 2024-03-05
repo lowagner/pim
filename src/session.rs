@@ -2357,7 +2357,7 @@ impl Session {
         let n = usize::min(self.palette.size(), h) as f32;
         let p = &mut self.palette;
 
-        p.y = self.height / 2. - n * p.cellsize / 2.;
+        p.y = self.height / 2. + n * p.cellsize / 2.;
     }
 
     /// Vertically center the active view in the workspace.

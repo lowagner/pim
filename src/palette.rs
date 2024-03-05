@@ -10,6 +10,7 @@ pub struct Palette {
     pub colors: ArrayVec<Rgba8, 256>,
     pub hover: Option<Rgba8>,
     pub cellsize: f32,
+    // TODO: rename to max_height
     pub height: usize,
     pub y: f32,
 }
@@ -70,9 +71,9 @@ impl Palette {
     }
 
     pub fn handle_cursor_moved(&mut self, p: SessionCoords) {
-        // TODO: fix y-offset here, it's not grabbing each palette.
         let relative_x = p.x as i32;
-        let relative_y = p.y as i32 - self.y as i32;
+        // Larger y is going up, but we index the palette going down, so invert p.y:
+        let relative_y = self.y as i32 - p.y as i32;
         let cell_size_in_pixels = self.cellsize as i32;
         let color_count = self.size() as i32;
         let cells_per_column = self.height as i32;
@@ -94,8 +95,7 @@ impl Palette {
         let cell_x = relative_x / cell_size_in_pixels;
         let cell_y = relative_y / cell_size_in_pixels;
 
-        // Larger y is going up, but we index the palette going down.
-        let index = (cells_per_column - cell_y - 1) + cell_x * cells_per_column;
+        let index = cell_y + cell_x * cells_per_column;
 
         self.hover = if index < color_count {
             Some(self.colors[index as usize])

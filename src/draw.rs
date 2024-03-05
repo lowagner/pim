@@ -385,7 +385,8 @@ fn draw_meta(session: &Session, canvas: &mut shape2d::Batch, text: &mut TextBatc
             MARGIN,
             MARGIN,
             self::TEXT_LAYER,
-            // TODO: if ui-background is white, this won't be visible
+            // TODO: create a session.text_color option that updates when session.settings.ui_background changes.
+            //       replace all `text Rgba8::WHITE` instances.
             Rgba8::WHITE,
             TextAlign::Left,
         );
@@ -394,6 +395,7 @@ fn draw_meta(session: &Session, canvas: &mut shape2d::Batch, text: &mut TextBatc
             MARGIN + session.cmdline.cursor as f32 * self::GLYPH_WIDTH,
             MARGIN,
             self::TEXT_LAYER,
+            // TODO: shift from session.text_color
             Rgba8::RED,
         );
     } else if !session.message.is_execution() && !session.message.is_debug() {
@@ -507,7 +509,7 @@ fn draw_palette(session: &Session, batch: &mut shape2d::Batch) {
     let height = p.height;
     for (i, color) in p.colors.iter().cloned().enumerate() {
         let x = (i / height) as f32 * p.cellsize;
-        let y = (height - 1 - (i % height)) as f32 * p.cellsize;
+        let y = p.y - (i % height) as f32 * p.cellsize;
 
         let mut stroke = shape2d::Stroke::NONE;
         if let (Tool::Sampler, Some(c)) = (&session.tool, p.hover) {
@@ -517,7 +519,7 @@ fn draw_palette(session: &Session, batch: &mut shape2d::Batch) {
         }
 
         batch.add(Shape::Rectangle(
-            Rect::new(x, p.y + y, x + p.cellsize, p.y + y + p.cellsize),
+            Rect::new(x, y - p.cellsize, x + p.cellsize, y),
             self::PALETTE_LAYER,
             Rotation::ZERO,
             stroke,
