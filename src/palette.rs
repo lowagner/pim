@@ -11,7 +11,6 @@ pub struct Palette {
     pub hover: Option<Rgba8>,
     pub cellsize: f32,
     pub height: usize,
-    pub x: f32,
     pub y: f32,
 }
 
@@ -22,7 +21,6 @@ impl Palette {
             hover: None,
             cellsize,
             height,
-            x: 0.,
             y: 0.,
         }
     }
@@ -73,9 +71,8 @@ impl Palette {
 
     pub fn handle_cursor_moved(&mut self, p: SessionCoords) {
         // TODO: fix y-offset here, it's not grabbing each palette.
-        let (x, y) = (p.x, p.y);
-        let relative_x = x as i32 - self.x as i32;
-        let relative_y = y as i32 - self.y as i32;
+        let relative_x = p.x as i32;
+        let relative_y = p.y as i32 - self.y as i32;
         let cell_size_in_pixels = self.cellsize as i32;
         let color_count = self.size() as i32;
         let cells_per_column = self.height as i32;

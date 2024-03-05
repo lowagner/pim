@@ -517,7 +517,7 @@ fn draw_palette(session: &Session, batch: &mut shape2d::Batch) {
         }
 
         batch.add(Shape::Rectangle(
-            Rect::new(p.x + x, p.y + y, p.x + x + p.cellsize, p.y + y + p.cellsize),
+            Rect::new(x, p.y + y, x + p.cellsize, p.y + y + p.cellsize),
             self::PALETTE_LAYER,
             Rotation::ZERO,
             stroke,
