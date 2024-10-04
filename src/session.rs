@@ -530,6 +530,7 @@ impl Session {
         base_dirs: dirs::BaseDirs,
     ) -> Self {
         let history_path = proj_dirs.data_dir().join("history");
+        eprintln!("history will be saved in {}", history_path.display());
         let cwd = cwd.as_ref().to_path_buf();
 
         Self {
@@ -986,7 +987,7 @@ impl Session {
         let was_select = match old {
             Mode::Select(_) => true,
             Mode::Command => {
-                // TODO: put this into history
+                // TODO: if input was valuable, put it into cmdline.history
                 self.cmdline.clear();
                 false
             }
@@ -1187,11 +1188,11 @@ impl Session {
     /// loads all files within that directory.
     ///
     /// If a path doesn't exist, creates a blank view for that path.
-    pub fn edit_images<P: AsRef<Path>>(&mut self, paths: &[P]) -> VoidResult {
+    pub fn edit_images<P: AsRef<Path>>(&mut self, paths: &[P], add_to_cmdline: bool) -> VoidResult {
         if paths.is_empty() {
             return Err("include file(s) to edit in the command".to_string());
         }
-        match self.edit_internal(paths) {
+        match self.edit_internal(paths, add_to_cmdline) {
             Ok((success_count, fail_count)) => {
                 if success_count + fail_count > 1 {
                     self.message(
@@ -1215,7 +1216,11 @@ impl Session {
     /// loads all files within that directory.
     ///
     /// If a path doesn't exist, creates a blank view for that path.
-    fn edit_internal<P: AsRef<Path>>(&mut self, paths: &[P]) -> io::Result<(usize, usize)> {
+    fn edit_internal<P: AsRef<Path>>(
+        &mut self,
+        paths: &[P],
+        add_to_cmdline: bool,
+    ) -> io::Result<(usize, usize)> {
         use std::ffi::OsStr;
 
         let (mut success_count, mut fail_count) = (0usize, 0usize);
@@ -1223,6 +1228,9 @@ impl Session {
         let mut first_loaded_id = None;
         for path in paths {
             let path = path.as_ref();
+            if add_to_cmdline {
+                self.cmdline.history.add(format!(":e {}", path.display()));
+            }
 
             if path.is_dir() {
                 for entry in path.read_dir()? {
@@ -3231,7 +3239,7 @@ impl Session {
                 if strings.len() == 0 {
                     return Err("add files to source configuration from".to_string());
                 }
-                self.edit_images(&strings)?;
+                self.edit_images(&strings, false)?;
             }
             /*
             StringsFor::Append => {

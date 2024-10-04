@@ -165,7 +165,7 @@ pub fn init<P: AsRef<Path>>(paths: &[P], options: Options<'_>) -> std::io::Resul
     let mut renderer: gl::Renderer = Renderer::new(&mut win, win_size, scale_factor, assets)?;
 
     if !paths.is_empty() {
-        session.edit_images(paths);
+        session.edit_images(paths, true);
     }
 
     // Make sure our session ticks once before anything is rendered.

@@ -9,6 +9,7 @@ pub struct History {
     /// The history of commands entered.
     entries: VecDeque<String>,
     /// The current cursor into the history.
+    // TODO: rename to `index` or something.
     cursor: Option<usize>,
     /// Maximum number of entries.
     capacity: usize,
@@ -111,6 +112,10 @@ impl History {
 
     pub fn prev(&mut self, prefix: &str) -> Option<&str> {
         let start = self.cursor.map(|c| c + 1).unwrap_or(0);
+        eprintln!(
+            "getting previous history with prefix `{}` based on cursor {:?}",
+            prefix, self.cursor
+        );
 
         self.entries
             .iter()
