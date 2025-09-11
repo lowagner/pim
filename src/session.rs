@@ -1225,7 +1225,6 @@ impl Session {
 
         let (mut success_count, mut fail_count) = (0usize, 0usize);
 
-        let mut first_loaded_id = None;
         for path in paths {
             let path = path.as_ref();
             if add_to_cmdline {
@@ -1245,16 +1244,9 @@ impl Session {
                         continue;
                     }
 
-                    match self.load_view(path) {
-                        Ok(id) => {
-                            if first_loaded_id.is_none() {
-                                first_loaded_id = Some(id);
-                            }
-                        }
-                        Err(_) => {
-                            fail_count += 1;
-                            continue;
-                        }
+                    if self.load_view(path).is_err() {
+                        fail_count += 1;
+                        continue;
                     }
 
                     success_count += 1;
@@ -1263,14 +1255,14 @@ impl Session {
                 self.source_dir(path).ok();
             } else {
                 if path.exists() {
-                    let id = self.load_view(path)?;
-                    if first_loaded_id.is_none() {
-                        first_loaded_id = Some(id);
+                    if self.load_view(path).is_err() {
+                        fail_count += 1;
+                        continue;
                     }
                 } else if !path.exists() && path.with_extension("png").exists() {
-                    let id = self.load_view(path.with_extension("png"))?;
-                    if first_loaded_id.is_none() {
-                        first_loaded_id = Some(id);
+                    if self.load_view(path.with_extension("png")).is_err() {
+                        fail_count += 1;
+                        continue;
                     }
                 } else {
                     self.blank(
@@ -1289,7 +1281,6 @@ impl Session {
 
         if let Some(last_id) = self.views.last().map(|v| v.id) {
             self.organize_views();
-            self.edit_view(first_loaded_id.unwrap_or(last_id));
         }
 
         Ok((success_count, fail_count))
@@ -1460,10 +1451,7 @@ impl Session {
             }
         }
 
-        if let Some(id) = self.views.last().map(|v| v.id) {
-            self.organize_views();
-            self.edit_view(id);
-        }
+        self.organize_views();
 
         Ok(())
     }
@@ -1577,6 +1565,8 @@ impl Session {
             .add(file_status, fw, fh, nframes, delay, resource);
 
         self.effects.push(Effect::ViewAdded(id));
+
+        self.edit_view(id);
 
         id
     }
