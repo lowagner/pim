@@ -1273,13 +1273,11 @@ impl Session {
                         first_loaded_id = Some(id);
                     }
                 } else {
-                    let (w, h) = if !self.views.is_empty() {
-                        let v = self.active_view();
-                        (v.width(), v.fh)
-                    } else {
-                        (Self::DEFAULT_VIEW_W, Self::DEFAULT_VIEW_H)
-                    };
-                    self.blank(FileStatus::New(path.with_extension("png")), w, h);
+                    self.blank(
+                        FileStatus::New(path.with_extension("png")),
+                        Self::DEFAULT_VIEW_W,
+                        Self::DEFAULT_VIEW_H,
+                    );
                 }
                 success_count += 1;
             }
@@ -2522,6 +2520,9 @@ impl Session {
     }
 
     fn cmdline_hide(&mut self) {
+        // Hide any current message in case we get a new error,
+        // or if we need to clear an existing error.
+        self.message_clear();
         self.switch_mode(self.prev_mode.unwrap_or(Mode::Normal));
     }
 

@@ -931,6 +931,7 @@ impl<R> ViewManager<R> {
 
         self.views.insert(id, view);
 
+        self.active_id = id;
         id
     }
 
