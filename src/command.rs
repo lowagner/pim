@@ -655,6 +655,16 @@ impl CommandLine {
         }
     }
 
+    pub fn has_input(&self) -> bool {
+        !(self.input.is_empty() || self.input == ":")
+    }
+
+    pub fn add_input_to_history(&mut self) {
+        if self.has_input() {
+            self.history.add(self.input.clone());
+        }
+    }
+
     pub fn input(&self) -> String {
         self.input.clone()
     }

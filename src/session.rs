@@ -980,8 +980,10 @@ impl Session {
         let was_select = match old {
             Mode::Select(_) => true,
             Mode::Command => {
-                // TODO: if input was valuable, put it into cmdline.history
-                self.cmdline.clear();
+                // Always add the command, even if it's bad; maybe the user forgot
+                // a letter/syntax but they can go back and edit it rather than
+                // lose it completely.
+                self.cmdline.add_input_to_history();
                 false
             }
             _ => false,
@@ -2516,19 +2518,19 @@ impl Session {
     }
 
     fn cmdline_handle_enter(&mut self) {
-        let input = self.cmdline.input();
         // Always hide the command line before executing the command,
         // because commands will often require being in a specific mode, e.g.
         // select mode for commands that run on selections.
+        // This will also take care of adding any input to command history.
         self.cmdline_hide();
 
-        if input.is_empty() {
+        if !self.cmdline.has_input() {
+            // If there was nothing in the cmdline, don't try to execute it.
             return;
         }
-        // Always add the command, even if it's bad; maybe the user forgot
-        // a letter/syntax but they can go back and edit it rather than
-        // lose it completely.
-        self.cmdline.history.add(&input);
+
+        let input = self.cmdline.input();
+        eprintln!("should be executing {}", input);
 
         match self
             .cmdline
