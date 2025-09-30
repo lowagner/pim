@@ -437,8 +437,6 @@ pub struct Session {
     /// User directories.
     base_dirs: dirs::BaseDirs,
 
-    /// Whether we should ignore characters received.
-    ignore_received_characters: bool,
     /// The keys currently pressed, with a list of scripts to run (with arguments) when they are released.
     keys_pressed: HashMap<platform::Key, Vec<(Script, Vec<Argument>)>>,
     /// The list of all active key bindings.
@@ -560,7 +558,6 @@ impl Session {
             palette: Palette::new(Self::PALETTE_CELL_SIZE, Self::PALETTE_HEIGHT as usize),
             key_bindings: KeyBindings::default(),
             keys_pressed: HashMap::new(),
-            ignore_received_characters: false,
             cmdline: CommandLine::new(cwd, history_path, path::SUPPORTED_READ_FORMATS),
             mode: Mode::Normal,
             prev_mode: Option::default(),
@@ -661,10 +658,6 @@ impl Session {
                 self.active_view_mut().animation.step();
                 self.accumulator = time::Duration::from_secs(0);
             }
-        }
-
-        if self.ignore_received_characters {
-            self.ignore_received_characters = false;
         }
 
         // TODO: This whole block needs refactoring..
@@ -1003,13 +996,7 @@ impl Session {
                 false
             }
             Mode::Command => {
-                // When switching to command mode via the keyboard, we simultaneously
-                // also receive the character input equivalent of the key pressed.
-                // This input, since we are now in command mode, is processed as
-                // text input to the command line. To avoid this, we have to ignore
-                // all such input until the end of the current update.
-                self.ignore_received_characters = true;
-                self.cmdline_handle_input(':');
+                self.cmdline.clear();
                 false
             }
             _ => false,
@@ -2112,7 +2099,7 @@ impl Session {
         // TODO: for some reason <ctrl>'z' doesn't get mapped here.
         //       in the meantime, make sure to use <ctrl><z> etc.
         if self.mode == Mode::Command {
-            if c.is_control() || self.ignore_received_characters {
+            if c.is_control() || mods.ctrl || mods.meta {
                 return;
             }
             self.cmdline_handle_input(c);

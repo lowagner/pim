@@ -735,6 +735,13 @@ impl CommandLine {
         if self.input.len() + c.len_utf8() > self.input.capacity() {
             return;
         }
+        if c == ':' && self.cursor <= 1 {
+            // When switching to command mode via the keyboard, we simultaneously
+            // also receive the character input equivalent of the key pressed.
+            // There are some odd race conditions with trying to ignore this in `session.rs`,
+            // so just ignore adding `:` to the start of the command line.
+            return;
+        }
         self.input.insert(self.cursor, c);
         self.cursor += c.len_utf8();
         self.autocomplete.invalidate();
@@ -770,8 +777,9 @@ impl CommandLine {
     }
 
     pub fn clear(&mut self) {
-        self.cursor = 0;
         self.input.clear();
+        self.input += ":";
+        self.cursor = 1;
         self.history.reset();
         self.autocomplete.invalidate();
     }
